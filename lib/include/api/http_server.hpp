@@ -4,12 +4,19 @@
 // Small blocking HTTP/1.1 server for the local exchange management API.
 //
 // One accept thread and one thread per connection, with a hard cap on
-// concurrent connections (extra connections get 503 and are closed), socket
-// read/write timeouts, bounded request sizes (HttpLimits) and a bounded
-// number of requests per keep-alive connection. It binds loopback by default:
-// v1 has no remote access control.
+// concurrent connections (extra connections get 503 and are closed), read and
+// write timeouts, bounded request sizes (HttpLimits) and a bounded number of
+// requests per keep-alive connection. It binds loopback by default: v1 has no
+// remote access control.
+//
+// Sockets come from exsim::net like the exchange's own, so they are
+// non-blocking; each connection thread blocks in poll() for at most the idle
+// or write timeout. Blocking threads instead of the exchange's Poller reactor
+// is a deliberate trade-off: the management API serves a few local clients,
+// and a thread per connection keeps it short and off the trading hot path.
 
 #include "api/http_message.hpp"
+#include "net/socket.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -59,9 +66,9 @@ private:
     // One per allowed concurrent connection, allocated by start(). Only the
     // accept thread (and stop(), after joining it) claims, joins and closes a
     // slot, so the slot array needs no lock. The connection thread never
-    // closes its descriptor, so stop() cannot shut down a reused one.
+    // closes its socket, so stop() cannot shut down a reused descriptor.
     struct ConnectionSlot {
-        int socket_descriptor = -1;
+        net::Socket socket;
         std::thread thread;  // joinable while the slot is in use
         std::atomic<bool> is_finished{false};
     };
@@ -73,7 +80,7 @@ private:
     HttpServerOptions options_;
     HttpRequestHandler handler_;
     HttpRejectionResponder rejection_responder_;
-    int listen_descriptor_ = -1;
+    net::Socket listener_;
     std::uint16_t bound_port_ = 0;
     std::atomic<bool> stopping_{false};
     std::atomic<std::size_t> active_connections_{0};
