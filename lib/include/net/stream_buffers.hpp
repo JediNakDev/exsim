@@ -4,7 +4,9 @@
 // Fixed-capacity byte buffers for the two directions of a TCP connection.
 // Storage is allocated once in the constructor and never grows; when a buffer
 // runs out of room the caller is told and decides (the TCP server disconnects
-// the connection). Bytes are `char`, matching the protocol codecs.
+// the connection). Bytes are `char`, matching the protocol codecs. The
+// constructor zero-fills the storage, so its pages are faulted in at startup
+// instead of on the first message.
 //
 //   inbound:  receive_from(fd) appends at the tail -> framer reads readable()
 //             and consume()s whole messages -> unread partial bytes are moved
@@ -39,7 +41,7 @@ struct ReceiveResult {
 
 class ReceiveBuffer {
    public:
-    explicit ReceiveBuffer(std::size_t capacity) : storage_(new char[capacity]), capacity_(capacity) {}
+    explicit ReceiveBuffer(std::size_t capacity) : storage_(std::make_unique<char[]>(capacity)), capacity_(capacity) {}
 
     // Bytes received and not yet consumed.
     std::span<const char> readable() const noexcept {
@@ -106,7 +108,7 @@ struct FlushResult {
 
 class SendBuffer {
    public:
-    explicit SendBuffer(std::size_t capacity) : storage_(new char[capacity]), capacity_(capacity) {}
+    explicit SendBuffer(std::size_t capacity) : storage_(std::make_unique<char[]>(capacity)), capacity_(capacity) {}
 
     // Zero-copy append: returns exactly `max_bytes` of contiguous space at the
     // end of the queue; encode into it, then commit() the bytes actually used.
