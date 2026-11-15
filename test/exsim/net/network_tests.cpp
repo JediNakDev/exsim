@@ -122,6 +122,8 @@ TEST_CASE(net_tcp, connect_completion_and_failure) {
     Pair pair;
     CHECK(pair.client.connected());
     CHECK_EQ(pair.client.complete_connect(), 0);
+    CHECK(fcntl(pair.accepted.fd(), F_GETFL) & O_NONBLOCK);
+    CHECK(fcntl(pair.accepted.fd(), F_GETFD) & FD_CLOEXEC);
     Ipv4Endpoint peer{}, local{};
     REQUIRE_EQ(peer_endpoint(pair.accepted.fd(), peer), 0);
     REQUIRE_EQ(local_endpoint(pair.client.fd(), local), 0);

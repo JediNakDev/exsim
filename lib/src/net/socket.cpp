@@ -25,6 +25,15 @@ Ipv4Endpoint endpoint_from_socket_address(const sockaddr_in& socket_address) noe
 ErrorCode set_socket_option(int fd, int level, int name, int value) noexcept {
     return system_call_error(setsockopt(fd, level, name, &value, sizeof(value)));
 }
+#if defined(__linux__)
+// Linux sets non-blocking and close-on-exec inside socket() and accept4(), and
+// has no SO_NOSIGPIPE (every send passes MSG_NOSIGNAL), so nothing is left to configure.
+constexpr int kSocketFlags = SOCK_NONBLOCK | SOCK_CLOEXEC;
+ErrorCode configure_socket(int) noexcept {
+    return 0;
+}
+#else
+constexpr int kSocketFlags = 0;
 ErrorCode configure_socket(int fd) noexcept {
     int flags = fcntl(fd, F_GETFD);
     if (flags < 0) return errno;
@@ -32,8 +41,9 @@ ErrorCode configure_socket(int fd) noexcept {
     const auto error = set_non_blocking(fd);
     return error ? error : set_no_sigpipe(fd);
 }
+#endif
 ErrorCode open_socket(int type, Socket& output) noexcept {
-    Socket next(::socket(AF_INET, type, 0));
+    Socket next(::socket(AF_INET, type | kSocketFlags, 0));
     if (!next.is_open()) return errno;
     const auto error = configure_socket(next.fd());
     if (error) return error;
@@ -141,7 +151,11 @@ ErrorCode accept_connection(int fd, Socket& output, Ipv4Endpoint& peer) noexcept
     socklen_t length = sizeof(socket_address);
     int accepted;
     do {
+#if defined(__linux__)
+        accepted = accept4(fd, reinterpret_cast<sockaddr*>(&socket_address), &length, kSocketFlags);
+#else
         accepted = accept(fd, reinterpret_cast<sockaddr*>(&socket_address), &length);
+#endif
     } while (accepted < 0 && errno == EINTR);
     if (accepted < 0) return errno;
     Socket next(accepted);
