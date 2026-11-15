@@ -97,6 +97,16 @@ bool ExchangeProcess::read_status() {
         return false;
     }
 }
+bool ExchangeProcess::admin(std::string_view command, std::string& reply) {
+    try {
+        ipc::send_control(control_.fd(), "admin " + std::string(command));
+        reply = ipc::receive_control(control_.fd());
+        return true;
+    } catch (const std::exception&) {
+        stop_after_failure("exchange control failed");
+        return false;
+    }
+}
 void ExchangeProcess::reap_if_exited() {
     if (pid_ <= 0 || !has_exited()) return;
     const bool clean_exit = reap();
