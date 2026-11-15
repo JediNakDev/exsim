@@ -54,16 +54,16 @@ TEST_CASE(engine_queries, depth_and_level_orders_in_priority_order_with_truncati
     CHECK(!fixture.engine.last_trade_price(2).has_value());
 }
 
-TEST_CASE(engine_queries, find_order_and_for_each_order) {
+TEST_CASE(engine_queries, find_order_by_order_id_and_by_session_token) {
     EngineFixture fixture(Phase::Continuous, 2);
-    CHECK(all_live_orders(fixture.engine).empty());
+    CHECK(testsupport::live_orders(fixture.engine).empty());
     fixture.apply(limit_order(kAliceSession, 1, Side::BUY, 100, 5, 2));   // 1
     fixture.apply(limit_order(kBobSession, 1, Side::SELL, 150, 5, 1));    // 2
     fixture.apply(limit_order(kAliceSession, 2, Side::SELL, 160, 5, 2));  // 3
     fixture.apply(ReplaceOrder{4, kAliceSession, 1, 9, 90, 5, false});    // 1 becomes 4 with token 9
 
     std::vector<OrderId> visited;
-    for (const OrderInfo& order : all_live_orders(fixture.engine)) visited.push_back(order.order_id);
+    for (const OrderInfo& order : testsupport::live_orders(fixture.engine)) visited.push_back(order.order_id);
     CHECK_EQ(visited, (std::vector<OrderId>{2, 3, 4}));
 
     const auto replaced = fixture.engine.find_order(OrderId{4});

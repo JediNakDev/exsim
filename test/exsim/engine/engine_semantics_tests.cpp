@@ -1,5 +1,6 @@
 #include <test/framework/test.hpp>
 #include <engine/matching_engine.hpp>
+#include <test/exsim/engine/live_orders.hpp>
 #include <array>
 #include <limits>
 #include <random>
@@ -44,11 +45,11 @@ std::uint64_t digest(const EventBuffer& out) {
 }
 void invariants(const MatchingEngine& e) {
     std::size_t count = 0; OrderId last = 0;
-    e.for_each_order([&](const OrderInfo& o) {
+    for (const OrderInfo& o : testsupport::live_orders(e)) {
         CHECK(o.order_id > last); last=o.order_id; ++count;
         CHECK(o.leaves_qty > 0); CHECK_EQ(o.qty, o.leaves_qty + o.cum_qty);
-        CHECK_EQ(e.find_order(o.order_id)->cl_ord_id, o.cl_ord_id);
-    });
+        CHECK_EQ(e.find_order(o.session, o.cl_ord_id)->order_id, o.order_id);
+    }
     CHECK_EQ(count,e.live_order_count());
     for (InstrumentId id=1;id<=e.instrument_count();++id) {
         if (e.phase(id)==Phase::Continuous || e.phase(id)==Phase::Closed) {

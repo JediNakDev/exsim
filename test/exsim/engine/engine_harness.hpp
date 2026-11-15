@@ -141,12 +141,6 @@ public:
         return result;
     }
 
-    std::vector<OrderInfo> all_orders() const {
-        std::vector<OrderInfo> result;
-        engine_.for_each_order([&](const OrderInfo& info) { result.push_back(info); });
-        return result;
-    }
-
 private:
     const EventBuffer& run(const Command& cmd) {
         out_.clear();

@@ -3,8 +3,8 @@
 // occupancy bitmaps, FIFO links); all books share one bounded OrderBookStorage
 // (order pool, level pool, OrderId map) sized by EngineConfig::max_orders. The
 // engine walks and mutates book orders through Order pointers and keeps only
-// engine-only metadata (session, STP, cumulative fills, query lists) in
-// preallocated arrays.
+// engine-only metadata (session, STP, cumulative fills, session and instrument
+// lists) in preallocated arrays.
 
 #include <engine/matching_engine.hpp>
 
@@ -149,7 +149,6 @@ struct MatchingEngine::Impl {
     FixedArray<OrderListEnds> orders_by_session;         // per SessionId, ascending OrderId
     FixedArray<InstrumentListLinks> instrument_links;    // per order, threads orders_by_instrument
     FixedArray<OrderListEnds> orders_by_instrument;      // per InstrumentId, ascending OrderId
-    OrderListEnds all_orders{};                          // engine-wide, ascending OrderId
     OrderId next_order_id = 1;
     MatchId next_match_id = 1;
 
@@ -194,8 +193,6 @@ struct MatchingEngine::Impl {
     void refresh_best_tick(InstrumentBook& book, Side side) noexcept;
     void retire(OrderIndex index);
 
-    void list_append_by_order_id(OrderIndex index) noexcept;
-    void list_unlink_by_order_id(OrderIndex index) noexcept;
     void list_append_in_session(SessionId session, OrderIndex index) noexcept;
     void list_unlink_in_session(SessionId session, OrderIndex index) noexcept;
     void list_append_in_instrument(InstrumentId instrument, OrderIndex index) noexcept;
@@ -314,32 +311,6 @@ void MatchingEngine::Impl::emit_resting_canceled(const InstrumentBook& book, Ord
 // Intrusive ascending-OrderId lists
 // ===========================================================================
 
-void MatchingEngine::Impl::list_append_by_order_id(OrderIndex index) noexcept {
-    OrderCold& order_cold = cold[index];
-    order_cold.next_by_order_id = kNilOrder;
-    order_cold.prev_by_order_id = all_orders.tail;
-    if (all_orders.tail != kNilOrder) {
-        cold[all_orders.tail].next_by_order_id = index;
-    } else {
-        all_orders.head = index;
-    }
-    all_orders.tail = index;
-}
-
-void MatchingEngine::Impl::list_unlink_by_order_id(OrderIndex index) noexcept {
-    const OrderCold& order_cold = cold[index];
-    if (order_cold.prev_by_order_id != kNilOrder) {
-        cold[order_cold.prev_by_order_id].next_by_order_id = order_cold.next_by_order_id;
-    } else {
-        all_orders.head = order_cold.next_by_order_id;
-    }
-    if (order_cold.next_by_order_id != kNilOrder) {
-        cold[order_cold.next_by_order_id].prev_by_order_id = order_cold.prev_by_order_id;
-    } else {
-        all_orders.tail = order_cold.prev_by_order_id;
-    }
-}
-
 void MatchingEngine::Impl::list_append_in_session(SessionId session, OrderIndex index) noexcept {
     OrderListEnds& list = orders_by_session[session];
     OrderCold& order_cold = cold[index];
@@ -417,7 +388,6 @@ void MatchingEngine::Impl::refresh_best_tick(InstrumentBook& book, Side side) no
 void MatchingEngine::Impl::retire(OrderIndex index) {
     OrderHot& order_hot = hot[index];
     const SessionId session = session_of(order_hot.session_token);
-    list_unlink_by_order_id(index);
     list_unlink_in_session(session, index);
     list_unlink_in_instrument(cold[index].instrument, index);
     const bool erased = order_by_session_token.erase(order_hot.session_token);
@@ -460,7 +430,6 @@ void MatchingEngine::Impl::rest(InstrumentBook& book, const IncomingOrder& order
     if (order_hot.order == nullptr) std::abort();  // shared storage holds max_orders; admission checked live_count
     refresh_best_tick(book, order.side);
 
-    list_append_by_order_id(index);
     list_append_in_session(order.session, index);
     list_append_in_instrument(order.instrument, index);
     const bool inserted = order_by_session_token.insert(order_hot.session_token, index);
@@ -1293,13 +1262,6 @@ AuctionIndicative MatchingEngine::auction_indicative(InstrumentId id) const noex
         indicative.imbalance_side = Aggressor::Sell;
     }
     return indicative;
-}
-
-void MatchingEngine::visit_orders(void (*fn)(const OrderInfo&, void*), void* ctx) const {
-    const Impl& impl = *impl_;
-    for (OrderIndex index = impl.all_orders.head; index != kNilOrder; index = impl.cold[index].next_by_order_id) {
-        fn(impl.order_info(index), ctx);
-    }
 }
 
 void MatchingEngine::visit_level_orders(InstrumentId id, Side side, Price price,

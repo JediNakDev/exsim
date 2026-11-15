@@ -1,4 +1,5 @@
 #include "engine_harness.hpp"
+#include <test/exsim/engine/live_orders.hpp>
 #include <random>
 using namespace engine_harness;
 
@@ -26,11 +27,11 @@ static std::vector<std::uint64_t> fields(const EventBuffer& out) {
 
 static void invariants(const MatchingEngine& e) {
     std::size_t count=0; OrderId previous=0;
-    e.for_each_order([&](const OrderInfo& o) {
+    for (const OrderInfo& o : testsupport::live_orders(e)) {
         CHECK(o.order_id>previous); previous=o.order_id; ++count;
         CHECK(o.leaves_qty>0); CHECK_EQ(std::uint64_t{o.leaves_qty}+o.cum_qty,o.qty);
         CHECK_EQ(e.find_order(o.session,o.cl_ord_id)->order_id,o.order_id);
-    });
+    }
     CHECK_EQ(count,e.live_order_count());
     std::size_t depth_count=0;
     for(InstrumentId id=1;id<=e.instrument_count();++id) {
@@ -113,7 +114,7 @@ TEST_CASE(engine_invariants, randomized_commands_and_deterministic_active_fields
             if(e.type==EventType::Canceled) canceled+=e.canceled.canceled_qty;
         }
         // Cancel reductions change current qty but are already counted by the cancellation.
-        std::int64_t leaves=0; a.for_each_order([&](const OrderInfo& o) { leaves+=o.leaves_qty; });
+        std::int64_t leaves=0; for (const OrderInfo& o : testsupport::live_orders(a)) leaves+=o.leaves_qty;
         CHECK_EQ(expected,executed+canceled+leaves);
         invariants(a);
     }
