@@ -71,12 +71,12 @@ void connect_client(TcpClient& client, Ipv4Endpoint remote) {
 struct Pair {
     Socket listener, accepted;
     TcpClient client;
+    Ipv4Endpoint peer{};  // the client's address, as accept_connection reported it
     Pair() {
         REQUIRE_EQ(open_tcp_listener(loopback_endpoint(0), 8, 0, 0, listener), 0);
         Ipv4Endpoint local{};
         REQUIRE_EQ(local_endpoint(listener.fd(), local), 0);
         connect_client(client, local);
-        Ipv4Endpoint peer{};
         until([&] { return accepted.is_open(); },
               [&] {
                   const auto error = accept_connection(listener.fd(), accepted, peer);
@@ -96,9 +96,10 @@ TEST_CASE(net_socket, ownership_and_options) {
     REQUIRE_EQ(set_send_buffer_size(fd, 8192), 0);
     REQUIRE_EQ(set_receive_buffer_size(fd, 8192), 0);
     int bytes = 0;
-    REQUIRE_EQ(get_send_buffer_size(fd, bytes), 0);
+    socklen_t length = sizeof(bytes);
+    REQUIRE_EQ(getsockopt(fd, SOL_SOCKET, SO_SNDBUF, &bytes, &length), 0);
     CHECK_GE(bytes, 8192);
-    REQUIRE_EQ(get_receive_buffer_size(fd, bytes), 0);
+    REQUIRE_EQ(getsockopt(fd, SOL_SOCKET, SO_RCVBUF, &bytes, &length), 0);
     CHECK_GE(bytes, 8192);
     Socket moved(std::move(socket));
     CHECK(!socket.is_open());
@@ -124,10 +125,9 @@ TEST_CASE(net_tcp, connect_completion_and_failure) {
     CHECK_EQ(pair.client.complete_connect(), 0);
     CHECK(fcntl(pair.accepted.fd(), F_GETFL) & O_NONBLOCK);
     CHECK(fcntl(pair.accepted.fd(), F_GETFD) & FD_CLOEXEC);
-    Ipv4Endpoint peer{}, local{};
-    REQUIRE_EQ(peer_endpoint(pair.accepted.fd(), peer), 0);
+    Ipv4Endpoint local{};
     REQUIRE_EQ(local_endpoint(pair.client.fd(), local), 0);
-    CHECK_EQ(peer, local);
+    CHECK_EQ(pair.peer, local);
     Socket unlistened;
     REQUIRE_EQ(open_tcp_socket(unlistened), 0);
     REQUIRE_EQ(bind_ipv4(unlistened.fd(), loopback_endpoint(0)), 0);

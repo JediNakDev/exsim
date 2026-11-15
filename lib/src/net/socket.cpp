@@ -110,14 +110,6 @@ ErrorCode set_send_buffer_size(int fd, int bytes) noexcept {
 ErrorCode set_receive_buffer_size(int fd, int bytes) noexcept {
     return set_socket_option(fd, SOL_SOCKET, SO_RCVBUF, bytes);
 }
-ErrorCode get_send_buffer_size(int fd, int& bytes) noexcept {
-    socklen_t length = sizeof(bytes);
-    return system_call_error(getsockopt(fd, SOL_SOCKET, SO_SNDBUF, &bytes, &length));
-}
-ErrorCode get_receive_buffer_size(int fd, int& bytes) noexcept {
-    socklen_t length = sizeof(bytes);
-    return system_call_error(getsockopt(fd, SOL_SOCKET, SO_RCVBUF, &bytes, &length));
-}
 ErrorCode set_no_sigpipe(int fd) noexcept {
 #ifdef SO_NOSIGPIPE
     return set_socket_option(fd, SOL_SOCKET, SO_NOSIGPIPE, 1);
@@ -130,9 +122,6 @@ ErrorCode bind_ipv4(int fd, Ipv4Endpoint endpoint_value) noexcept {
     const auto socket_address = socket_address_from_endpoint(endpoint_value);
     return system_call_error(bind(fd, reinterpret_cast<const sockaddr*>(&socket_address), sizeof(socket_address)));
 }
-ErrorCode listen_for_connections(int fd, int backlog) noexcept {
-    return system_call_error(listen(fd, backlog));
-}
 ErrorCode open_tcp_listener(Ipv4Endpoint endpoint_value, int backlog, int send_buffer_bytes, int receive_buffer_bytes,
                             Socket& output) noexcept {
     Socket next;
@@ -141,7 +130,7 @@ ErrorCode open_tcp_listener(Ipv4Endpoint endpoint_value, int backlog, int send_b
     if ((error = set_reuse_address(next.fd(), true))) return error;
     if (send_buffer_bytes && (error = set_send_buffer_size(next.fd(), send_buffer_bytes))) return error;
     if (receive_buffer_bytes && (error = set_receive_buffer_size(next.fd(), receive_buffer_bytes))) return error;
-    if ((error = bind_ipv4(next.fd(), endpoint_value)) || (error = listen_for_connections(next.fd(), backlog)))
+    if ((error = bind_ipv4(next.fd(), endpoint_value)) || (error = system_call_error(listen(next.fd(), backlog))))
         return error;
     output = std::move(next);
     return 0;
@@ -165,34 +154,11 @@ ErrorCode accept_connection(int fd, Socket& output, Ipv4Endpoint& peer) noexcept
     output = std::move(next);
     return 0;
 }
-ErrorCode start_connect(int fd, Ipv4Endpoint endpoint_value) noexcept {
-    const auto socket_address = socket_address_from_endpoint(endpoint_value);
-    return system_call_error(connect(fd, reinterpret_cast<const sockaddr*>(&socket_address), sizeof(socket_address)));
-}
-ErrorCode take_socket_error(int fd) noexcept {
-    int error = 0;
-    socklen_t length = sizeof(error);
-    return getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &length) < 0 ? errno : error;
-}
-ErrorCode peer_endpoint(int fd, Ipv4Endpoint& output) noexcept {
-    sockaddr_in socket_address{};
-    socklen_t length = sizeof(socket_address);
-    if (getpeername(fd, reinterpret_cast<sockaddr*>(&socket_address), &length) < 0) return errno;
-    output = endpoint_from_socket_address(socket_address);
-    return 0;
-}
 ErrorCode local_endpoint(int fd, Ipv4Endpoint& output) noexcept {
     sockaddr_in socket_address{};
     socklen_t length = sizeof(socket_address);
     if (getsockname(fd, reinterpret_cast<sockaddr*>(&socket_address), &length) < 0) return errno;
     output = endpoint_from_socket_address(socket_address);
     return 0;
-}
-ErrorCode connect_result(int fd) noexcept {
-    const int error = take_socket_error(fd);
-    if (error) return error;
-    Ipv4Endpoint peer{};
-    const int status = peer_endpoint(fd, peer);
-    return status == ENOTCONN ? EINPROGRESS : status;
 }
 }  // namespace exsim::net
