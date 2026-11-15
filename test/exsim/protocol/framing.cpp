@@ -1,3 +1,4 @@
+#include "moldudp64_reader.hpp"
 #include "../../framework/test.hpp"
 #include <protocol/moldudp64.hpp>
 #include <protocol/soupbintcp.hpp>

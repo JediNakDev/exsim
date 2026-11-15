@@ -1,3 +1,4 @@
+#include "fix44_reader.hpp"
 #include "../../framework/test.hpp"
 #include <protocol/fix44.hpp>
 #include <random>
