@@ -211,7 +211,7 @@ struct MatchingEngine::Impl {
 // ===========================================================================
 
 MatchingEngine::Impl::Impl(const EngineConfig& config)
-    : max_instruments(((void)required_event_capacity(config), config.max_instruments)),
+    : max_instruments(config.max_instruments),
       max_orders(static_cast<std::uint32_t>(config.max_orders)),
       // Every live level holds at least one live order, so max_orders bounds both pools.
       shared_order_storage(std::make_shared<exsim::book::OrderBookStorage>(max_orders, max_orders, false)),
@@ -1044,29 +1044,33 @@ OrderInfo MatchingEngine::Impl::order_info(OrderIndex index) const noexcept {
     const OrderCold& order_cold = cold[index];
     const Order& resting = *order_hot.order;
     const InstrumentBook& book = books[order_cold.instrument - 1];
-    OrderInfo info;
-    std::memset(static_cast<void*>(&info), 0, sizeof(info));
-    info.order_id = resting.id;
-    info.cl_ord_id = cl_ord_id_of(order_hot.session_token);
-    info.instrument = order_cold.instrument;
-    info.session = session_of(order_hot.session_token);
-    info.owner = order_hot.owner;
-    info.side = resting.side;
-    info.tif = order_cold.tif;
-    info.stp = order_cold.stp;
-    info.post_only = order_cold.post_only;
-    info.price = book.price_of(static_cast<std::int32_t>(resting.price));
-    info.leaves_qty = static_cast<Quantity>(resting.remaining_quantity);
-    info.qty = info.leaves_qty + order_hot.cum_qty;
-    info.cum_qty = order_hot.cum_qty;
-    return info;
+    const Quantity leaves_qty = static_cast<Quantity>(resting.remaining_quantity);
+    return OrderInfo{
+        .order_id = resting.id,
+        .cl_ord_id = cl_ord_id_of(order_hot.session_token),
+        .instrument = order_cold.instrument,
+        .session = session_of(order_hot.session_token),
+        .owner = order_hot.owner,
+        .side = resting.side,
+        .tif = order_cold.tif,
+        .stp = order_cold.stp,
+        .post_only = order_cold.post_only,
+        .price = book.price_of(static_cast<std::int32_t>(resting.price)),
+        .qty = leaves_qty + order_hot.cum_qty,
+        .leaves_qty = leaves_qty,
+        .cum_qty = order_hot.cum_qty,
+    };
 }
 
 // ===========================================================================
 // MatchingEngine forwarding
 // ===========================================================================
 
-MatchingEngine::MatchingEngine(const EngineConfig& config) : impl_(std::make_unique<Impl>(config)) {}
+MatchingEngine::MatchingEngine(const EngineConfig& config) {
+    // Throws on invalid bounds before anything is allocated.
+    static_cast<void>(required_event_capacity(config));
+    impl_ = std::make_unique<Impl>(config);
+}
 
 MatchingEngine::~MatchingEngine() = default;
 
