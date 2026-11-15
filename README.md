@@ -48,7 +48,7 @@ make -j4 bench
 
 - This is a very early alpha, expects bugs.
 - We provided only exchange simulator, you have to have your own trader engine.
-- Currently only support ITCH 5.0, OUCH 4.2, FIX 4.4, iLink 3, and MDP 3.0.
+- Currently support ITCH 5.0, OUCH 4.2, FIX 4.4, iLink 3, and MDP 3.0.
 
 ## Further Reading
 
