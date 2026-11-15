@@ -22,7 +22,6 @@
 #include <limits>
 #include <memory>
 #include <type_traits>
-#include <unordered_map>
 #include <vector>
 
 namespace exsim {
@@ -77,6 +76,7 @@ template <typename Enum>
 }
 
 // The 8 symbol bytes as one integer, the key of the symbol -> instrument map.
+// Eight NUL bytes give 0, the map's empty-slot key: that symbol is never listed.
 [[nodiscard]] std::uint64_t symbol_key(const Symbol& symbol) noexcept {
     std::uint64_t key = 0;
     static_assert(sizeof(key) == sizeof(symbol.chars));
@@ -140,7 +140,7 @@ struct MatchingEngine::Impl {
     // Order pool, level pool and OrderId map shared by every instrument book.
     std::shared_ptr<exsim::book::OrderBookStorage> shared_order_storage;
     std::vector<InstrumentBook> books;  // books[id - 1]; reserved up front so pointers stay stable
-    std::unordered_map<std::uint64_t, InstrumentId> instrument_by_symbol;  // key: symbol_key(symbol)
+    exsim::util::FlatHashMap<InstrumentId> instrument_by_symbol;  // key: symbol_key(symbol)
     FixedArray<OrderHot> hot;
     FixedArray<OrderCold> cold;
     OrderIndex free_head = kNilOrder;
@@ -215,6 +215,7 @@ MatchingEngine::Impl::Impl(const EngineConfig& config)
       max_orders(static_cast<std::uint32_t>(config.max_orders)),
       // Every live level holds at least one live order, so max_orders bounds both pools.
       shared_order_storage(std::make_shared<exsim::book::OrderBookStorage>(max_orders, max_orders, false)),
+      instrument_by_symbol(max_instruments),
       hot(std::size_t{max_orders} + 1),
       cold(std::size_t{max_orders} + 1),
       order_by_session_token(max_orders),
@@ -222,7 +223,6 @@ MatchingEngine::Impl::Impl(const EngineConfig& config)
       instrument_links(std::size_t{max_orders} + 1),
       orders_by_instrument(max_instruments + 1) {
     books.reserve(max_instruments);
-    instrument_by_symbol.reserve(max_instruments);
     // Free-index stack: 1, 2, ..., max_orders (first allocations are sequential).
     for (std::uint32_t i = 1; i < max_orders; ++i) {
         hot[i].next = i + 1;
@@ -1085,16 +1085,16 @@ InstrumentId MatchingEngine::add_instrument(const InstrumentConfig& config) {
     if (tick_count > engine::kMaxLadderTicks) {
         return 0;
     }
+    const std::uint64_t key = symbol_key(config.symbol);
+    if (key == 0 || impl.instrument_by_symbol.contains(key)) {
+        return 0;  // all-NUL symbol or symbol taken
+    }
     const InstrumentId id = static_cast<InstrumentId>(impl.books.size() + 1);
-    if (!impl.instrument_by_symbol.try_emplace(symbol_key(config.symbol), id).second) {
-        return 0;  // symbol taken
-    }
-    try {
-        impl.books.emplace_back(config, id, static_cast<std::uint32_t>(tick_count), impl.shared_order_storage);
-    } catch (...) {
-        impl.instrument_by_symbol.erase(symbol_key(config.symbol));
-        throw;
-    }
+    // The ladders may throw; the map is updated only after they exist.
+    impl.books.emplace_back(config, id, static_cast<std::uint32_t>(tick_count), impl.shared_order_storage);
+    const bool inserted = impl.instrument_by_symbol.insert(key, id);
+    assert(inserted);  // sized for max_instruments, so this never grows or fails
+    (void)inserted;
     return id;
 }
 
@@ -1142,8 +1142,8 @@ const InstrumentConfig* MatchingEngine::instrument(InstrumentId id) const noexce
 }
 
 InstrumentId MatchingEngine::find_instrument(const Symbol& symbol) const noexcept {
-    const auto found = impl_->instrument_by_symbol.find(symbol_key(symbol));
-    return found == impl_->instrument_by_symbol.end() ? InstrumentId{0} : found->second;
+    const InstrumentId* id = impl_->instrument_by_symbol.find(symbol_key(symbol));
+    return id == nullptr ? InstrumentId{0} : *id;
 }
 
 Phase MatchingEngine::phase(InstrumentId id) const noexcept {

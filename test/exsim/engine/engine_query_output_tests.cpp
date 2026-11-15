@@ -304,4 +304,12 @@ TEST_CASE(engine_instruments, find_instrument_by_symbol_after_many_instruments) 
     }
     CHECK_EQ(engine.find_instrument(Symbol("S40")), InstrumentId{0});
     CHECK_EQ(engine.find_instrument(Symbol("")), InstrumentId{0});
+
+    // Eight NUL bytes are the symbol map's empty key: never listed, never found.
+    InstrumentConfig nul_symbol_config = small_instrument_config("");
+    nul_symbol_config.symbol.chars.fill('\0');
+    CHECK_EQ(engine.add_instrument(nul_symbol_config), InstrumentId{0});
+    CHECK_EQ(engine.find_instrument(nul_symbol_config.symbol), InstrumentId{0});
+    CHECK_EQ(engine.instrument_count(), std::size_t{40});
+    CHECK_EQ(engine.add_instrument(small_instrument_config("S40")), InstrumentId{41});
 }
