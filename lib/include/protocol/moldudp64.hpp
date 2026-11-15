@@ -51,7 +51,8 @@ public:
         if (message.size() + 2 > buffer_.size() - used_) return Status::full;
         wire::store16(buffer_.data() + used_, static_cast<std::uint16_t>(message.size()));
         used_ += 2;
-        for (char c : message) buffer_[used_++] = c;
+        std::copy_n(message.data(), message.size(), buffer_.data() + used_);
+        used_ += message.size();
         wire::store16(buffer_.data() + 18, ++count_);
         return Status::ok;
     }
