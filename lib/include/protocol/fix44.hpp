@@ -24,31 +24,9 @@ inline bool parse_uint(std::string_view s, std::uint64_t& v) noexcept {
     return true;
 }
 inline bool parse_price(std::string_view s, Price& price) noexcept {
-    bool negative = !s.empty() && s.front() == '-';
-    if (negative) s.remove_prefix(1);
-    if (s.empty()) return false;
-    std::uint64_t v = 0;
-    unsigned decimals = 0;
-    bool dot = false, digit = false;
-    const auto limit = std::uint64_t(INT64_MAX) + (negative ? 1 : 0);
-    for (char c : s) {
-        if (c == '.' && !dot && digit) {
-            dot = true;
-            continue;
-        }
-        if (c < '0' || c > '9' || (dot && ++decimals > 4)) return false;
-        digit = true;
-        auto d = static_cast<unsigned>(c - '0');
-        if (v > (limit - d) / 10) return false;
-        v = v * 10 + d;
-    }
-    if (!digit || (dot && !decimals)) return false;
-    for (unsigned i = decimals; i < 4; ++i) {
-        if (v > limit / 10) return false;
-        v *= 10;
-    }
-    price = negative ? (v == std::uint64_t(INT64_MAX) + 1 ? INT64_MIN : -static_cast<Price>(v)) : static_cast<Price>(v);
-    return true;
+    auto digits = s;
+    if (!digits.empty() && digits.front() == '-') digits.remove_prefix(1);
+    return !digits.empty() && digits.front() != '.' && exsim::parse_decimal_price(s, price);
 }
 inline std::size_t format_uint(std::uint64_t v, char* p, std::size_t n) noexcept {
     char tmp[20];
