@@ -112,7 +112,10 @@ class TcpServer {
     void flush_pending(Handler& handler) noexcept;
 
     // True for an accepted connection that is not closing.
-    bool is_open(ConnectionId id) const noexcept { return open_slot(id) != nullptr; }
+    bool is_open(ConnectionId id) const noexcept {
+        return id.slot < slots_.size() && slots_[id.slot].state == SlotState::Open &&
+               slots_[id.slot].generation == id.generation;
+    }
 
     // Queues bytes for the next flush_pending(). Returns false for a stale or
     // closing connection, and on send-buffer overflow (the connection is then
@@ -223,16 +226,8 @@ class TcpServer {
         Slot& slot = slots_[id.slot];
         return (slot.state != SlotState::Free && slot.generation == id.generation) ? &slot : nullptr;
     }
-    const Slot* open_slot(ConnectionId id) const noexcept {
-        if (id.slot >= slots_.size()) {
-            return nullptr;
-        }
-        const Slot& slot = slots_[id.slot];
-        return (slot.state == SlotState::Open && slot.generation == id.generation) ? &slot : nullptr;
-    }
-    Slot* open_slot(ConnectionId id) noexcept {
-        return const_cast<Slot*>(static_cast<const TcpServer*>(this)->open_slot(id));
-    }
+    // Slot of an open (not closing) connection with this exact id.
+    Slot* open_slot(ConnectionId id) noexcept { return is_open(id) ? &slots_[id.slot] : nullptr; }
 
     void queue_for_flush(std::uint32_t slot_index) noexcept {
         Slot& slot = slots_[slot_index];
