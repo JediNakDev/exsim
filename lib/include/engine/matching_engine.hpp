@@ -127,7 +127,9 @@ public:
     std::size_t depth(InstrumentId id, Side side, LevelInfo* out, std::size_t max_levels) const noexcept;
 
     // Writes the OrderIds resting at (side, price) in FIFO order; returns
-    // the number written (at most `max_orders`).
+    // the number written (at most `max_orders`). Writes none for an unknown
+    // instrument, an invalid side, a price off the instrument's grid or band,
+    // or an empty level.
     std::size_t level_orders(InstrumentId id, Side side, Price price,
                              OrderId* out, std::size_t max_orders) const noexcept;
 
@@ -137,30 +139,10 @@ public:
 
     [[nodiscard]] AuctionIndicative auction_indicative(InstrumentId id) const noexcept;
 
-    // Visits the orders resting at (side, price) of instrument `id` in FIFO
-    // order. Visits none for an unknown instrument, an invalid side, a price
-    // off the instrument's grid or band, or an empty level. Allocation-free;
-    // `f` must not modify the engine.
-    template <typename F>
-    void for_each_level_order(InstrumentId id, Side side, Price price, F&& f) const;
-
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
-
-    // Implementation hook for for_each_level_order (FIFO).
-    void visit_level_orders(InstrumentId id, Side side, Price price,
-                            void (*fn)(const OrderInfo&, void*), void* ctx) const;
 };
-
-template <typename F>
-void MatchingEngine::for_each_level_order(InstrumentId id, Side side, Price price, F&& f) const {
-    auto callback = [&](const OrderInfo& o) { f(o); };
-    visit_level_orders(
-        id, side, price,
-        [](const OrderInfo& o, void* ctx) { (*static_cast<decltype(callback)*>(ctx))(o); },
-        &callback);
-}
 
 }  // namespace exsim
 

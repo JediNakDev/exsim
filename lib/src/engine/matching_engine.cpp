@@ -1264,19 +1264,4 @@ AuctionIndicative MatchingEngine::auction_indicative(InstrumentId id) const noex
     return indicative;
 }
 
-void MatchingEngine::visit_level_orders(InstrumentId id, Side side, Price price,
-                                        void (*fn)(const OrderInfo&, void*), void* ctx) const {
-    const Impl& impl = *impl_;
-    const InstrumentBook* book = impl.find_book(id);
-    std::int32_t tick = 0;
-    if (book == nullptr || raw_value(side) > raw_value(Side::SELL) || !book->tick_of(price, tick)) {
-        return;
-    }
-    const Level* level = book->order_book->price_level(side, tick);
-    for (const Order* resting = level == nullptr ? nullptr : level->head_order; resting != nullptr;
-         resting = resting->next_order) {
-        fn(impl.order_info(resting->context_index), ctx);
-    }
-}
-
 }  // namespace exsim

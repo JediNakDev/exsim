@@ -46,6 +46,10 @@ TEST_CASE(engine_queries, depth_and_level_orders_in_priority_order_with_truncati
     CHECK_EQ(fixture.engine.level_orders(1, Side::BUY, 5000, ids, 2), std::size_t{0});  // out of band
     CHECK_EQ(fixture.engine.level_orders(1, Side::BUY, -10, ids, 2), std::size_t{0});
     CHECK_EQ(fixture.engine.level_orders(3, Side::BUY, 100, ids, 2), std::size_t{0});
+    CHECK_EQ(fixture.engine.level_orders(0, Side::BUY, 100, ids, 2), std::size_t{0});
+    CHECK_EQ(fixture.engine.level_orders(1, static_cast<Side>(2), 100, ids, 2), std::size_t{0});
+    CHECK_EQ(fixture.engine.level_orders(1, Side::BUY, std::numeric_limits<Price>::max(), ids, 2), std::size_t{0});
+    CHECK_EQ(fixture.engine.level_orders(1, Side::BUY, std::numeric_limits<Price>::min(), ids, 2), std::size_t{0});
 
     CHECK_EQ(*fixture.engine.best_bid(1), Price{100});
     CHECK_EQ(*fixture.engine.best_ask(1), Price{120});
@@ -83,17 +87,7 @@ TEST_CASE(engine_queries, find_order_by_order_id_and_by_session_token) {
     check_book_invariants(fixture.engine);
 }
 
-namespace {
-
-std::vector<OrderInfo> orders_at_level(const MatchingEngine& engine, InstrumentId id, Side side, Price price) {
-    std::vector<OrderInfo> visited;
-    engine.for_each_level_order(id, side, price, [&](const OrderInfo& order) { visited.push_back(order); });
-    return visited;
-}
-
-}  // namespace
-
-TEST_CASE(engine_queries, for_each_level_order_visits_one_level_in_fifo_order) {
+TEST_CASE(engine_queries, level_orders_keeps_fifo_order_through_fills) {
     EngineFixture fixture(Phase::Continuous, 2);
     fixture.apply(limit_order(kAliceSession, 1, Side::BUY, 100, 5));     // 1
     fixture.apply(limit_order(kBobSession, 1, Side::BUY, 90, 4));        // 2, other level
@@ -102,79 +96,46 @@ TEST_CASE(engine_queries, for_each_level_order_visits_one_level_in_fifo_order) {
     fixture.apply(limit_order(kAliceSession, 3, Side::BUY, 100, 8));     // 5
     fixture.apply(limit_order(kBobSession, 3, Side::SELL, 100, 2));      // partially fills 1
 
-    const std::vector<OrderInfo> level = orders_at_level(fixture.engine, 1, Side::BUY, 100);
-    REQUIRE_EQ(level.size(), std::size_t{3});
-    CHECK_EQ(level[0].order_id, OrderId{1});
-    CHECK_EQ(level[0].leaves_qty, Quantity{3});
-    CHECK_EQ(level[0].cum_qty, Quantity{2});
-    CHECK_EQ(level[1].order_id, OrderId{3});
-    CHECK_EQ(level[1].session, kBobSession);
-    CHECK_EQ(level[1].leaves_qty, Quantity{6});
-    CHECK_EQ(level[2].order_id, OrderId{5});
-    CHECK_EQ(level[2].cl_ord_id, ClOrdId{3});
-    for (const OrderInfo& order : level) {
-        CHECK_EQ(order.instrument, InstrumentId{1});
-        CHECK_EQ(order.price, Price{100});
-        CHECK(order.side == Side::BUY);
-    }
-
-    // Same order as level_orders, and the same fields as find_order.
-    OrderId ids[4] = {};
-    REQUIRE_EQ(fixture.engine.level_orders(1, Side::BUY, 100, ids, 4), level.size());
-    for (std::size_t i = 0; i < level.size(); ++i) {
-        CHECK_EQ(level[i].order_id, ids[i]);
-        CHECK_EQ(fixture.engine.find_order(ids[i])->leaves_qty, level[i].leaves_qty);
+    CHECK_EQ(level_fifo(fixture.engine, 1, Side::BUY, 100), (std::vector<OrderId>{1, 3, 5}));
+    const auto head = fixture.engine.find_order(OrderId{1});
+    REQUIRE(head.has_value());
+    CHECK_EQ(head->leaves_qty, Quantity{3});
+    CHECK_EQ(head->cum_qty, Quantity{2});
+    for (const OrderId order_id : level_fifo(fixture.engine, 1, Side::BUY, 100)) {
+        const auto order = fixture.engine.find_order(order_id);
+        REQUIRE(order.has_value());
+        CHECK_EQ(order->instrument, InstrumentId{1});
+        CHECK_EQ(order->price, Price{100});
+        CHECK(order->side == Side::BUY);
     }
 
     // Fully filling the head removes it; the queue behind keeps its order.
     fixture.apply(limit_order(kBobSession, 4, Side::SELL, 100, 3));
-    const std::vector<OrderInfo> after_fill = orders_at_level(fixture.engine, 1, Side::BUY, 100);
-    REQUIRE_EQ(after_fill.size(), std::size_t{2});
-    CHECK_EQ(after_fill[0].order_id, OrderId{3});
-    CHECK_EQ(after_fill[1].order_id, OrderId{5});
-
-    const std::vector<OrderInfo> other_instrument = orders_at_level(fixture.engine, 2, Side::BUY, 100);
-    REQUIRE_EQ(other_instrument.size(), std::size_t{1});
-    CHECK_EQ(other_instrument[0].order_id, OrderId{4});
+    CHECK_EQ(level_fifo(fixture.engine, 1, Side::BUY, 100), (std::vector<OrderId>{3, 5}));
+    CHECK_EQ(level_fifo(fixture.engine, 2, Side::BUY, 100), (std::vector<OrderId>{4}));
     check_book_invariants(fixture.engine);
 }
 
-TEST_CASE(engine_queries, for_each_level_order_visits_nothing_for_absent_or_invalid_levels) {
-    EngineFixture fixture;
-    fixture.apply(limit_order(kAliceSession, 1, Side::BUY, 100, 5));
-    fixture.apply(limit_order(kAliceSession, 2, Side::SELL, 120, 5));
-
-    CHECK(orders_at_level(fixture.engine, 1, Side::SELL, 100).empty());   // other side
-    CHECK(orders_at_level(fixture.engine, 1, Side::BUY, 110).empty());    // empty level
-    CHECK(orders_at_level(fixture.engine, 1, Side::BUY, 95).empty());     // off grid
-    CHECK(orders_at_level(fixture.engine, 1, Side::BUY, 5000).empty());   // above band
-    CHECK(orders_at_level(fixture.engine, 1, Side::BUY, -10).empty());    // below band
-    CHECK(orders_at_level(fixture.engine, 0, Side::BUY, 100).empty());    // no instrument 0
-    CHECK(orders_at_level(fixture.engine, 2, Side::BUY, 100).empty());    // unknown instrument
-    CHECK(orders_at_level(fixture.engine, 1, static_cast<Side>(2), 100).empty());
-    CHECK(orders_at_level(fixture.engine, 1, Side::BUY, std::numeric_limits<Price>::max()).empty());
-    CHECK(orders_at_level(fixture.engine, 1, Side::BUY, std::numeric_limits<Price>::min()).empty());
-}
-
-TEST_CASE(engine_queries, for_each_level_order_allocates_nothing) {
+TEST_CASE(engine_queries, depth_and_level_orders_allocate_nothing) {
     EngineFixture fixture;
     for (ClOrdId token = 1; token <= 20; ++token) {
-        fixture.apply(limit_order(kAliceSession, token, Side::SELL, 150, token));
+        fixture.apply(limit_order(kAliceSession, token, Side::SELL, 150, static_cast<Quantity>(token)));
     }
-    Quantity visited_leaves = 0;
-    std::size_t visited_orders = 0;
+    LevelInfo levels[4];
+    OrderId order_ids[32];
+    std::size_t level_count = 0;
+    std::size_t order_count = 0;
     std::size_t allocations = 0;
     {
         testfw::AllocationScope scope;
-        fixture.engine.for_each_level_order(1, Side::SELL, 150, [&](const OrderInfo& order) {
-            visited_leaves += order.leaves_qty;
-            ++visited_orders;
-        });
-        fixture.engine.for_each_level_order(1, Side::SELL, 140, [&](const OrderInfo&) { ++visited_orders; });
+        level_count = fixture.engine.depth(1, Side::SELL, levels, 4);
+        order_count = fixture.engine.level_orders(1, Side::SELL, 150, order_ids, 32);
+        order_count += fixture.engine.level_orders(1, Side::SELL, 140, order_ids, 32);
         allocations = scope.count();
     }
-    CHECK_EQ(visited_orders, std::size_t{20});
-    CHECK_EQ(visited_leaves, Quantity{210});
+    CHECK_EQ(level_count, std::size_t{1});
+    CHECK_EQ(levels[0].qty, std::uint64_t{210});
+    CHECK_EQ(order_count, std::size_t{20});
     CHECK_EQ(allocations, std::size_t{0});
 }
 
