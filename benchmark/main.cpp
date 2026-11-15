@@ -1,6 +1,5 @@
 #include "utils/cpu_pinner.hpp"
 #include "utils/csv_writer.hpp"
-#include "utils/warmup.hpp"
 #include <benchmark/benchmark.h>
 
 #include <iostream>
@@ -11,6 +10,12 @@ int main(int argc, char** argv) {
     std::cout << "Exsim Benchmark Suite\n";
     std::cout << "========================================\n";
     std::cout << "CPU: " << bench::CPUPinner::cpu_info() << "\n";
+    std::cout << "Compiler: " << __VERSION__ << "\n";
+#ifdef NDEBUG
+    std::cout << "Asserts: off\n";
+#else
+    std::cout << "Asserts: on\n";
+#endif
 
     int target_core = 0;
     std::string csv_path = "build/bench/exsim_results.csv";
@@ -39,10 +44,6 @@ int main(int argc, char** argv) {
     bench::csv() = std::make_unique<bench::CSVWriter>(csv_path);
     std::cout << "CSV Output: " << csv_path << "\n";
     std::cout << "========================================\n\n";
-
-    std::cout << "Warmup...\n";
-    bench::warmup();
-    std::cout << "Done.\n\n";
 
     benchmark::Initialize(&argc, argv);
     benchmark::RunSpecifiedBenchmarks();

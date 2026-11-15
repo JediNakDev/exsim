@@ -1,4 +1,5 @@
-#pragma once
+#ifndef EXSIM_BENCH_CPU_PINNER_HPP
+#define EXSIM_BENCH_CPU_PINNER_HPP
 
 #include <string>
 
@@ -46,4 +47,6 @@ public:
     }
 };
 
-}
+}  // namespace bench
+
+#endif

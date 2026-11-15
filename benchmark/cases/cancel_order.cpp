@@ -1,25 +1,18 @@
-#include "../utils/runner.hpp"
-#include "../utils/workload.hpp"
-#include <book/order_book.hpp>
+#include "utils/runner.hpp"
+
+#include <algorithm>
 
 using namespace bench;
 
+// Cancels every order of a 64k-order book in random order.
 static void BM_CancelOrder(benchmark::State& state) {
-    std::unique_ptr<PrePopulatedBook> prepop;
-    const std::vector<exsim::book::OrderId>* ids = nullptr;
-
-    BenchmarkRunner runner(state, "CancelOrder");
-    runner.run_with_setup(
-        [&] {
-            prepop = std::make_unique<PrePopulatedBook>(500, 10);
-            ids = &prepop->ids();
-        },
-        [&](size_t i) {
-            if (i < ids->size()) {
-                return prepop->book().cancel_order((*ids)[i]);
-            }
-            return false;
-        });
+    run_commands(state, "CancelOrder", [](Scenario& scenario) {
+        std::vector<RestingOrder> resting = scenario.rest_random_orders(65536);
+        std::shuffle(resting.begin(), resting.end(), scenario.rng());
+        std::vector<exsim::Command> commands;
+        for (const RestingOrder& order : resting) commands.push_back(Scenario::cancel(order.cl_ord_id));
+        return commands;
+    });
 }
 
-BENCHMARK(BM_CancelOrder)->Unit(benchmark::kNanosecond)->MinTime(3.0);
+BENCHMARK(BM_CancelOrder)->Iterations(kIterations)->Unit(benchmark::kMillisecond);

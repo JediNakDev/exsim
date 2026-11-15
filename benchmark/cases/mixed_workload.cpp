@@ -1,83 +1,62 @@
-#include "../utils/constants.hpp"
-#include "../utils/csv_writer.hpp"
-#include "../utils/stats.hpp"
-#include "../utils/warmup.hpp"
-#include "../utils/workload.hpp"
-#include <book/order_book.hpp>
-#include <chrono>
+#include "utils/runner.hpp"
 
 using namespace bench;
 
-static void BM_MixedWorkload(benchmark::State& state) {
-    warmup();
-    const auto& w = workload();
-    std::vector<double> latencies;
-    latencies.reserve(BENCHMARK_SAMPLES);
+namespace {
 
-    for (auto _ : state) {
-        state.PauseTiming();
-        PrePopulatedBook prepop(30, 5);
-        auto& book = prepop.book();
-        const auto& ids = prepop.ids();
-        std::vector<exsim::book::OrderId> active_ids(ids);
-        latencies.clear();
-        size_t idx = 0;
-        state.ResumeTiming();
+struct CommandMix {
+    unsigned new_order_percent;
+    unsigned cancel_percent;  // the rest are replaces
+};
 
-        auto batch_start = std::chrono::high_resolution_clock::now();
-
-        for (size_t i = 0; i < BENCHMARK_SAMPLES; ++i) {
-            int op = (idx + i) % 100;
-
-            auto start = std::chrono::high_resolution_clock::now();
-
-            if (op < 60) {
-                if (op % 3 == 0) {
-                    benchmark::DoNotOptimize(book.get_best_bid());
-                } else if (op % 3 == 1) {
-                    benchmark::DoNotOptimize(book.get_best_ask());
-                } else {
-                    benchmark::DoNotOptimize(book.get_spread());
-                }
-            } else if (op < 85) {
-                const auto& order = w.get(idx + i);
-                auto result = book.add_order(order.price, order.quantity, order.side);
-                benchmark::DoNotOptimize(result);
-                if (active_ids.size() < 10000) {
-                    active_ids.push_back(result.order_id);
-                }
-            } else if (op < 95) {
-                if (!active_ids.empty()) {
-                    size_t cancel_idx = w.cancel_index(i) % active_ids.size();
-                    benchmark::DoNotOptimize(book.cancel_order(active_ids[cancel_idx]));
-                }
-            } else {
-                if (!active_ids.empty()) {
-                    size_t mod_idx = (idx + i) % active_ids.size();
-                    benchmark::DoNotOptimize(book.modify_order(active_ids[mod_idx], w.modify_quantity(i)));
-                }
-            }
-
-            auto end = std::chrono::high_resolution_clock::now();
-            latencies.push_back(std::chrono::duration<double, std::nano>(end - start).count());
-            benchmark::ClobberMemory();
+// New orders rest and never cross, so the live-order model below stays exact
+// and every cancel and replace targets an order that is on the book.
+std::vector<exsim::Command> mixed_commands(Scenario& scenario, std::size_t book_size,
+                                           std::size_t command_count, CommandMix mix) {
+    std::vector<RestingOrder> live = scenario.rest_random_orders(book_size);
+    std::vector<exsim::Command> commands;
+    commands.reserve(command_count);
+    for (std::size_t i = 0; i < command_count; ++i) {
+        const unsigned roll = static_cast<unsigned>(scenario.rng()() % 100);
+        if (live.empty() || roll < mix.new_order_percent) {
+            const RestingOrder order{scenario.next_cl_ord_id(), scenario.random_side()};
+            commands.push_back(scenario.new_order(order.cl_ord_id, order.side,
+                                                  scenario.random_price(order.side),
+                                                  scenario.random_quantity()));
+            live.push_back(order);
+            continue;
         }
-
-        auto batch_end = std::chrono::high_resolution_clock::now();
-        double batch_time_sec = std::chrono::duration<double>(batch_end - batch_start).count();
-
-        auto stats = Stats::compute(latencies);
-        stats.throughput = BENCHMARK_SAMPLES / batch_time_sec;
-        stats.report(state);
-        state.counters["Throughput_ops_sec"] = stats.throughput;
-
-        if (csv()) csv()->write("MixedWorkload", stats);
-
-        idx += BENCHMARK_SAMPLES;
+        const std::size_t target = scenario.rng()() % live.size();
+        if (roll < mix.new_order_percent + mix.cancel_percent) {
+            commands.push_back(Scenario::cancel(live[target].cl_ord_id));
+            live[target] = live.back();
+            live.pop_back();
+        } else {
+            const exsim::ClOrdId new_cl_ord_id = scenario.next_cl_ord_id();
+            commands.push_back(Scenario::replace(live[target].cl_ord_id, new_cl_ord_id,
+                                                 scenario.random_price(live[target].side),
+                                                 scenario.random_quantity()));
+            live[target].cl_ord_id = new_cl_ord_id;
+        }
     }
-
-    state.SetItemsProcessed(state.iterations() * BENCHMARK_SAMPLES);
-    state.SetLabel("60% query, 25% add, 10% cancel, 5% modify");
+    return commands;
 }
 
-BENCHMARK(BM_MixedWorkload)->Unit(benchmark::kNanosecond)->MinTime(5.0);
+}  // namespace
+
+// 50% new order, 35% cancel, 15% replace on a 16k-order book.
+static void BM_MixedWorkload(benchmark::State& state) {
+    run_commands(state, "MixedWorkload", [](Scenario& scenario) {
+        return mixed_commands(scenario, 16384, 65536, {.new_order_percent = 50, .cancel_percent = 35});
+    });
+}
+
+// Cancel-dominated traffic: 93% cancel, 5% new order, 2% replace.
+static void BM_CancelHeavyWorkload(benchmark::State& state) {
+    run_commands(state, "CancelHeavyWorkload", [](Scenario& scenario) {
+        return mixed_commands(scenario, 65536, 65536, {.new_order_percent = 5, .cancel_percent = 93});
+    });
+}
+
+BENCHMARK(BM_MixedWorkload)->Iterations(kIterations)->Unit(benchmark::kMillisecond);
+BENCHMARK(BM_CancelHeavyWorkload)->Iterations(kIterations)->Unit(benchmark::kMillisecond);
