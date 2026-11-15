@@ -1,3 +1,4 @@
+#include "test/exsim/protocol/fix44_decode.hpp"
 #ifndef EXSIM_TEST_SUPPORT_FIX_CLIENT_HPP
 #define EXSIM_TEST_SUPPORT_FIX_CLIENT_HPP
 
