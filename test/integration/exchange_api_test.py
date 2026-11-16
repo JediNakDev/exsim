@@ -233,8 +233,10 @@ class ExchangeApiTests(unittest.TestCase):
             self.assertEqual(replay, packet)
 
     def test_managed_journal_records_external_orders_and_shutdown(self):
-        journal = Path(self.temporary.name) / "managed.journal"
-        exchange = self.start(self.create(config() + f"\n[journal]\npath = {journal}\n"))
+        for path in ("/tmp/managed.journal", "../managed.journal", "managed.conf"):
+            self.api("POST", "/v1/exchanges", {"config": config() + f"\n[journal]\npath = {path}\n"}, 400)
+        journal = self.data / "managed.journal"
+        exchange = self.start(self.create(config() + "\n[journal]\npath = managed.journal\n"))
         path = f"/v1/exchanges/{exchange['id']}"
         trader = Trader(exchange["runtime"]["connections"]["orderEntryPort"], "ALICE", "alice")
         self.addCleanup(trader.close)
