@@ -31,11 +31,10 @@ LIB_SRCS := $(filter-out $(TEST_LIB_SRCS),$(shell find lib/src -name '*.cpp' | s
 obj = $(patsubst %.cpp,$(BUILD)/obj/%.o,$(1))
 LIB_OBJS := $(call obj,$(LIB_SRCS))
 TEST_LIB_OBJS := $(call obj,$(TEST_LIB_SRCS))
-# Unit coverage stays local to codecs, gateways, matching and core policies.
-UNIT_SRCS := $(shell find test/exsim/book test/exsim/util test/exsim/itch_replay test/framework test/exsim/engine test/exsim/protocol test/exsim/gateway test/exsim/md test/exsim/server/core test/exsim/server/admin -name '*.cpp' | sort)
-UNIT_SRCS := $(filter-out %udp_loopback_tests.cpp,$(UNIT_SRCS))
-UNIT_SRCS += test/exsim/api/api_json_tests.cpp test/exsim/server/config_tests.cpp test/exsim/server/config_review_tests.cpp test/exsim/foundation/contract_tests.cpp
-INTEGRATION_SRCS := $(shell find test/exsim/net -name '*.cpp' | sort) test/exsim/api/http_tests.cpp test/exsim/api/exchange_service_tests.cpp test/exsim/md/udp_loopback_tests.cpp test/framework/alloc_counter.cpp
+# A suite is a folder: test/exsim holds unit tests (mirrors lib/), test/integration holds sockets and processes.
+# Both hold *_tests.cpp only; shared helpers under test/exsim/support are not picked up here.
+UNIT_SRCS := $(shell find test/exsim test/framework -name '*_tests.cpp' | sort) test/framework/alloc_counter.cpp
+INTEGRATION_SRCS := $(shell find test/integration -name '*_tests.cpp' | sort) test/framework/alloc_counter.cpp
 .PHONY: all apps test unit integration clean
 all: apps
 apps: $(BUILD)/exsim_api $(BUILD)/exsim_exchanged
