@@ -18,3 +18,36 @@ jobs:
         run: make -j4 unit MODE=${{ matrix.mode }} EXTRA_CXXFLAGS=-Werror
       - name: API and exchange integration
         run: make -j4 integration MODE=${{ matrix.mode }} EXTRA_CXXFLAGS=-Werror
+  tsan:
+    name: ThreadSanitizer (ubuntu-24.04)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      # Some runner kernels map memory at addresses ThreadSanitizer cannot handle.
+      - name: lower ASLR entropy for ThreadSanitizer
+        run: sudo sysctl vm.mmap_rnd_bits=28
+      - name: unit tests
+        run: make -j4 unit MODE=release EXTRA_CXXFLAGS='-fsanitize=thread -g' EXTRA_LDFLAGS=-fsanitize=thread BUILD=build/tsan
+      - name: API and exchange integration
+        run: make -j4 integration MODE=release EXTRA_CXXFLAGS='-fsanitize=thread -g' EXTRA_LDFLAGS=-fsanitize=thread BUILD=build/tsan
+  benchmarks:
+    name: benchmark build (ubuntu-24.04)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: install Google Benchmark
+        run: sudo apt-get update && sudo apt-get install -y libbenchmark-dev
+      - name: build benchmarks
+        run: make -j4 MODE=bench bench-build
+  format:
+    name: format check (clang-format 18)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: install clang-format 18
+        run: sudo apt-get update && sudo apt-get install -y clang-format-18
+      - name: check formatting
+        run: make format-check
