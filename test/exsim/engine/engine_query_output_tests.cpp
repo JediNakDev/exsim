@@ -314,3 +314,9 @@ TEST_CASE(engine_instruments, find_instrument_by_symbol_after_many_instruments) 
     CHECK_EQ(engine.instrument_count(), std::size_t{40});
     CHECK_EQ(engine.add_instrument(small_instrument_config("S40")), InstrumentId{41});
 }
+
+TEST_CASE(engine_capacity, default_engine_is_small) {
+    CHECK_EQ(EngineConfig{}.max_orders, std::size_t{1024});
+    MatchingEngine engine;
+    CHECK_EQ(engine.live_order_count(), std::size_t{0});
+}

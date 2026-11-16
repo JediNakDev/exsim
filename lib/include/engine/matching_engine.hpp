@@ -34,7 +34,7 @@ namespace exsim {
 
 struct EngineConfig {
     std::size_t max_instruments = 64;
-    std::size_t max_orders = 1u << 20;  // live (resting) orders across all instruments
+    std::size_t max_orders = 1024;  // live (resting) orders across all instruments
 };
 
 // Conservative bound for ANY command, including all-instrument phase changes.
