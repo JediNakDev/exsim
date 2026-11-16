@@ -55,9 +55,8 @@ clean:
 	rm -rf $(BUILD)
 -include $(shell find $(BUILD)/obj -name '*.d' 2>/dev/null)
 
-# The ITCH replay tool links only the order book. The benchmarks link the matching engine too.
-BOOK_OBJS := $(call obj,lib/src/book/order_book.cpp)
-ENGINE_OBJS := $(BOOK_OBJS) $(call obj,lib/src/engine/matching_engine.cpp)
+# The ITCH replay tool and the benchmarks link only the matching engine and its order book.
+ENGINE_OBJS := $(call obj,lib/src/book/order_book.cpp lib/src/engine/matching_engine.cpp)
 BENCH_SRCS := $(sort $(wildcard benchmark/*.cpp benchmark/cases/*.cpp benchmark/utils/*.cpp))
 BENCH_BUILD ?= build/bench
 BENCH_BIN := $(BENCH_BUILD)/exsim_benchmark
@@ -69,7 +68,7 @@ BENCH_LDFLAGS := -L$(BENCHMARK_PREFIX)/lib
 endif
 
 .PHONY: bench bench-build itch-replay
-$(BUILD)/itch_replay: $(call obj,src/utils/itch_replay/main.cpp) $(BOOK_OBJS)
+$(BUILD)/itch_replay: $(call obj,src/utils/itch_replay/main.cpp) $(ENGINE_OBJS)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $^ -o $@ $(LDLIBS)
 itch-replay:
 	$(MAKE) MODE=perf build/perf/itch_replay

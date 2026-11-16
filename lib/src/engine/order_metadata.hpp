@@ -3,9 +3,9 @@
 
 // Engine-only order metadata indexed by the order book order's context_index.
 // The order book owns resting orders (ID, price tick, leaves), price levels and
-// FIFO links. These preallocated arrays hold what the book does not: session
-// and STP attributes, cumulative fills, and the per-session and per-instrument
-// order lists. Index 0 means no metadata slot.
+// FIFO links. One preallocated record per order holds what the book does not:
+// session and STP attributes, cumulative fills, and the links of the
+// per-session and per-instrument order lists. Index 0 means no metadata slot.
 
 #include <engine/types.hpp>
 #include <book/order.hpp>
@@ -33,38 +33,29 @@ inline constexpr unsigned kSessionTokenShift = 48;
     return session_token & kMaxClOrdId;
 }
 
-struct OrderHot {
-    exsim::book::Order* order;  // the resting book order; its context_index is this slot
+// One cache line, so a rest, fill or cancel reads one metadata line per order.
+struct alignas(64) OrderMetadata {
+    exsim::book::Order* order;      // the resting book order; its context_index is this slot
     std::uint64_t session_token;    // make_session_token(session, cl_ord_id)
     Quantity cum_qty;
     OwnerId owner;
-    OrderIndex next;                // metadata free-list link when the slot is free
-};
-static_assert(sizeof(OrderHot) == 32, "two hot records per cache line");
-
-struct OrderCold {
+    OrderIndex next_free;           // free-list link while the slot is free
     InstrumentId instrument;
     TimeInForce tif;
     StpMode stp;
     bool post_only;
-    OrderIndex next_in_session;   // per-session list, ascending OrderId
+    OrderIndex next_in_session;     // per-session list, ascending OrderId
     OrderIndex prev_in_session;
+    OrderIndex next_in_instrument;  // per-instrument list, ascending OrderId
+    OrderIndex prev_in_instrument;
 };
-static_assert(sizeof(OrderCold) == 16, "four cold records per cache line");
+static_assert(sizeof(OrderMetadata) == 64, "one metadata record per cache line");
 
 // Head and tail of an intrusive doubly linked list of orders.
 struct OrderListEnds {
     OrderIndex head;
     OrderIndex tail;
 };
-
-// Per-instrument list links, kept apart from OrderCold and touched only on
-// add and remove.
-struct InstrumentListLinks {
-    OrderIndex next;  // per-instrument list, ascending OrderId
-    OrderIndex prev;
-};
-static_assert(sizeof(InstrumentListLinks) == 8, "eight instrument links per cache line");
 
 }  // namespace exsim::engine
 
