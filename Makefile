@@ -13,6 +13,7 @@ ifeq ($(MODE),debug)
 CXXFLAGS += -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined
 LDFLAGS += -fsanitize=address,undefined
 else ifeq ($(MODE),release)
+# Release keeps asserts on (no -DNDEBUG) on purpose: a broken invariant aborts. Only perf and bench define NDEBUG.
 CXXFLAGS += -O2 -g
 else ifneq ($(filter $(MODE),perf bench),)
 # bench is the perf configuration under another name, so the benchmarked engine is the perf build.
@@ -51,9 +52,11 @@ unit: $(BUILD)/unit_tests
 	./$(BUILD)/unit_tests $(FILTER)
 $(BUILD)/integration_tests: $(call obj,test/main.cpp $(INTEGRATION_SRCS)) $(LIB_OBJS) $(TEST_LIB_OBJS)
 	$(CXX) $(LDFLAGS) $^ -o $@ $(LDLIBS)
+# FILTER goes to both runners (substring for native cases, -k for Python). A runner that matches
+# nothing exits 2 (native) or 5 (Python 3.12+); that is not a failure.
 integration: apps $(BUILD)/integration_tests
-	EXSIM_BUILD=$(BUILD) ./$(BUILD)/integration_tests $(FILTER)
-	EXSIM_BUILD=$(BUILD) python3 -B test/integration/exchange_api_test.py
+	EXSIM_BUILD=$(BUILD) ./$(BUILD)/integration_tests $(FILTER); [ $$? -eq 0 -o $$? -eq 2 ]
+	EXSIM_BUILD=$(BUILD) python3 -B test/integration/exchange_api_test.py $(if $(FILTER),-k '$(FILTER)'); [ $$? -eq 0 -o $$? -eq 5 ]
 test: unit integration
 clean:
 	rm -rf $(BUILD)
