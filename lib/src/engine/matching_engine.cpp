@@ -10,7 +10,7 @@
 
 #include "fixed_array.hpp"
 #include "order_metadata.hpp"
-#include "price_ladder.hpp"
+#include "instrument_book.hpp"
 
 #include <util/compiler.hpp>
 #include <util/flat_hash_map.hpp>
