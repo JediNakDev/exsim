@@ -1,7 +1,6 @@
 #ifndef EXSIM_UTIL_OBJECT_POOL_HPP
 #define EXSIM_UTIL_OBJECT_POOL_HPP
 
-#include "util/compiler.hpp"
 #include <cstddef>
 #include <memory>
 #include <new>
@@ -32,7 +31,7 @@ public:
     // Returns nullptr when every node is in use.
     template <typename... Args>
     T* create(Args&&... args) {
-        if (EXSIM_UNLIKELY(!free_list_)) {
+        if (!free_list_) [[unlikely]] {
             return nullptr;
         }
 

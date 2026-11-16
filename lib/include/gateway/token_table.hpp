@@ -18,7 +18,6 @@
 // the gateway can echo the original 14 bytes back.
 
 #include "engine/types.hpp"
-#include "util/compiler.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -62,7 +61,7 @@ public:
 
     // Returns the id for `token`, assigning the next id if it is new.
     [[nodiscard]] InternResult intern(std::string_view token) noexcept {
-        if (EXSIM_UNLIKELY(token.empty() || token.size() > kMaxTokenLen)) {
+        if (token.empty() || token.size() > kMaxTokenLen) [[unlikely]] {
             return {0, InternStatus::Invalid};
         }
         const std::uint64_t h = hash(token);
@@ -80,7 +79,7 @@ public:
                 }
             }
         }
-        if (EXSIM_UNLIKELY(size_ == max_tokens_)) {
+        if (size_ == max_tokens_) [[unlikely]] {
             return {0, InternStatus::Full};
         }
         const std::uint32_t id = ++size_;
@@ -91,7 +90,7 @@ public:
 
     // Id of a previously interned token, or 0.
     [[nodiscard]] ClOrdId find(std::string_view token) const noexcept {
-        if (EXSIM_UNLIKELY(token.empty() || token.size() > kMaxTokenLen)) {
+        if (token.empty() || token.size() > kMaxTokenLen) [[unlikely]] {
             return 0;
         }
         const std::uint64_t h = hash(token);
@@ -112,7 +111,7 @@ public:
 
     // Original token bytes for an id, or an empty view if the id is unknown.
     [[nodiscard]] std::string_view token(ClOrdId id) const noexcept {
-        if (EXSIM_UNLIKELY(id == 0 || id > size_)) {
+        if (id == 0 || id > size_) [[unlikely]] {
             return {};
         }
         const Entry& e = entries_[id - 1];

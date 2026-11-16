@@ -1,7 +1,6 @@
 #ifndef EXSIM_UTIL_FLAT_HASH_MAP_HPP
 #define EXSIM_UTIL_FLAT_HASH_MAP_HPP
 
-#include "util/compiler.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -61,7 +60,7 @@ public:
     }
 
     [[nodiscard]] V* find(Key key) noexcept {
-        if (EXSIM_UNLIKELY(mask_ == 0 || key == 0)) {
+        if (mask_ == 0 || key == 0) [[unlikely]] {
             return nullptr;
         }
         for (std::size_t i = slot_of(key);; i = (i + 1) & mask_) {
@@ -84,10 +83,10 @@ public:
     // Inserts key -> value. Returns false if the key already exists, the key
     // is 0, or the map is full.
     [[nodiscard]] bool insert(Key key, const V& value) {
-        if (EXSIM_UNLIKELY(key == 0)) {
+        if (key == 0) [[unlikely]] {
             return false;
         }
-        if (EXSIM_UNLIKELY(size_ >= max_entries_)) {
+        if (size_ >= max_entries_) [[unlikely]] {
             return false;
         }
         for (std::size_t i = slot_of(key);; i = (i + 1) & mask_) {
@@ -106,7 +105,7 @@ public:
 
     // Removes `key`. Returns false if it was not present.
     bool erase(Key key) noexcept {
-        if (EXSIM_UNLIKELY(mask_ == 0 || key == 0)) {
+        if (mask_ == 0 || key == 0) [[unlikely]] {
             return false;
         }
         std::size_t hole = slot_of(key);
