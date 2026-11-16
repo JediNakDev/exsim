@@ -131,13 +131,7 @@ inline NewOrder limit_order(Timestamp ts, InstrumentId instrument, SessionId ses
 }
 
 inline void set_command_time(Command& command, Timestamp ts) {
-    switch (command.type) {
-        case CommandType::NewOrder: command.new_order.ts = ts; break;
-        case CommandType::Cancel: command.cancel.ts = ts; break;
-        case CommandType::Replace: command.replace.ts = ts; break;
-        case CommandType::MassCancel: command.mass_cancel.ts = ts; break;
-        case CommandType::SetPhase: command.set_phase.ts = ts; break;
-    }
+    command.timestamp = ts;
 }
 
 // First difference between two books exposing depth()/level_orders(), or

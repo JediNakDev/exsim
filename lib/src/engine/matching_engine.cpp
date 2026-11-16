@@ -100,22 +100,14 @@ inline void set_fill_leg(FillLeg& leg, OrderId order_id, ClOrdId cl_ord_id, Sess
 
 // The order currently being matched (a new order, or a replace that lost
 // priority). It lives on the stack until it rests.
-struct IncomingOrder {
+struct IncomingOrder : NewOrderData {
+    IncomingOrder(const NewOrderData& data, OrderId id, std::int32_t tick, Quantity cumulative = 0) noexcept
+        : NewOrderData(data), order_id(id), limit_tick(tick), leaves_qty(data.qty - cumulative), cum_qty(cumulative) {}
+
     OrderId order_id;
-    ClOrdId cl_ord_id;
-    Price price;               // as given; for market orders the command price, verbatim
-    std::int32_t limit_tick;   // market orders: the most aggressive tick of the ladder
-    Quantity qty;
+    std::int32_t limit_tick;  // market orders use the most aggressive tick
     Quantity leaves_qty;
     Quantity cum_qty;
-    OwnerId owner;
-    SessionId session;
-    InstrumentId instrument;
-    Side side;
-    OrdType type;
-    TimeInForce tif;
-    StpMode stp;
-    bool post_only;
 };
 
 // Result of the uncross price search.
@@ -627,23 +619,7 @@ void MatchingEngine::Impl::on_new_order(const NewOrder& cmd, EventBuffer& out) {
         return reject_new_order(cmd, RejectReason::CapacityExceeded, out);
     }
 
-    IncomingOrder order{
-        .order_id = next_order_id++,
-        .cl_ord_id = cmd.cl_ord_id,
-        .price = cmd.price,
-        .limit_tick = limit_tick,
-        .qty = cmd.qty,
-        .leaves_qty = cmd.qty,
-        .cum_qty = 0,
-        .owner = cmd.owner,
-        .session = cmd.session,
-        .instrument = cmd.instrument,
-        .side = cmd.side,
-        .type = cmd.type,
-        .tif = cmd.tif,
-        .stp = cmd.stp,
-        .post_only = cmd.post_only,
-    };
+    IncomingOrder order{cmd, next_order_id++, limit_tick};
     emit_accepted(order, cmd.ts, out);
 
     if (book.phase != Phase::Continuous) {
@@ -793,23 +769,20 @@ void MatchingEngine::Impl::on_replace(const ReplaceOrder& cmd, EventBuffer& out)
     }
 
     // Priority lost: leave the book, take a new OrderId, re-enter as an aggressor.
-    IncomingOrder order{
-        .order_id = next_order_id++,
-        .cl_ord_id = new_cl_ord_id,
-        .price = cmd.price,
-        .limit_tick = new_tick,
-        .qty = cmd.qty,
-        .leaves_qty = new_leaves_qty,
-        .cum_qty = cum_qty,
-        .owner = order_hot.owner,
-        .session = session,
+    const NewOrderData data{
         .instrument = instrument,
+        .session = session,
+        .owner = order_hot.owner,
+        .cl_ord_id = new_cl_ord_id,
         .side = side,
         .type = OrdType::Limit,
         .tif = order_cold.tif,
         .stp = order_cold.stp,
         .post_only = order_cold.post_only,
+        .price = cmd.price,
+        .qty = cmd.qty,
     };
+    IncomingOrder order{data, next_order_id++, new_tick, cum_qty};
     remove_resting(book, index);
 
     replaced.new_order_id = order.order_id;
@@ -1110,11 +1083,11 @@ HandleResult MatchingEngine::handle(const SetPhase& cmd, EventBuffer& out) {
 }
 HandleResult MatchingEngine::handle(const Command& cmd, EventBuffer& out) {
     switch (cmd.type) {
-        case CommandType::NewOrder: return handle(cmd.new_order, out);
-        case CommandType::Cancel: return handle(cmd.cancel, out);
-        case CommandType::Replace: return handle(cmd.replace, out);
-        case CommandType::MassCancel: return handle(cmd.mass_cancel, out);
-        case CommandType::SetPhase: return handle(cmd.set_phase, out);
+        case CommandType::NewOrder: return handle(NewOrder{cmd.ts(), cmd.new_order}, out);
+        case CommandType::Cancel: return handle(CancelOrder{cmd.ts(), cmd.cancel}, out);
+        case CommandType::Replace: return handle(ReplaceOrder{cmd.ts(), cmd.replace}, out);
+        case CommandType::MassCancel: return handle(MassCancel{cmd.ts(), cmd.mass_cancel}, out);
+        case CommandType::SetPhase: return handle(SetPhase{cmd.ts(), cmd.set_phase}, out);
     }
     return HandleResult::Applied;
 }

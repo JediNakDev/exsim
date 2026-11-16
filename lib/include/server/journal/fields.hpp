@@ -253,8 +253,8 @@ template <typename F>
 constexpr void visit_fields(const Command& c, F&& f) {
     switch (c.type) {
         case CommandType::NewOrder: {
-            const NewOrder& n = c.new_order;
-            f(Field{"ts", FieldKind::Timestamp, to_raw(n.ts)});
+            const auto& n = c.new_order;
+            f(Field{"ts", FieldKind::Timestamp, to_raw(c.ts())});
             f(Field{"instrument", FieldKind::Instrument, to_raw(n.instrument)});
             f(Field{"session", FieldKind::Session, to_raw(n.session)});
             f(Field{"owner", FieldKind::Owner, to_raw(n.owner)});
@@ -269,8 +269,8 @@ constexpr void visit_fields(const Command& c, F&& f) {
             return;
         }
         case CommandType::Cancel: {
-            const CancelOrder& x = c.cancel;
-            f(Field{"ts", FieldKind::Timestamp, to_raw(x.ts)});
+            const auto& x = c.cancel;
+            f(Field{"ts", FieldKind::Timestamp, to_raw(c.ts())});
             f(Field{"session", FieldKind::Session, to_raw(x.session)});
             f(Field{"orig_cl_ord_id", FieldKind::Token, to_raw(x.orig_cl_ord_id)});
             f(Field{"cl_ord_id", FieldKind::Token, to_raw(x.cl_ord_id)});
@@ -278,8 +278,8 @@ constexpr void visit_fields(const Command& c, F&& f) {
             return;
         }
         case CommandType::Replace: {
-            const ReplaceOrder& r = c.replace;
-            f(Field{"ts", FieldKind::Timestamp, to_raw(r.ts)});
+            const auto& r = c.replace;
+            f(Field{"ts", FieldKind::Timestamp, to_raw(c.ts())});
             f(Field{"session", FieldKind::Session, to_raw(r.session)});
             f(Field{"orig_cl_ord_id", FieldKind::Token, to_raw(r.orig_cl_ord_id)});
             f(Field{"cl_ord_id", FieldKind::Token, to_raw(r.cl_ord_id)});
@@ -289,8 +289,8 @@ constexpr void visit_fields(const Command& c, F&& f) {
             return;
         }
         case CommandType::MassCancel: {
-            const MassCancel& m = c.mass_cancel;
-            f(Field{"ts", FieldKind::Timestamp, to_raw(m.ts)});
+            const auto& m = c.mass_cancel;
+            f(Field{"ts", FieldKind::Timestamp, to_raw(c.ts())});
             f(Field{"session", FieldKind::Session, to_raw(m.session)});
             f(Field{"instrument", FieldKind::Instrument, to_raw(m.instrument)});
             f(Field{"cl_ord_id", FieldKind::Token, to_raw(m.cl_ord_id)});
@@ -298,8 +298,8 @@ constexpr void visit_fields(const Command& c, F&& f) {
             return;
         }
         case CommandType::SetPhase: {
-            const SetPhase& s = c.set_phase;
-            f(Field{"ts", FieldKind::Timestamp, to_raw(s.ts)});
+            const auto& s = c.set_phase;
+            f(Field{"ts", FieldKind::Timestamp, to_raw(c.ts())});
             f(Field{"instrument", FieldKind::Instrument, to_raw(s.instrument)});
             f(Field{"phase", FieldKind::Phase, to_raw(s.phase)});
             return;

@@ -256,13 +256,7 @@ public:
 
 private:
     static void stamp(Command& command, Timestamp now) noexcept {
-        switch (command.type) {
-            case CommandType::NewOrder: command.new_order.ts = now; break;
-            case CommandType::Cancel: command.cancel.ts = now; break;
-            case CommandType::Replace: command.replace.ts = now; break;
-            case CommandType::MassCancel: command.mass_cancel.ts = now; break;
-            case CommandType::SetPhase: command.set_phase.ts = now; break;
-        }
+        command.timestamp = now;
     }
 
     static bool consume_one(std::uint32_t& remaining) noexcept {

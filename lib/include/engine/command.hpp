@@ -11,8 +11,7 @@
 
 namespace exsim {
 
-struct NewOrder {
-    Timestamp ts = 0;
+struct NewOrderData {
     InstrumentId instrument = 0;
     SessionId session = 0;
     OwnerId owner = 0;
@@ -26,16 +25,14 @@ struct NewOrder {
     Quantity qty = 0;
 };
 
-struct CancelOrder {
-    Timestamp ts = 0;
+struct CancelOrderData {
     SessionId session = 0;
     ClOrdId orig_cl_ord_id = 0;  // token of the live order to cancel
     ClOrdId cl_ord_id = 0;       // token of this request (echoed back; may be 0)
     Quantity reduce_to_total_qty = 0; // 0 full cancel; else clamp leaves to max(total-cum,0)
 };
 
-struct ReplaceOrder {
-    Timestamp ts = 0;
+struct ReplaceOrderData {
     SessionId session = 0;
     ClOrdId orig_cl_ord_id = 0;  // token of the live order to replace
     ClOrdId cl_ord_id = 0;       // new token for the order; 0 = keep orig
@@ -44,49 +41,56 @@ struct ReplaceOrder {
     bool force_priority_loss = false;  // OUCH U always sets true
 };
 
-struct MassCancel {
-    Timestamp ts = 0;
+struct MassCancelData {
     SessionId session = 0;
     InstrumentId instrument = 0;  // 0 = all instruments
     ClOrdId cl_ord_id = 0;        // token of this request (echoed back)
     bool cancel_on_disconnect = false;  // selects CancelReason
 };
 
-struct SetPhase {
-    Timestamp ts = 0;
+struct SetPhaseData {
     InstrumentId instrument = 0;  // 0 = all instruments
     Phase phase = Phase::Continuous;
 };
 
+// Gateways may submit a timestamped typed request directly. Command stores
+// that timestamp once in its header and only the request data in its union.
+template <typename Payload>
+struct Timestamped : Payload {
+    Timestamp ts = 0;
+    Timestamped() = default;
+    template <typename... Args>
+    Timestamped(Timestamp stamp, Args... args) noexcept : Payload(args...), ts(stamp) {}
+};
+
+using NewOrder = Timestamped<NewOrderData>;
+using CancelOrder = Timestamped<CancelOrderData>;
+using ReplaceOrder = Timestamped<ReplaceOrderData>;
+using MassCancel = Timestamped<MassCancelData>;
+using SetPhase = Timestamped<SetPhaseData>;
+
 // Explicit tags and unions keep queue records trivially copyable and avoid
 // a second variant discriminator. Wire and journal formats encode fields.
 struct Command {
+    Timestamp timestamp = 0;
     CommandType type = CommandType::NewOrder;
     union {
-        NewOrder new_order;
-        CancelOrder cancel;
-        ReplaceOrder replace;
-        MassCancel mass_cancel;
-        SetPhase set_phase;
+        NewOrderData new_order;
+        CancelOrderData cancel;
+        ReplaceOrderData replace;
+        MassCancelData mass_cancel;
+        SetPhaseData set_phase;
     };
 
     Command() noexcept : new_order() {}
-    Command(const NewOrder& c) noexcept : type(CommandType::NewOrder), new_order(c) {}
-    Command(const CancelOrder& c) noexcept : type(CommandType::Cancel), cancel(c) {}
-    Command(const ReplaceOrder& c) noexcept : type(CommandType::Replace), replace(c) {}
-    Command(const MassCancel& c) noexcept : type(CommandType::MassCancel), mass_cancel(c) {}
-    Command(const SetPhase& c) noexcept : type(CommandType::SetPhase), set_phase(c) {}
+    Command(const NewOrder& c) noexcept : timestamp(c.ts), type(CommandType::NewOrder), new_order(static_cast<const NewOrderData&>(c)) {}
+    Command(const CancelOrder& c) noexcept : timestamp(c.ts), type(CommandType::Cancel), cancel(static_cast<const CancelOrderData&>(c)) {}
+    Command(const ReplaceOrder& c) noexcept : timestamp(c.ts), type(CommandType::Replace), replace(static_cast<const ReplaceOrderData&>(c)) {}
+    Command(const MassCancel& c) noexcept : timestamp(c.ts), type(CommandType::MassCancel), mass_cancel(static_cast<const MassCancelData&>(c)) {}
+    Command(const SetPhase& c) noexcept : timestamp(c.ts), type(CommandType::SetPhase), set_phase(static_cast<const SetPhaseData&>(c)) {}
 
-    [[nodiscard]] Timestamp ts() const noexcept {
-        switch (type) {
-            case CommandType::NewOrder: return new_order.ts;
-            case CommandType::Cancel: return cancel.ts;
-            case CommandType::Replace: return replace.ts;
-            case CommandType::MassCancel: return mass_cancel.ts;
-            case CommandType::SetPhase: return set_phase.ts;
-        }
-        return 0;
-    }
+    [[nodiscard]] Timestamp ts() const noexcept { return timestamp; }
+
 };
 
 static_assert(std::is_trivially_copyable_v<Command>);
