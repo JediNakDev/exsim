@@ -1,10 +1,12 @@
 // exsim_exchanged at default sizes stays small: a config with no [engine]
-// section, default max_connections, one OUCH and one FIX user peaks well
-// below the 360 MiB the old defaults made resident.
+// section, default max_connections, one OUCH and one FIX user peaks below
+// 96 MiB (192 MiB under ASan), well below the 360 MiB the old defaults made
+// resident.
 
 #include "test/framework/test.hpp"
 
 #include <csignal>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -44,6 +46,21 @@ protocol = fix44
 session_id = 2
 )";
 
+// The exchange binary is built with the same flags as this test. ASan adds
+// shadow memory and its own runtime (about 120 MiB peak at default sizes),
+// still far below the 300+ MiB the old defaults prefaulted.
+#if defined(__SANITIZE_ADDRESS__)
+constexpr std::uint64_t kPeakLimitBytes = std::uint64_t{192} << 20;
+#elif defined(__has_feature)
+#if __has_feature(address_sanitizer)
+constexpr std::uint64_t kPeakLimitBytes = std::uint64_t{192} << 20;
+#else
+constexpr std::uint64_t kPeakLimitBytes = std::uint64_t{96} << 20;
+#endif
+#else
+constexpr std::uint64_t kPeakLimitBytes = std::uint64_t{96} << 20;
+#endif
+
 std::filesystem::path exchange_binary() {
     const char* build = std::getenv("EXSIM_BUILD");
     return std::filesystem::path(build ? build : "build/release") / "exsim_exchanged";
@@ -51,7 +68,7 @@ std::filesystem::path exchange_binary() {
 
 }  // namespace
 
-TEST_CASE(exchange_process_memory, default_sizes_peak_below_96_mib) {
+TEST_CASE(exchange_process_memory, default_sizes_peak_below_the_limit) {
     char directory_template[] = "/tmp/exsim-memory-XXXXXX";
     const char* directory = ::mkdtemp(directory_template);
     REQUIRE(directory != nullptr);
@@ -91,5 +108,5 @@ TEST_CASE(exchange_process_memory, default_sizes_peak_below_96_mib) {
     const auto peak_bytes = static_cast<std::uint64_t>(usage.ru_maxrss) * 1024;
 #endif
     CHECK_GT(peak_bytes, 0u);
-    CHECK_LT(peak_bytes, std::uint64_t{96} << 20);
+    CHECK_LT(peak_bytes, kPeakLimitBytes);
 }
