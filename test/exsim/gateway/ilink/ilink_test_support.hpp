@@ -1,4 +1,5 @@
-#pragma once
+#ifndef TEST_EXSIM_GATEWAY_ILINK_ILINK_TEST_SUPPORT_HPP
+#define TEST_EXSIM_GATEWAY_ILINK_ILINK_TEST_SUPPORT_HPP
 #include "server/server_runtime.hpp"
 #include "test/framework/test.hpp"
 
@@ -150,3 +151,5 @@ struct Client {
     }
 };
 }
+
+#endif  // TEST_EXSIM_GATEWAY_ILINK_ILINK_TEST_SUPPORT_HPP

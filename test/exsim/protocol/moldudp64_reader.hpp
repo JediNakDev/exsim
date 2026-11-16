@@ -1,4 +1,5 @@
-#pragma once
+#ifndef TEST_EXSIM_PROTOCOL_MOLDUDP64_READER_HPP
+#define TEST_EXSIM_PROTOCOL_MOLDUDP64_READER_HPP
 #include <protocol/moldudp64.hpp>
 namespace exsim::protocol::moldudp64 {
 class PacketReader {
@@ -40,3 +41,5 @@ public:
     }
 };
 }
+
+#endif  // TEST_EXSIM_PROTOCOL_MOLDUDP64_READER_HPP
