@@ -346,6 +346,28 @@ TEST_CASE(md_publisher, imbalance_timer_covers_every_call_phase_instrument) {
     CHECK(quiet.packets.empty());
 }
 
+// The imbalance timer stops the session on an out-of-day time only when a
+// call-phase instrument would be published with it.
+TEST_CASE(md_publisher, out_of_day_imbalance_timer_stops_only_with_a_call_phase_instrument) {
+    md::PublisherConfig config = small_config();
+    config.noii_interval_ns = 500;
+    PublisherFixture fixture(config, 3);
+    REQUIRE(fixture.publisher.start_session(0) == md::PublishStatus::Ok);
+    fixture.packets.clear();
+    const Timestamp past_day_end = net::kNanosecondsPerDay;
+    CHECK(fixture.publisher.publish_imbalances(past_day_end, fixture.engine) == md::PublishStatus::Ok);
+    CHECK(fixture.publisher.state() == md::PublisherState::Live);
+    CHECK(fixture.packets.empty());
+
+    REQUIRE(fixture.submit(SetPhase{600, 3, Phase::PreClose}) == md::PublishStatus::Ok);
+    fixture.packets.clear();
+    CHECK(fixture.publisher.publish_imbalances(past_day_end + 500, fixture.engine) ==
+          md::PublishStatus::TimestampOutsideDay);
+    CHECK(fixture.publisher.state() == md::PublisherState::Stopped);
+    CHECK(fixture.packets.empty());
+    CHECK_EQ(fixture.publisher.stats().imbalance_messages_sent, 0u);
+}
+
 TEST_CASE(md_publisher, ring_holds_exactly_the_published_bytes) {
     md::PublisherConfig config = small_config();
     config.retransmit_buffer_messages = 8;
