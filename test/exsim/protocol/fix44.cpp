@@ -24,7 +24,7 @@ TEST_CASE(proto_fix, decimal_boundaries) {
     CHECK_EQ(p, INT64_MAX);
     CHECK(parse_price("-922337203685477.5808", p));
     CHECK_EQ(p, INT64_MIN);
-    for (auto bad : {"", ".", "1.", "+1", "--1", "1.2.3", " 1", "1e2"}) CHECK(!parse_price(bad, p));
+    for (auto bad : {"", ".", ".5", "-.5", "1.", "+1", "--1", "1.2.3", " 1", "1e2"}) CHECK(!parse_price(bad, p));
     char b[64];
     CHECK_EQ(std::string_view(b, exsim::format_price(1502500, b, sizeof b, 0)), "150.25");
     CHECK_EQ(std::string_view(b, exsim::format_price(0, b, sizeof b, 0)), "0");

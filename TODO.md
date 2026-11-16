@@ -5,7 +5,7 @@ Memory figures are computed from the code, not measured.
 
 ## Fix these first
 
-- [ ] **1.** **Phase and fault control is unreachable in the shipped product.** `CoreAdmin` and [admin_command.cpp](./lib/src/server/admin/admin_command.cpp) link only into test binaries (`TEST_LIB_SRCS` in the Makefile). The control socket in [src/exchange/main.cpp](./src/exchange/main.cpp) accepts only `status` and `stop`, and the HTTP API has only lifecycle endpoints. No operator can send `SetPhase` or set a user or packet fault at runtime (the only production `SetPhase` is the close-all at shutdown, `exchange_core.hpp:614`), so auctions, uncross, halts and fault injection are production code that only tests can trigger. An instrument with `initial_phase = pre_open` stays there until end-of-day close.
+- [x] **1.** **Phase and fault control is unreachable in the shipped product.** `CoreAdmin` and [admin_command.cpp](./lib/src/server/admin/admin_command.cpp) link only into test binaries (`TEST_LIB_SRCS` in the Makefile). The control socket in [src/exchange/main.cpp](./src/exchange/main.cpp) accepts only `status` and `stop`, and the HTTP API has only lifecycle endpoints. No operator can send `SetPhase` or set a user or packet fault at runtime (the only production `SetPhase` is the close-all at shutdown, `exchange_core.hpp:614`), so auctions, uncross, halts and fault injection are production code that only tests can trigger. An instrument with `initial_phase = pre_open` stays there until end-of-day close. Fixed in #8: `POST /v1/exchanges/{id}/admin`.
 - [ ] **2.** **`OrderBook` is two classes in one.** It is a standalone matching book (`add_order`, `cancel_order`, `modify_order`, `match_order_impl`, `get_snapshot`) and also passive storage for the engine (`rest_order`, `execute_order`, `amend_order`, `remove_order`). The engine sets `max_fills_per_add_order = 1; // the engine never calls add_order`. The `std::shared_ptr<OrderBookStorage>` exists only to serve both roles: the standalone book owns its storage, the engine shares one across its books.
 - [ ] **3.** **Benchmarks measure the path production does not use.** Every case drives `OrderBook::add_order` and friends. Nothing measures `MatchingEngine`, a gateway, or the reactor. `benchmark/utils/sharded_engine` is a multi-threaded engine that exists only in the benchmark, while production is single-threaded.
 - [ ] **4.** **Per-operation percentiles are at clock resolution.** `BenchmarkRunner::run` wraps each operation in two `high_resolution_clock::now()` calls ([runner.hpp:29](./benchmark/utils/runner.hpp#L29)). The last committed CSV (`results/benchmark_result_0.1.3.csv`) shows AddOrder P50 41, P95 42, P99 42 and CancelOrder P50 0.00, which is the roughly 42 ns timer tick. Only `sharded_throughput.cpp` times a batch. `benchmark/utils/cycle_timer.hpp` (rdtsc) exists and is unused. Needs a fresh run to confirm on current code.
@@ -38,7 +38,7 @@ Memory figures are computed from the code, not measured.
 - [ ] **21.** `md/random.hpp` and `md/packet_faults.hpp` are generic simulation utilities living in `md/`.
 - [ ] **22.** `md/publisher.hpp` is ITCH-specific; its sibling is `mdp_publisher.hpp`. Name it `itch_publisher.hpp`.
 - [ ] **23.** `server/exchange_core.hpp` and `server/server_runtime.hpp` sit at the `server/` root while their parts live in `server/core/` and `server/runtime/`.
-- [ ] **24.** `server/admin/*` lives in `lib/` but is test-only. Ship it (see 1) or move it under `test/`.
+- [x] **24.** `server/admin/*` lives in `lib/` but is test-only. Ship it (see 1) or move it under `test/`. Shipped in #8.
 - [ ] **25.** `src/utils/itch_replay` and `src/utils/cme_codegen` are tools sitting beside the two real binaries. A `tools/` folder reads better.
 - [ ] **26.** Gateway file granularity is inconsistent: OUCH is one 1036-line `ouch_server.hpp`, FIX is five files plus a 15-line umbrella `fix_gateway.hpp`, iLink is two files.
 - [ ] **27.** The unit versus integration split exists only as path lists in the Makefile. `test/integration/` holds just the Python API test, while C++ integration tests sit in `test/exsim/net/` and a few listed files.
@@ -51,8 +51,8 @@ Memory figures are computed from the code, not measured.
 
 - [ ] **32.** **No users at all:** `kAllEventTypes` (`journal/fields.hpp:125`), `book::Timestamp`, `cycle_timer.hpp`, and `BenchmarkRunner::set_samples`, `add_counter`, `latencies`, `state`.
 - [ ] **33.** **Test-only code in `lib/`:**
-    - `fix44::FrameReader` ([fix44.hpp:284](./lib/include/protocol/fix44.hpp#L284)) and the typed `fix44::decode` functions
-    - `moldudp64::PacketReader`
+    - ~~`fix44::FrameReader` and the typed `fix44::decode` functions~~ (moved to `test/` in #14)
+    - ~~`moldudp64::PacketReader`~~ (moved to `test/` in #14)
     - journal `decode_command` and `hash_event`
     - `ServerConfig::find_user`, `utc_midnight_ns`
     - `FlatHashMap::for_each` and `max_entries`
@@ -60,10 +60,10 @@ Memory figures are computed from the code, not measured.
 - [ ] **34.** **Engine queries with no production caller:** `level_orders`, `for_each_order`, `for_each_level_order`, `best_bid`, `best_ask`. (`depth` is used by the MDP publisher, `mdp_publisher.hpp:135`.)
 - [ ] **35.** **A global order list is maintained for nobody.** `all_orders` is relinked on every rest and retire ([matching_engine.cpp:320](./lib/src/engine/matching_engine.cpp#L320)) and read only by `for_each_order` (line 1300), which has no production caller.
 - [ ] **36.** **`find_order(OrderId)` has one production caller**, [ilink_user.hpp:439](./lib/include/gateway/ilink/ilink_user.hpp#L439). OUCH and FIX flows still pay an OrderId hash insert and erase per order.
-- [ ] **37.** **Two FIX inbound decoders.** Production uses `Parser` plus `FixFieldReader`; `fix44::decode` is exercised only by tests.
+- [x] **37.** **Two FIX inbound decoders.** Production uses `Parser` plus `FixFieldReader`; `fix44::decode` is exercised only by tests. Fixed in #14: typed decoders moved to `test/exsim/protocol/fix44_decode.hpp`.
 - [ ] **38.** **Duplicates:**
     - Nanoseconds-per-day is defined three times (`server/config.hpp:82`, `net/clocks.hpp`, `md/feed_common.hpp`).
-    - `fix44::parse_price` and `server::parse_price`.
+    - ~~`fix44::parse_price` and `server::parse_price`.~~ (both call `parse_decimal_price` since #14)
     - `IncomingOrder` is filled field by field in both `on_new_order` and `on_replace`.
     - `__builtin_ctzll` (matching_engine.cpp:916, 933) alongside `std::countr_zero` in `ActiveBitmap`.
 - [ ] **39.** **Single-use one-line wrappers:** `listen_for_connections` and `accept_connection` each have one production caller.
@@ -82,7 +82,7 @@ Memory figures are computed from the code, not measured.
 - [ ] **49.** TCP buffers are `new char[capacity]` (`stream_buffers.hpp:42, 109`), so they are first touched on the hot path. The engine structures prefault; these do not.
 - [ ] **50.** The ITCH publisher encodes to a stack buffer, copies into the packet, then copies into the ring. It also walks each batch twice (`validate_batch`, then `publish_event`).
 - [ ] **51.** `SPSCQueue` hardcodes `alignas(128)` instead of `std::hardware_destructive_interference_size`, keeps its buffer inside the object, and is copy-only.
-- [ ] **52.** `moldudp64::PacketBuilder::append` and the OUCH field copies go byte by byte. `wire::load/store` rely on the optimiser to form a bswap, which is worth confirming in a profile.
+- [x] **52.** `moldudp64::PacketBuilder::append` and the OUCH field copies go byte by byte. `wire::load/store` rely on the optimiser to form a bswap, which is worth confirming in a profile. Bulk copies done in #14; the bswap check stays with the profiling work in #9.
 
 ## Data structures and complexity
 
@@ -108,7 +108,7 @@ Memory figures are computed from the code, not measured.
 - [ ] **70.** `const_cast` sites: [flat_hash_map.hpp:82](./lib/include/util/flat_hash_map.hpp#L82), `tcp_server.hpp:234`, `exchange_control.cpp:31`, `exchange_process.cpp:42`.
 - [ ] **71.** `ObjectPool::destroy` uses `reinterpret_cast<Node*>` without `std::launder` ([object_pool.hpp:77](./lib/include/util/object_pool.hpp#L77)). Growth defaults to on in the pool and off in `FlatHashMap`.
 - [ ] **72.** `for_each_order` uses a function pointer plus `void*` trampoline. `order_info` uses `memset`. The engine constructor uses a comma-expression trick to validate config.
-- [ ] **74.** `std::expected` is unused. `protocol::Status` ([wire.hpp:11](./lib/include/protocol/wire.hpp#L11)) has no fixed underlying type.
+- [ ] **74.** `std::expected` is unused. `protocol::Status` ([wire.hpp:11](./lib/include/protocol/wire.hpp#L11)) has no fixed underlying type. `Status` is `std::uint8_t` since #14; `std::expected` is still open.
 - [ ] **75.** `book/types.hpp` uses unqualified `uint8_t`. `mdp_runtime.hpp` and `journal.hpp` rely on transitive includes.
 - [ ] **76.** `.clang-format` says `Standard: c++20` for a C++23 project, and several files do not follow it (`book/*`, `server/journal/*`, `mdp_runtime.hpp`, `gateway/ilink/*`, the iLink block in `order_entry_gateways.hpp`, `src/api/main.cpp`).
 - [ ] **77.** Naming is mixed: `get_best_bid` in the book, `best_bid` in the engine.
@@ -123,7 +123,7 @@ Memory figures are computed from the code, not measured.
 - [ ] **83.** There is no scatter I/O (`writev`, `sendmsg`) and no UDP batching (`sendmmsg`, `recvmmsg`).
 - [ ] **84.** UDP send results are discarded in `itch_runtime.hpp`.
 - [ ] **85.** The stack is IPv4 only, with no `SO_REUSEPORT`.
-- [ ] **86.** Signal handling differs between the two binaries: `std::signal` with `volatile sig_atomic_t` in the exchange daemon, `sigwait` in the API. The daemon also closes its raw control fd by hand.
+- [x] **86.** Signal handling differs between the two binaries: `std::signal` with `volatile sig_atomic_t` in the exchange daemon, `sigwait` in the API. The daemon also closes its raw control fd by hand. Fixed in #8.
 
 ## Benchmarking and profiling
 

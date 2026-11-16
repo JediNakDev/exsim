@@ -1,5 +1,6 @@
 #pragma once
 #include <protocol/fix44.hpp>
+
 namespace exsim::protocol::fix44 {
 template <std::size_t N>
 Status decode(const Parser<N>& p, Logon& m) noexcept {
@@ -622,4 +623,4 @@ inline Status decode(const char* p, std::size_t n, BusinessMessageReject& m) noe
     auto s = parser.parse(p, n);
     return s == Status::ok ? decode(parser, m) : s;
 }
-}
+}  // namespace exsim::protocol::fix44

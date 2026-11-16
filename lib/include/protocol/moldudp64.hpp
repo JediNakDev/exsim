@@ -1,7 +1,7 @@
 #ifndef EXSIM_PROTOCOL_MOLDUDP64_HPP
 #define EXSIM_PROTOCOL_MOLDUDP64_HPP
-// Downstream datagrams are validated in full before iteration. A full builder
-// never partially appends a message: flush packet(), reset(), then retry.
+// A full builder never partially appends a message: flush packet(), reset(),
+// then retry.
 #include "wire.hpp"
 #include <algorithm>
 namespace exsim::protocol::moldudp64 {

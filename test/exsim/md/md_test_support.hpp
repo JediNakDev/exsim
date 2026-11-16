@@ -1,6 +1,7 @@
-#include "test/exsim/protocol/moldudp64_reader.hpp"
 #ifndef EXSIM_TESTS_MD_TEST_SUPPORT_HPP
 #define EXSIM_TESTS_MD_TEST_SUPPORT_HPP
+
+#include "test/exsim/protocol/moldudp64_reader.hpp"
 
 // Shared helpers for the market-data suites: golden hex bytes, packet
 // capture, MoldUDP64 message extraction, and engine/builder book comparison.

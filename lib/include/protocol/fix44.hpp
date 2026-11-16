@@ -3,7 +3,7 @@
 // Single-message FIX 4.4 codec. Parser and decoded Text values borrow input;
 // keep that buffer alive and unchanged until all views have been consumed.
 // No repeating groups are supported by the scoped message set: duplicate tags
-// are rejected. Message decoders check required fields and typed values.
+// are rejected. The gateway validates inbound fields through FixFieldReader.
 // Builder buffers can be reused after finish(); construct a new Builder per
 // message.
 #include "engine/price_text.hpp"
@@ -23,10 +23,10 @@ inline bool parse_uint(std::string_view s, std::uint64_t& v) noexcept {
     }
     return true;
 }
+// FIX requires an integer part; config also accepts values such as .5.
 inline bool parse_price(std::string_view s, Price& price) noexcept {
-    auto digits = s;
-    if (!digits.empty() && digits.front() == '-') digits.remove_prefix(1);
-    return !digits.empty() && digits.front() != '.' && exsim::parse_decimal_price(s, price);
+    const auto unsigned_text = s.starts_with('-') ? s.substr(1) : s;
+    return !unsigned_text.starts_with('.') && exsim::parse_decimal_price(s, price);
 }
 inline std::size_t format_uint(std::uint64_t v, char* p, std::size_t n) noexcept {
     char tmp[20];

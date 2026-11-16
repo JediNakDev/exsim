@@ -15,11 +15,14 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <string>
 #include <limits>
+#include <string>
+#include <string_view>
 
 namespace exsim {
 
+// Signed decimal with up to four fraction digits. The integer part may be
+// omitted, but a decimal point must be followed by at least one digit.
 inline bool parse_decimal_price(std::string_view text, Price& out) noexcept {
     if (text.empty()) {
         return false;
@@ -65,7 +68,6 @@ inline bool parse_decimal_price(std::string_view text, Price& out) noexcept {
         : negative ? -static_cast<Price>(value) : static_cast<Price>(value);
     return true;
 }
-
 
 // Writes at most `capacity` bytes and returns the length, or returns zero
 // without writing when the text does not fit. Allocation-free.
