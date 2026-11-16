@@ -4,7 +4,7 @@
 namespace exsim::net {
 // Both classes own nonblocking sockets. Return -1/errno for datagram I/O.
 class UdpSender {
-   public:
+public:
     ErrorCode open() noexcept { return open_udp_socket(socket_); }
     void close() noexcept { socket_.close(); }
     int fd() const noexcept { return socket_.fd(); }
@@ -12,11 +12,11 @@ class UdpSender {
                                 std::uint32_t interface_address = kIpv4AnyAddress) noexcept;
     ssize_t send_to(std::span<const char> bytes, Ipv4Endpoint destination) noexcept;
 
-   private:
+private:
     Socket socket_;
 };
 class UdpReceiver {
-   public:
+public:
     ErrorCode open(Ipv4Endpoint local, bool reuse = false) noexcept;
     void close() noexcept { socket_.close(); }
     int fd() const noexcept { return socket_.fd(); }
@@ -26,7 +26,7 @@ class UdpReceiver {
     ssize_t receive_from(std::span<char> bytes, Ipv4Endpoint& peer) noexcept;
     ssize_t send_to(std::span<const char> bytes, Ipv4Endpoint destination) noexcept;
 
-   private:
+private:
     Socket socket_;
 };
 }  // namespace exsim::net

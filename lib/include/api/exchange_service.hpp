@@ -23,14 +23,15 @@ public:
     ExchangeService(std::filesystem::path directory, std::filesystem::path executable);
     ~ExchangeService();
     HttpResponse handle(const HttpRequest& request);
+
 private:
     struct Exchange {
         std::string id, config_text;
         server::ServerConfig config;
         ExchangeProcess process;
         std::mutex mutex;
-        bool deleted = false;      // guarded by mutex
-        std::string listed_view;   // guarded by the service mutex_
+        bool deleted = false;     // guarded by mutex
+        std::string listed_view;  // guarded by the service mutex_
     };
     HttpResponse list_exchanges();
     HttpResponse create_exchange(const HttpRequest& request);
@@ -50,5 +51,5 @@ private:
     // Market data destinations of exchanges whose process may be running.
     std::map<std::string, server::MarketDataSection> claimed_feeds_;
 };
-}
+}  // namespace exsim::api
 #endif

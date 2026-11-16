@@ -25,8 +25,7 @@ namespace exsim::server::runtime {
 template <class... Gateways>
 class GatewaySessions {
 public:
-    explicit GatewaySessions(const ServerConfig& config)
-        : user_directories_(Gateways::make_user_directory(config)...) {
+    explicit GatewaySessions(const ServerConfig& config) : user_directories_(Gateways::make_user_directory(config)...) {
         SessionId largest_session = 0;
         for (const UserConfig& user : config.users) largest_session = std::max(largest_session, user.session_id);
         user_by_session_.resize(std::size_t{largest_session} + 1);

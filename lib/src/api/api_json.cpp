@@ -55,8 +55,6 @@ ApiJsonWriter& ApiJsonWriter::string(std::string_view value) {
     return *this;
 }
 
-
-
 ApiJsonWriter& ApiJsonWriter::null() {
     before_value();
     text_ += "null";
@@ -76,7 +74,6 @@ ApiJsonWriter& ApiJsonWriter::unsigned_text(std::uint64_t value) {
     text_ += '"';
     return *this;
 }
-
 
 ApiJsonWriter& ApiJsonWriter::raw(std::string_view serialized_json_value) {
     before_value();

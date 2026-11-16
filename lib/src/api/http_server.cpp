@@ -40,7 +40,8 @@ bool send_all(int socket_descriptor, std::string_view bytes, std::chrono::millis
             bytes.remove_prefix(static_cast<std::size_t>(sent));
             continue;
         }
-        if (sent < 0 && net::is_would_block(errno) && wait_until_ready(socket_descriptor, POLLOUT, write_timeout)) continue;
+        if (sent < 0 && net::is_would_block(errno) && wait_until_ready(socket_descriptor, POLLOUT, write_timeout))
+            continue;
         return false;
     }
     return true;
@@ -48,8 +49,11 @@ bool send_all(int socket_descriptor, std::string_view bytes, std::chrono::millis
 
 }  // namespace
 
-HttpServer::HttpServer(HttpServerOptions options, HttpRequestHandler handler, HttpRejectionResponder rejection_responder)
-    : options_(std::move(options)), handler_(std::move(handler)), rejection_responder_(std::move(rejection_responder)) {}
+HttpServer::HttpServer(HttpServerOptions options, HttpRequestHandler handler,
+                       HttpRejectionResponder rejection_responder)
+    : options_(std::move(options)),
+      handler_(std::move(handler)),
+      rejection_responder_(std::move(rejection_responder)) {}
 
 HttpServer::~HttpServer() { stop(); }
 
@@ -134,7 +138,8 @@ void HttpServer::accept_loop() {
             }
         }
         try {
-            HttpResponse response = rejection_responder_(503, "service_unavailable", "too many concurrent connections; retry shortly");
+            HttpResponse response =
+                rejection_responder_(503, "service_unavailable", "too many concurrent connections; retry shortly");
             response.close_connection = true;
             (void)send_all(client.fd(), serialize_http_response(response, false), options_.write_timeout);
         } catch (...) {
@@ -170,7 +175,8 @@ void HttpServer::serve_connection(int socket_descriptor) {
                 request_head_bytes = head.consumed_bytes;
                 request_body_bytes = head.body_bytes;
             } else if (head.status != HttpParseStatus::NeedMoreData) {
-                HttpResponse response = rejection_responder_(status_for(head.status), "invalid_request", head.error_message);
+                HttpResponse response =
+                    rejection_responder_(status_for(head.status), "invalid_request", head.error_message);
                 (void)send_all(socket_descriptor, serialize_http_response(response, false), options_.write_timeout);
                 return;
             }
@@ -208,13 +214,13 @@ void HttpServer::serve_connection(int socket_descriptor) {
         }
         if (received < 0 && net::is_would_block(errno)) {
             // An idle connection waits the full timeout; a started request only what is left of its deadline.
-            const auto timeout = received_bytes.empty()
-                                     ? options_.idle_timeout
-                                     : std::chrono::duration_cast<std::chrono::milliseconds>(
-                                           request_deadline - std::chrono::steady_clock::now());
+            const auto timeout = received_bytes.empty() ? options_.idle_timeout
+                                                        : std::chrono::duration_cast<std::chrono::milliseconds>(
+                                                              request_deadline - std::chrono::steady_clock::now());
             if (timeout.count() > 0 && wait_until_ready(socket_descriptor, POLLIN, timeout)) continue;
             if (!received_bytes.empty()) {
-                HttpResponse response = rejection_responder_(408, "invalid_request", "request incomplete before the idle timeout");
+                HttpResponse response =
+                    rejection_responder_(408, "invalid_request", "request incomplete before the idle timeout");
                 (void)send_all(socket_descriptor, serialize_http_response(response, false), options_.write_timeout);
             }
         }

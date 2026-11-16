@@ -21,15 +21,11 @@ TEST_CASE(proto_mdp3, book46_schema13_golden) {
     // Packed from the pinned XML offsets, including root alignment padding,
     // optional TradeableSize and the empty eight-byte order group header.
     constexpr unsigned char expected[] = {
-        0x40,0, 0x0b,0, 0x2e,0, 1,0, 0x0d,0,
-        1,0,0,0,0,0,0,0, 0x80,0,0, 0x20,0,1,
-        0,0xe8,0x76,0x48,0x17,0,0,0, 0x0a,0,0,0,
-        0xcb,0xa7,0x0d,0, 1,0,0,0, 2,0,0,0,
-        1,0,0x30,0xff,0xff,0xff,0x7f,0,
-        0x18,0,0,0,0,0,0,0};
+        0x40, 0,    0x0b, 0,    0x2e, 0,    1,    0, 0x0d, 0, 1, 0, 0,    0,    0,    0, 0, 0, 0x80, 0, 0, 0x20, 0, 1,
+        0,    0xe8, 0x76, 0x48, 0x17, 0,    0,    0, 0x0a, 0, 0, 0, 0xcb, 0xa7, 0x0d, 0, 1, 0, 0,    0, 2, 0,    0, 0,
+        1,    0,    0x30, 0xff, 0xff, 0xff, 0x7f, 0, 0x18, 0, 0, 0, 0,    0,    0,    0};
     static_assert(sizeof expected == bytes.size());
-    for (std::size_t i = 0; i < bytes.size(); ++i)
-        CHECK_EQ(static_cast<unsigned char>(bytes[i]), expected[i]);
+    for (std::size_t i = 0; i < bytes.size(); ++i) CHECK_EQ(static_cast<unsigned char>(bytes[i]), expected[i]);
     cme::MessageView frame;
     REQUIRE_EQ(cme::decode_mdp_message(bytes, frame), Status::ok);
     mdp::IncrementalView message;

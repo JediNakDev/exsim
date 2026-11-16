@@ -46,7 +46,8 @@ struct FeedRunTotals {
         boundaries_checked += feed.handler.boundaries_checked;
         imbalance_messages += feed.publisher.stats().imbalance_messages_sent;
         heartbeats += feed.publisher.stats().heartbeats_sent;
-        for (std::size_t type = 0; type < 256; ++type) message_type_counts[type] += feed.handler.message_type_counts[type];
+        for (std::size_t type = 0; type < 256; ++type)
+            message_type_counts[type] += feed.handler.message_type_counts[type];
     }
 
     // Every ITCH message type the publisher emits appeared on the feed.
@@ -58,15 +59,14 @@ struct FeedRunTotals {
     }
 
     void print(const char* label) const {
-        std::printf("    %s: %llu commands, %llu messages, %llu boundaries checked, %llu dropped, %llu duplicated, "
-                    "%llu reordered, %llu requests, %llu responses dropped, %llu NOII, %llu heartbeats\n",
-                    label, static_cast<unsigned long long>(commands), static_cast<unsigned long long>(messages),
-                    static_cast<unsigned long long>(boundaries_checked),
-                    static_cast<unsigned long long>(packets_dropped),
-                    static_cast<unsigned long long>(packets_duplicated),
-                    static_cast<unsigned long long>(packets_reordered), static_cast<unsigned long long>(requests),
-                    static_cast<unsigned long long>(responses_dropped),
-                    static_cast<unsigned long long>(imbalance_messages), static_cast<unsigned long long>(heartbeats));
+        std::printf(
+            "    %s: %llu commands, %llu messages, %llu boundaries checked, %llu dropped, %llu duplicated, "
+            "%llu reordered, %llu requests, %llu responses dropped, %llu NOII, %llu heartbeats\n",
+            label, static_cast<unsigned long long>(commands), static_cast<unsigned long long>(messages),
+            static_cast<unsigned long long>(boundaries_checked), static_cast<unsigned long long>(packets_dropped),
+            static_cast<unsigned long long>(packets_duplicated), static_cast<unsigned long long>(packets_reordered),
+            static_cast<unsigned long long>(requests), static_cast<unsigned long long>(responses_dropped),
+            static_cast<unsigned long long>(imbalance_messages), static_cast<unsigned long long>(heartbeats));
         std::printf("      by type:");
         for (char type : std::string_view("SRHAEXDUCQI"))
             std::printf(" %c=%llu", type,

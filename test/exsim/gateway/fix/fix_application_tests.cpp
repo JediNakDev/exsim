@@ -56,22 +56,19 @@ TEST_CASE(gateway_fix_application, avgpx_and_cum_leaves_through_partial_fills_an
     auto seller_messages = clients.seller.drain();
     REQUIRE_EQ(seller_messages.size(), std::size_t{2});
     check_golden(seller_messages[0], "8", 2,
-                 er("37=1|11=S1|17=1|150=0|39=0|55=AAPL|54=2|38=100|44=150|32=0|31=0|151=100|14=0|6=0|"),
-                 "CLIENT2");
+                 er("37=1|11=S1|17=1|150=0|39=0|55=AAPL|54=2|38=100|44=150|32=0|31=0|151=100|14=0|6=0|"), "CLIENT2");
 
     clients.buyer.send("D", new_order_fields("B1", "1", 300, "151"));
     auto buyer_messages = clients.buyer.drain();
     REQUIRE_EQ(buyer_messages.size(), std::size_t{3});
     check_golden(buyer_messages[0], "8", 2,
-                 er("37=3|11=B1|17=1|150=0|39=0|55=AAPL|54=1|38=300|44=151|32=0|31=0|151=300|14=0|6=0|"),
-                 "CLIENT1");
+                 er("37=3|11=B1|17=1|150=0|39=0|55=AAPL|54=1|38=300|44=151|32=0|31=0|151=300|14=0|6=0|"), "CLIENT1");
     check_golden(buyer_messages[1], "8", 3,
                  er("37=3|11=B1|17=2|150=F|39=1|55=AAPL|54=1|38=300|44=151|32=100|31=150|151=200|14=100|6=150|"),
                  "CLIENT1");
-    check_golden(
-        buyer_messages[2], "8", 4,
-        er("37=3|11=B1|17=3|150=F|39=1|55=AAPL|54=1|38=300|44=151|32=100|31=150.1|151=100|14=200|6=150.05|"),
-        "CLIENT1");
+    check_golden(buyer_messages[2], "8", 4,
+                 er("37=3|11=B1|17=3|150=F|39=1|55=AAPL|54=1|38=300|44=151|32=100|31=150.1|151=100|14=200|6=150.05|"),
+                 "CLIENT1");
     seller_messages = clients.seller.drain();
     REQUIRE_EQ(seller_messages.size(), std::size_t{2});
     check_golden(seller_messages[0], "8", 4,
@@ -106,8 +103,8 @@ TEST_CASE(gateway_fix_application, avgpx_and_cum_leaves_through_partial_fills_an
     clients.buyer.send("F", cancel_fields("B1R", "C1"));
     buyer_messages = clients.buyer.drain();
     REQUIRE_EQ(buyer_messages.size(), std::size_t{1});
-    check_golden(buyer_messages[0], "9", 7,
-                 "37=" + new_order_id + "|11=C1|41=B1R|39=2|434=1|102=0|58=UNKNOWN_ORDER|", "CLIENT1");
+    check_golden(buyer_messages[0], "9", 7, "37=" + new_order_id + "|11=C1|41=B1R|39=2|434=1|102=0|58=UNKNOWN_ORDER|",
+                 "CLIENT1");
 }
 
 TEST_CASE(gateway_fix_application, avgpx_rounds_to_nearest_ten_thousandth) {
@@ -204,7 +201,7 @@ TEST_CASE(gateway_fix_application, cancel_reject_and_replace_reject_434_102) {
 
     clients.buyer.send("F", cancel_fields("NOPE", "C1"));
     clients.buyer.send("G", replace_fields("NOPE", "R1", 10, "149"));
-    clients.buyer.send("F", cancel_fields("B1", "B1"));  // request token already used
+    clients.buyer.send("F", cancel_fields("B1", "B1"));                  // request token already used
     clients.buyer.send("G", replace_fields("B1", "R2", 10, "149.001"));  // engine: off tick
     clients.buyer.send("G", "41=B1|11=R3|55=AAPL|54=1|38=10|40=1|60=20261103-09:30:00.000|");
     clients.buyer.send("G", replace_fields("B1", "R1", 10, "149"));  // R1 was used by the rejected replace
@@ -214,8 +211,8 @@ TEST_CASE(gateway_fix_application, cancel_reject_and_replace_reject_434_102) {
     check_golden(messages[1], "9", 4, "37=NONE|11=R1|41=NOPE|39=8|434=2|102=1|58=unknown order|", "CLIENT1");
     check_golden(messages[2], "9", 5, "37=1|11=B1|41=B1|39=0|434=1|102=6|58=duplicate ClOrdID|", "CLIENT1");
     check_golden(messages[3], "9", 6, "37=1|11=R2|41=B1|39=0|434=2|102=99|58=INVALID_PRICE|", "CLIENT1");
-    check_golden(messages[4], "9", 7,
-                 "37=1|11=R3|41=B1|39=0|434=2|102=99|58=replace supports OrdType 2 (limit) only|", "CLIENT1");
+    check_golden(messages[4], "9", 7, "37=1|11=R3|41=B1|39=0|434=2|102=99|58=replace supports OrdType 2 (limit) only|",
+                 "CLIENT1");
     check_golden(messages[5], "9", 8, "37=1|11=R1|41=B1|39=0|434=2|102=6|58=duplicate ClOrdID|", "CLIENT1");
     // Only the off-tick replace reached the engine.
     CHECK_EQ(engine_command_tokens(clients.exchange, 1), (Tokens{"D:B1", "G:R2"}));
@@ -336,8 +333,7 @@ TEST_CASE(gateway_fix_application, mass_cancel_reports) {
     check_golden(messages[2], "r", 12, "11=MC1|37=11|530=7|531=0|532=99|533=0|", "CLIENT1");
     CHECK_EQ(messages[3].type(), std::string("3"));
     CHECK_EQ(messages[3].get(371), std::string("55"));
-    CHECK_EQ(engine_command_tokens(clients.exchange, 1),
-             (Tokens{"D:B1", "D:B2", "D:B3", "q:MC1", "q:MC2", "q:MC3"}));
+    CHECK_EQ(engine_command_tokens(clients.exchange, 1), (Tokens{"D:B1", "D:B2", "D:B3", "q:MC1", "q:MC2", "q:MC3"}));
 }
 
 TEST_CASE(gateway_fix_application, self_trade_prevention_default_and_override) {
@@ -470,8 +466,8 @@ TEST_CASE(gateway_fix_application, cancel_replace_reject_symbol_and_side_mismatc
             TwoClients clients;
             clients.buyer.send("D", new_order_fields("B1", "1", 50, "149"));
             clients.buyer.drain();
-            clients.buyer.send(type, "41=B1|11=REQUEST|" + std::string(identity) +
-                                      "38=40|40=2|44=149|60=20261103-09:30:00.000|");
+            clients.buyer.send(
+                type, "41=B1|11=REQUEST|" + std::string(identity) + "38=40|40=2|44=149|60=20261103-09:30:00.000|");
             const auto messages = clients.buyer.drain();
             REQUIRE_EQ(messages.size(), 1u);
             CHECK_EQ(messages[0].type(), std::string("9"));

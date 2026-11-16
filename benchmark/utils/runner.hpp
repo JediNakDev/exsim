@@ -84,8 +84,7 @@ void run_commands(benchmark::State& state, const std::string& name, Prepare&& pr
     }
     const Stats stats = Stats::from(batches, kBatchSize);
     stats.report(state);
-    state.counters["EventsPerCommand"] =
-        static_cast<double>(events_emitted) / static_cast<double>(commands_run);
+    state.counters["EventsPerCommand"] = static_cast<double>(events_emitted) / static_cast<double>(commands_run);
     state.counters["LiveOrdersAfter"] = static_cast<double>(live_orders_after);
     state.SetItemsProcessed(static_cast<std::int64_t>(commands_run));
     if (csv()) csv()->write(name, stats);

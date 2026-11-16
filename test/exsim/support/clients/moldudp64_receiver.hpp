@@ -46,10 +46,10 @@
 namespace exsim::md {
 
 struct ReceiverConfig {
-    std::string_view session = {};                 // empty: adopt the first packet's session
-    std::uint64_t first_sequence = 1;              // 0: start at the first packet seen (late join)
+    std::string_view session = {};     // empty: adopt the first packet's session
+    std::uint64_t first_sequence = 1;  // 0: start at the first packet seen (late join)
     std::size_t reorder_window_messages = 1u << 14;
-    std::size_t max_buffered_message_size = 64;    // ITCH messages are at most 50 bytes
+    std::size_t max_buffered_message_size = 64;  // ITCH messages are at most 50 bytes
     std::uint16_t max_request_messages = 1024;
     std::uint64_t request_timeout_ns = 100'000'000;
     std::uint32_t max_request_attempts = 10;
@@ -71,9 +71,9 @@ struct ReceiverStats {
     std::uint64_t duplicate_messages = 0;
     std::uint64_t messages_buffered = 0;
     std::uint64_t messages_dropped_outside_window = 0;
-    std::uint64_t requests_sent = 0;   // including retries
+    std::uint64_t requests_sent = 0;  // including retries
     std::uint64_t request_retries = 0;
-    std::uint64_t messages_lost = 0;   // declared lost after the retry limit
+    std::uint64_t messages_lost = 0;  // declared lost after the retry limit
 };
 
 template <class Handler, class RequestSink>

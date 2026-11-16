@@ -46,11 +46,17 @@ TEST_CASE(object_pool, empty_pool_creates_nothing) {
 TEST_CASE(object_pool, throwing_constructor_restores_the_free_slot) {
     struct SometimesThrows {
         int value;
-        explicit SometimesThrows(bool fail) : value(42) { if (fail) throw 7; }
+        explicit SometimesThrows(bool fail) : value(42) {
+            if (fail) throw 7;
+        }
     };
     ObjectPool<SometimesThrows> pool(1);
     bool threw = false;
-    try { (void)pool.create(true); } catch (int) { threw = true; }
+    try {
+        (void)pool.create(true);
+    } catch (int) {
+        threw = true;
+    }
     REQUIRE(threw);
     auto* value = pool.create(false);
     REQUIRE(value != nullptr);

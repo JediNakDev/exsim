@@ -243,8 +243,7 @@ protected:
     // partial trailing frame is left for the next call).
     std::size_t consume_inbound(std::span<const char> bytes) noexcept {
         std::size_t position = 0;
-        while (position < bytes.size() && !wants_disconnect() &&
-               phase_ != FixConnectionPhase::Idle) {
+        while (position < bytes.size() && !wants_disconnect() && phase_ != FixConnectionPhase::Idle) {
             const std::span<const char> rest = bytes.subspan(position);
             const std::size_t frame_start = find_frame_start(rest, 0);
             if (frame_start != 0) {
@@ -290,10 +289,8 @@ protected:
                     request_disconnect();
                 }
                 return;
-            case FixConnectionPhase::Active:
-                break;
-            default:
-                return;
+            case FixConnectionPhase::Active: break;
+            default: return;
         }
         if (heartbeat_interval_ns_ != 0) {
             if (test_request_outstanding_) {
@@ -355,8 +352,7 @@ protected:
         fix44::Reject reject;
         reject.reference_sequence = reference_sequence;
         reject.reference_tag = reference_tag;
-        reject.reference_type.borrow(reference_message_type.empty() ? std::string_view("?")
-                                                                    : reference_message_type);
+        reject.reference_type.borrow(reference_message_type.empty() ? std::string_view("?") : reference_message_type);
         reject.reason = static_cast<std::uint64_t>(reason);
         reject.text.borrow(text.empty() ? std::string_view("rejected") : text);
         if (day_->send_session_message(
@@ -526,15 +522,9 @@ private:
         }
         const bool serviced = frame.parse_status == Status::ok && service_early(frame);
         switch (held_messages_.hold(frame.sequence, frame.bytes, serviced)) {
-            case FixHeldMessageQueue::HoldResult::Held:
-                ++counters_.messages_held;
-                break;
-            case FixHeldMessageQueue::HoldResult::Full:
-                ++counters_.held_messages_discarded;
-                break;
-            case FixHeldMessageQueue::HoldResult::AlreadyHeld:
-                ++counters_.duplicates_suppressed;
-                break;
+            case FixHeldMessageQueue::HoldResult::Held: ++counters_.messages_held; break;
+            case FixHeldMessageQueue::HoldResult::Full: ++counters_.held_messages_discarded; break;
+            case FixHeldMessageQueue::HoldResult::AlreadyHeld: ++counters_.duplicates_suppressed; break;
         }
         request_resend_for_gap();
     }
@@ -636,8 +626,8 @@ private:
                     send_session_reject(frame.sequence, 7, frame.message_type, SessionRejectReason::ValueIsIncorrect,
                                         "BeginSeqNo must be positive");
                 } else if (end != 0 && end < begin) {
-                    send_session_reject(frame.sequence, 16, frame.message_type,
-                                        SessionRejectReason::ValueIsIncorrect, "EndSeqNo below BeginSeqNo");
+                    send_session_reject(frame.sequence, 16, frame.message_type, SessionRejectReason::ValueIsIncorrect,
+                                        "EndSeqNo below BeginSeqNo");
                 } else {
                     ++counters_.resend_requests_serviced;
                     day_->resend(begin, end, now_);
@@ -655,12 +645,8 @@ private:
                 }
                 request_disconnect();
                 return;
-            case 'A':
-                send_logout_and_disconnect("unexpected Logon");
-                return;
-            default:
-                derived().on_application_message(frame);
-                return;
+            case 'A': send_logout_and_disconnect("unexpected Logon"); return;
+            default: derived().on_application_message(frame); return;
         }
     }
 
@@ -684,8 +670,7 @@ private:
             return false;
         }
         if (original_sending_time > sending_time) {
-            send_session_reject(frame.sequence, 52, frame.message_type,
-                                SessionRejectReason::SendingTimeAccuracyProblem,
+            send_session_reject(frame.sequence, 52, frame.message_type, SessionRejectReason::SendingTimeAccuracyProblem,
                                 "OrigSendingTime(122) later than SendingTime(52)");
             send_logout_and_disconnect("SendingTime accuracy problem");
             return false;

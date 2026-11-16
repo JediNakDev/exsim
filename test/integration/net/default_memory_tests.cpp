@@ -91,8 +91,7 @@ TEST_CASE(exchange_process_memory, default_sizes_peak_below_the_limit) {
     ::close(ready_pipe[1]);
     // The ready line is printed after start(): every startup allocation is done.
     char byte = 0;
-    while (::read(ready_pipe[0], &byte, 1) == 1 && byte != '\n') {
-    }
+    while (::read(ready_pipe[0], &byte, 1) == 1 && byte != '\n') {}
     ::close(ready_pipe[0]);
     CHECK_EQ(byte, '\n');
     ::kill(pid, SIGTERM);

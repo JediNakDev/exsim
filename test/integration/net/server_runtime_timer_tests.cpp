@@ -92,7 +92,7 @@ TEST_CASE(server_runtime_timers, timer_passes_run_once_per_interval) {
     }
     const std::uint64_t elapsed_ms = (net::monotonic_ns() - started) / 1'000'000;
     const std::uint64_t calls = gateway_timer_calls - calls_before;
-    CHECK_GE(calls, 5u);                // the connection's timers still run
-    CHECK_LE(calls, elapsed_ms + 1);    // but at most once per millisecond
+    CHECK_GE(calls, 5u);              // the connection's timers still run
+    CHECK_LE(calls, elapsed_ms + 1);  // but at most once per millisecond
     CHECK_GT(iterations, calls);
 }

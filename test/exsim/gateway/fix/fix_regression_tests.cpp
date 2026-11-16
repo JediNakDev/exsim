@@ -125,8 +125,8 @@ TEST_CASE(gateway_fix_review, r4_orig_sending_time_after_sending_time_is_rejecte
     FixTestExchange exchange;
     FixTestConnection client(exchange, "CLIENT2");
     client.logon(30, false, {});
-    client.feed(client_message("D", 2, new_order_fields("PD2", "1", 100, "150"), "CLIENT2",
-                               "43=Y|122=20261103-09:31:00.000|"));
+    client.feed(
+        client_message("D", 2, new_order_fields("PD2", "1", 100, "150"), "CLIENT2", "43=Y|122=20261103-09:31:00.000|"));
     const auto messages = client.drain();
     const ParsedFixMessage* reject = first_of_type(messages, "3");
     REQUIRE(reject != nullptr);
@@ -330,7 +330,7 @@ TEST_CASE(gateway_fix_review, r13_cancel_reject_status_matches_reason) {
     messages = buyer.drain();
     reject = first_of_type(messages, "9");
     REQUIRE(reject != nullptr);
-    const bool consistent = (reject->get(102) == "0" && reject->get(39) == "2") ||
-                            (reject->get(102) == "1" && reject->get(39) == "8");
+    const bool consistent =
+        (reject->get(102) == "0" && reject->get(39) == "2") || (reject->get(102) == "1" && reject->get(39) == "8");
     CHECK(consistent);
 }

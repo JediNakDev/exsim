@@ -79,13 +79,29 @@ TEST_CASE(md_golden, startup_sequence_packet) {
     GoldenFeed feed({test_instrument("AAA"), test_instrument("BBB", Phase::PreOpen)});
     REQUIRE_EQ(feed.packets.size(), 1u);
     const Bytes expected = hex_bytes(concat({
-        kSession, "0000000000000001", "0006",
-        "000C", "53 0000 0000 000000000010 4F",
-        "0027", "52 0001 0000 000000000010", kAAA, "51 4E 00000001 4E 43 5A20 50 4E 4E 20 4E 00000000 4E",
-        "0019", "48 0001 0000 000000000010", kAAA, "54 20 20202020",
-        "0027", "52 0002 0000 000000000010", kBBB, "51 4E 00000001 4E 43 5A20 50 4E 4E 20 4E 00000000 4E",
-        "0019", "48 0002 0000 000000000010", kBBB, "51 20 20202020",
-        "000C", "53 0000 0000 000000000010 53",
+        kSession,
+        "0000000000000001",
+        "0006",
+        "000C",
+        "53 0000 0000 000000000010 4F",
+        "0027",
+        "52 0001 0000 000000000010",
+        kAAA,
+        "51 4E 00000001 4E 43 5A20 50 4E 4E 20 4E 00000000 4E",
+        "0019",
+        "48 0001 0000 000000000010",
+        kAAA,
+        "54 20 20202020",
+        "0027",
+        "52 0002 0000 000000000010",
+        kBBB,
+        "51 4E 00000001 4E 43 5A20 50 4E 4E 20 4E 00000000 4E",
+        "0019",
+        "48 0002 0000 000000000010",
+        kBBB,
+        "51 20 20202020",
+        "000C",
+        "53 0000 0000 000000000010 53",
     }));
     CHECK_EQ(hex_of(feed.packets[0]), hex_of(expected));
     CHECK_EQ(feed.publisher.next_sequence(), 7u);
@@ -190,7 +206,8 @@ TEST_CASE(md_golden, opening_auction_is_two_leg_executions_and_cross_with_fresh_
     check_message(messages[0], "43 0001 0000 000000000040 0000000000000001 0000003C 0000000000000001 4E 000F4240");
     check_message(messages[1], "43 0001 0000 000000000040 0000000000000002 0000003C 0000000000000001 4E 000F4240");
     // Q carries AuctionSummary.match_id (2), not the constituent fill's (1); cross type O.
-    check_message(messages[2], concat({"51 0001 0000 000000000040 000000000000003C", kAAA, "000F4240 0000000000000002 4F"}));
+    check_message(messages[2],
+                  concat({"51 0001 0000 000000000040 000000000000003C", kAAA, "000F4240 0000000000000002 4F"}));
     check_message(messages[3], concat({"48 0001 0000 000000000040", kAAA, "54 20 20202020"}));
 }
 
@@ -204,7 +221,8 @@ TEST_CASE(md_golden, closing_auction_cross_type_and_end_of_day_expiry) {
     messages = feed.submit(SetPhase{0x50, 1, Phase::Closed});
     // Uncross, then the DAY remainder (40 shares of order 1) expires: D, then H.
     REQUIRE_EQ(message_types(messages), std::string("CCQDH"));
-    check_message(messages[2], concat({"51 0001 0000 000000000050 000000000000003C", kAAA, "000F4240 0000000000000002 43"}));
+    check_message(messages[2],
+                  concat({"51 0001 0000 000000000050 000000000000003C", kAAA, "000F4240 0000000000000002 43"}));
     check_message(messages[3], "44 0001 0000 000000000050 0000000000000001");
     check_message(messages[4], concat({"48 0001 0000 000000000050", kAAA, "48 20 20202020"}));
 }
@@ -218,14 +236,15 @@ TEST_CASE(md_golden, halted_crossed_book_uncrosses_with_cross_type_h) {
     check_message(messages[0], concat({"48 0001 0000 000000000040", kAAA, "48 20 20202020"}));
     messages = feed.submit(SetPhase{0x50, 1, Phase::Continuous});
     REQUIRE_EQ(message_types(messages), std::string("CCQH"));
-    check_message(messages[2], concat({"51 0001 0000 000000000050 000000000000003C", kAAA, "000F4240 0000000000000002 48"}));
+    check_message(messages[2],
+                  concat({"51 0001 0000 000000000050 000000000000003C", kAAA, "000F4240 0000000000000002 48"}));
     check_message(messages[3], concat({"48 0001 0000 000000000050", kAAA, "54 20 20202020"}));
 }
 
 TEST_CASE(md_golden, trading_action_state_per_phase) {
     GoldenFeed feed({test_instrument("AAA")});
     const std::pair<Phase, std::string_view> transitions[] = {
-        {Phase::Halted, "48"}, {Phase::PreOpen, "51"}, {Phase::Continuous, "54"},
+        {Phase::Halted, "48"},   {Phase::PreOpen, "51"}, {Phase::Continuous, "54"},
         {Phase::PreClose, "51"}, {Phase::Closed, "48"},
     };
     Timestamp ts = 0x20;

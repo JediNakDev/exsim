@@ -302,11 +302,11 @@ TEST_CASE(engine_phase, all_instruments_in_ascending_id_with_per_instrument_batc
 
 TEST_CASE(engine_phase, end_of_day_expires_day_orders_in_ascending_order_id) {
     EngineFixture fixture;
-    fixture.apply(limit_order(kBobSession, 1, Side::SELL, 150, 5));                                   // 1
-    fixture.apply(limit_order(kAliceSession, 1, Side::BUY, 90, 5));                                   // 2
-    fixture.apply(with_tif(limit_order(kAliceSession, 2, Side::BUY, 90, 5), TimeInForce::GTC));       // 3
-    fixture.apply(limit_order(kCarolSession, 1, Side::BUY, 100, 5));                                  // 4
-    fixture.apply(ReplaceOrder{5, kBobSession, 1, 0, 160, 5, false});                                 // 1 becomes 5
+    fixture.apply(limit_order(kBobSession, 1, Side::SELL, 150, 5));                              // 1
+    fixture.apply(limit_order(kAliceSession, 1, Side::BUY, 90, 5));                              // 2
+    fixture.apply(with_tif(limit_order(kAliceSession, 2, Side::BUY, 90, 5), TimeInForce::GTC));  // 3
+    fixture.apply(limit_order(kCarolSession, 1, Side::BUY, 100, 5));                             // 4
+    fixture.apply(ReplaceOrder{5, kBobSession, 1, 0, 160, 5, false});                            // 1 becomes 5
     fixture.apply(SetPhase{9, 1, Phase::Closed});
     CHECK_EQ(order_ids_of_events(fixture.events, EventType::Canceled), (std::vector<OrderId>{2, 4, 5}));
     CHECK_EQ(fixture.events[fixture.events.size() - 1].type, EventType::PhaseChanged);
@@ -322,13 +322,13 @@ TEST_CASE(engine_phase, end_of_day_expires_day_orders_in_ascending_order_id) {
 // count, including after a priority-losing Replace moves an order to the end.
 TEST_CASE(engine_phase, end_of_day_and_imbalance_see_only_their_instrument) {
     EngineFixture fixture(Phase::PreOpen, 3);
-    fixture.apply(limit_order(kAliceSession, 1, Side::BUY, 90, 5, 2));                                // 1
-    fixture.apply(limit_order(kAliceSession, 2, Side::BUY, 90, 7, 1));                                // 2
-    fixture.apply(with_tif(limit_order(kBobSession, 1, Side::SELL, 150, 4, 2), TimeInForce::GTC));    // 3
-    fixture.apply(limit_order(kBobSession, 2, Side::SELL, 150, 3, 3));                                // 4
-    fixture.apply(limit_order(kCarolSession, 1, Side::BUY, 80, 2, 2));                                // 5
-    fixture.apply(limit_order(kCarolSession, 2, Side::SELL, 160, 9, 1));                              // 6
-    fixture.apply(ReplaceOrder{7, kAliceSession, 1, 3, 100, 5, false});                               // 1 becomes 7
+    fixture.apply(limit_order(kAliceSession, 1, Side::BUY, 90, 5, 2));                              // 1
+    fixture.apply(limit_order(kAliceSession, 2, Side::BUY, 90, 7, 1));                              // 2
+    fixture.apply(with_tif(limit_order(kBobSession, 1, Side::SELL, 150, 4, 2), TimeInForce::GTC));  // 3
+    fixture.apply(limit_order(kBobSession, 2, Side::SELL, 150, 3, 3));                              // 4
+    fixture.apply(limit_order(kCarolSession, 1, Side::BUY, 80, 2, 2));                              // 5
+    fixture.apply(limit_order(kCarolSession, 2, Side::SELL, 160, 9, 1));                            // 6
+    fixture.apply(ReplaceOrder{7, kAliceSession, 1, 3, 100, 5, false});                             // 1 becomes 7
 
     CHECK_EQ(fixture.engine.auction_indicative(1).imbalance_qty, std::uint64_t{2});
     CHECK_EQ(fixture.engine.auction_indicative(1).imbalance_side, Aggressor::Sell);
@@ -425,9 +425,9 @@ TEST_CASE(engine_auction, sparse_prices_cross_bitmap_summary_boundaries) {
     instrument.reference_price = 4097;
     REQUIRE_EQ(engine.add_instrument(instrument), InstrumentId{1});
     EventBuffer events(required_event_capacity(config));
-    for (const auto& order : {limit_order(kAliceSession, 1, Side::BUY, 16385, 7),
-                              limit_order(kBobSession, 1, Side::SELL, 64, 3),
-                              limit_order(kBobSession, 2, Side::SELL, 4097, 4)}) {
+    for (const auto& order :
+         {limit_order(kAliceSession, 1, Side::BUY, 16385, 7), limit_order(kBobSession, 1, Side::SELL, 64, 3),
+          limit_order(kBobSession, 2, Side::SELL, 4097, 4)}) {
         events.clear();
         REQUIRE_EQ(engine.handle(order, events), HandleResult::Applied);
     }

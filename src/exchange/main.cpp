@@ -36,12 +36,15 @@ void handle_control_commands(void* context) noexcept {
             const auto command = exsim::ipc::receive_control(control.socket.fd());
             if (command.starts_with("admin ")) {
                 std::string reply;
-                exsim::server::CoreAdmin(control.runtime.core()).execute_line(std::string_view(command).substr(6), reply);
+                exsim::server::CoreAdmin(control.runtime.core())
+                    .execute_line(std::string_view(command).substr(6), reply);
                 exsim::ipc::send_control(control.socket.fd(), reply);
                 continue;
             }
-            if (command == "stop") control.runtime.request_shutdown();
-            else if (command != "status") throw std::runtime_error("invalid control command");
+            if (command == "stop")
+                control.runtime.request_shutdown();
+            else if (command != "status")
+                throw std::runtime_error("invalid control command");
             exsim::ipc::send_control(control.socket.fd(), exsim::ipc::runtime_snapshot_json(control.runtime));
         } catch (...) {
             control.runtime.request_shutdown();
@@ -67,7 +70,10 @@ int main(int argc, char** argv) {
         }
     }
     std::signal(SIGPIPE, SIG_IGN);
-    sigset_t signals; sigemptyset(&signals); sigaddset(&signals, SIGINT); sigaddset(&signals, SIGTERM);
+    sigset_t signals;
+    sigemptyset(&signals);
+    sigaddset(&signals, SIGINT);
+    sigaddset(&signals, SIGTERM);
     pthread_sigmask(SIG_BLOCK, &signals, nullptr);
     try {
         exsim::server::ServerConfig config;
@@ -81,7 +87,8 @@ int main(int argc, char** argv) {
             (void)exsim::net::set_non_blocking(control.fd());
             (void)exsim::net::set_no_sigpipe(control.fd());
         }
-        const auto session = std::to_string(static_cast<unsigned long>(::getpid())) + std::to_string(exsim::net::monotonic_ns());
+        const auto session =
+            std::to_string(static_cast<unsigned long>(::getpid())) + std::to_string(exsim::net::monotonic_ns());
         config.market_data.session = session.substr(session.size() - 10);
         config.exchange.soup_session = config.market_data.session;
         exsim::server::ServerRuntimeOptions options;
@@ -116,8 +123,7 @@ int main(int argc, char** argv) {
                 exsim::api::ApiJsonWriter json;
                 json.begin_object().key("error").string(error.what()).end_object();
                 exsim::ipc::send_control(control.fd(), json.take());
-            } catch (...) {
-            }
+            } catch (...) {}
         }
         std::cerr << "exsim_exchanged: " << error.what() << '\n';
         return 1;

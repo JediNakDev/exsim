@@ -29,14 +29,16 @@ std::string exchange_frame(Runtime& runtime, int fd, std::string_view frame) {
     while (exsim::net::monotonic_ns() < deadline) {
         runtime.poll_once();
         const auto size = ::recv(fd, buffer.data(), buffer.size(), 0);
-        if (size > 0) output.append(buffer.data(), static_cast<std::size_t>(size));
-        else if (size < 0) REQUIRE(exsim::net::is_would_block(errno));
+        if (size > 0)
+            output.append(buffer.data(), static_cast<std::size_t>(size));
+        else if (size < 0)
+            REQUIRE(exsim::net::is_would_block(errno));
         if (output.find("\00110=") != std::string::npos && output.back() == '\001') return output;
     }
     REQUIRE(!output.empty());
     return output;
 }
-}
+}  // namespace
 
 TEST_CASE(fix_runtime, tcp_logon_orders_matching_and_logout) {
     exsim::server::ServerConfig config;
@@ -61,9 +63,11 @@ TEST_CASE(fix_runtime, tcp_logon_orders_matching_and_logout) {
     };
     CHECK(send(alice.fd(), "ALICE", "A", 1, "98=0|108=30|554=alice|").find("35=A|") != std::string::npos);
     CHECK(send(bob.fd(), "BOB", "A", 1, "98=0|108=30|554=bob|").find("35=A|") != std::string::npos);
-    CHECK(send(alice.fd(), "ALICE", "D", 2, fix_test::new_order_fields("BUY", "1", 100, "150")).find("39=0|") != std::string::npos);
+    CHECK(send(alice.fd(), "ALICE", "D", 2, fix_test::new_order_fields("BUY", "1", 100, "150")).find("39=0|") !=
+          std::string::npos);
     CHECK_EQ(runtime.core().engine().live_order_count(), 1u);
-    CHECK(send(bob.fd(), "BOB", "D", 2, fix_test::new_order_fields("SELL", "2", 100, "150")).find("39=2|") != std::string::npos);
+    CHECK(send(bob.fd(), "BOB", "D", 2, fix_test::new_order_fields("SELL", "2", 100, "150")).find("39=2|") !=
+          std::string::npos);
     CHECK_EQ(runtime.core().engine().live_order_count(), 0u);
     CHECK(send(bob.fd(), "BOB", "5", 3, "").find("35=5|") != std::string::npos);
     // Deliver peer EOF before destroying sessions that are still bound.

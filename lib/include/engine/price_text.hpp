@@ -65,7 +65,8 @@ inline bool parse_decimal_price(std::string_view text, Price& out) noexcept {
         scale /= 10;
     }
     out = negative && value == maximum + 1 ? std::numeric_limits<Price>::min()
-        : negative ? -static_cast<Price>(value) : static_cast<Price>(value);
+          : negative                       ? -static_cast<Price>(value)
+                                           : static_cast<Price>(value);
     return true;
 }
 

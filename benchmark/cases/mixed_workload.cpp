@@ -11,8 +11,8 @@ struct CommandMix {
 
 // New orders rest and never cross, so the live-order model below stays exact
 // and every cancel and replace targets an order that is on the book.
-std::vector<exsim::Command> mixed_commands(Scenario& scenario, std::size_t book_size,
-                                           std::size_t command_count, CommandMix mix) {
+std::vector<exsim::Command> mixed_commands(Scenario& scenario, std::size_t book_size, std::size_t command_count,
+                                           CommandMix mix) {
     std::vector<RestingOrder> live = scenario.rest_random_orders(book_size);
     std::vector<exsim::Command> commands;
     commands.reserve(command_count);
@@ -20,8 +20,7 @@ std::vector<exsim::Command> mixed_commands(Scenario& scenario, std::size_t book_
         const unsigned roll = static_cast<unsigned>(scenario.rng()() % 100);
         if (live.empty() || roll < mix.new_order_percent) {
             const RestingOrder order{scenario.next_cl_ord_id(), scenario.random_side()};
-            commands.push_back(scenario.new_order(order.cl_ord_id, order.side,
-                                                  scenario.random_price(order.side),
+            commands.push_back(scenario.new_order(order.cl_ord_id, order.side, scenario.random_price(order.side),
                                                   scenario.random_quantity()));
             live.push_back(order);
             continue;
@@ -34,8 +33,7 @@ std::vector<exsim::Command> mixed_commands(Scenario& scenario, std::size_t book_
         } else {
             const exsim::ClOrdId new_cl_ord_id = scenario.next_cl_ord_id();
             commands.push_back(Scenario::replace(live[target].cl_ord_id, new_cl_ord_id,
-                                                 scenario.random_price(live[target].side),
-                                                 scenario.random_quantity()));
+                                                 scenario.random_price(live[target].side), scenario.random_quantity()));
             live[target].cl_ord_id = new_cl_ord_id;
         }
     }

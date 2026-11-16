@@ -75,8 +75,8 @@ public:
     }
 
     // New token, new price, losing time priority, as OUCH Replace does.
-    static exsim::Command replace(exsim::ClOrdId old_cl_ord_id, exsim::ClOrdId new_cl_ord_id,
-                                  exsim::Price price, exsim::Quantity qty) {
+    static exsim::Command replace(exsim::ClOrdId old_cl_ord_id, exsim::ClOrdId new_cl_ord_id, exsim::Price price,
+                                  exsim::Quantity qty) {
         exsim::ReplaceOrder replace;
         replace.session = kSession;
         replace.orig_cl_ord_id = old_cl_ord_id;
@@ -94,8 +94,7 @@ public:
             throw std::runtime_error("benchmark setup command not applied");
         }
         for (const auto& event : events_) {
-            if (event.type == exsim::EventType::Rejected)
-                throw std::runtime_error("benchmark setup command rejected");
+            if (event.type == exsim::EventType::Rejected) throw std::runtime_error("benchmark setup command rejected");
         }
     }
 

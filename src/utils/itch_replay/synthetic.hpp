@@ -19,8 +19,7 @@ namespace exsim::itch_replay {
 
 class SyntheticItchStream {
 public:
-    SyntheticItchStream(std::uint64_t seed, std::size_t n_messages,
-                        Price mid_price, Price half_spread = 50)
+    SyntheticItchStream(std::uint64_t seed, std::size_t n_messages, Price mid_price, Price half_spread = 50)
         : rng_(seed), n_(n_messages), mid_(mid_price), half_(half_spread) {}
 
     std::vector<char> build() {
@@ -53,11 +52,16 @@ private:
         std::uniform_int_distribution<int> pick(0, 99);
         while (emitted_ < n_) {
             int r = pick(rng_);
-            if (r < 50 || live_refs_.empty()) emit_add(out);
-            else if (r < 75)                  emit_delete(out);
-            else if (r < 90)                  emit_cancel(out);
-            else if (r < 97)                  emit_execute(out);
-            else                              emit_replace(out);
+            if (r < 50 || live_refs_.empty())
+                emit_add(out);
+            else if (r < 75)
+                emit_delete(out);
+            else if (r < 90)
+                emit_cancel(out);
+            else if (r < 97)
+                emit_execute(out);
+            else
+                emit_replace(out);
         }
     }
 
@@ -66,8 +70,7 @@ private:
     Price random_passive_price(Side s) {
         std::uniform_int_distribution<Price> jitter(0, half_ * 4);
         Price j = jitter(rng_);
-        return (s == Side::BUY) ? (mid_ - half_ - j)
-                                : (mid_ + half_ + j);
+        return (s == Side::BUY) ? (mid_ - half_ - j) : (mid_ + half_ + j);
     }
 
     void emit_add(std::vector<char>& out) {
@@ -140,7 +143,7 @@ private:
         write_be64(buf + 11, ref);
         std::uniform_int_distribution<std::uint32_t> q(10, 50);
         write_be32(buf + 19, q(rng_));
-        write_be64(buf + 23, ts_); // match number
+        write_be64(buf + 23, ts_);  // match number
         out.insert(out.end(), buf, buf + 31);
         ++emitted_;
     }
@@ -152,7 +155,7 @@ private:
         std::uniform_int_distribution<std::size_t> idx_d(0, live_refs_.size() - 1);
         std::size_t i = idx_d(rng_);
         std::uint64_t old_ref = live_refs_[i];
-        Side s = side_of_[old_ref];     // ITCH 'U' preserves the original side
+        Side s = side_of_[old_ref];  // ITCH 'U' preserves the original side
         // Remove old ref from live set.
         live_refs_[i] = live_refs_.back();
         live_refs_.pop_back();
@@ -174,7 +177,7 @@ private:
     static void write_be32(char* p, std::uint32_t v) {
         p[0] = char((v >> 24) & 0xFF);
         p[1] = char((v >> 16) & 0xFF);
-        p[2] = char((v >>  8) & 0xFF);
+        p[2] = char((v >> 8) & 0xFF);
         p[3] = char(v & 0xFF);
     }
     static void write_be48(char* p, std::uint64_t v) {
@@ -182,7 +185,7 @@ private:
         p[1] = char((v >> 32) & 0xFF);
         p[2] = char((v >> 24) & 0xFF);
         p[3] = char((v >> 16) & 0xFF);
-        p[4] = char((v >>  8) & 0xFF);
+        p[4] = char((v >> 8) & 0xFF);
         p[5] = char(v & 0xFF);
     }
     static void write_be64(char* p, std::uint64_t v) {

@@ -144,8 +144,7 @@ TEST_CASE(md_publisher, start_before_day_origin_stays_in_setup) {
     PublisherFixture fixture(config);
     CHECK(fixture.publisher.start_session(999) == md::PublishStatus::TimestampOutsideDay);
     CHECK(fixture.publisher.state() == md::PublisherState::Setup);
-    CHECK(fixture.publisher.start_session(1'000 + net::kNanosecondsPerDay) ==
-          md::PublishStatus::TimestampOutsideDay);
+    CHECK(fixture.publisher.start_session(1'000 + net::kNanosecondsPerDay) == md::PublishStatus::TimestampOutsideDay);
     CHECK(fixture.packets.empty());
     CHECK(fixture.publisher.start_session(1'000) == md::PublishStatus::Ok);
     CHECK(fixture.publisher.state() == md::PublisherState::Live);

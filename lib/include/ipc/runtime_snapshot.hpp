@@ -7,5 +7,5 @@ namespace exsim::ipc {
 // API returns as an exchange's "runtime". It lives with the control socket,
 // not in api/, so the management service never depends on the server runtime.
 std::string runtime_snapshot_json(server::ServerRuntime& runtime);
-}
+}  // namespace exsim::ipc
 #endif

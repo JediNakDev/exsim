@@ -31,6 +31,6 @@ public:
         }
     }
 };
-}
+}  // namespace exsim::protocol::fix44
 
 #endif  // TEST_EXSIM_PROTOCOL_FIX44_READER_HPP

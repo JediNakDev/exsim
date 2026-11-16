@@ -40,6 +40,6 @@ public:
         return Status::ok;
     }
 };
-}
+}  // namespace exsim::protocol::moldudp64
 
 #endif  // TEST_EXSIM_PROTOCOL_MOLDUDP64_READER_HPP

@@ -42,12 +42,11 @@ struct EngineConfig {
 // Conservative bound for ANY command, including all-instrument phase changes.
 // Setup-time validation also bounds aggregate quantities and count fields.
 [[nodiscard]] inline std::size_t required_event_capacity(const EngineConfig& c) {
-    if (c.max_instruments == 0 || c.max_instruments > std::numeric_limits<InstrumentId>::max() ||
-        c.max_orders == 0 || c.max_orders > std::numeric_limits<std::uint32_t>::max())
+    if (c.max_instruments == 0 || c.max_instruments > std::numeric_limits<InstrumentId>::max() || c.max_orders == 0 ||
+        c.max_orders > std::numeric_limits<std::uint32_t>::max())
         throw std::invalid_argument("EngineConfig bounds");
     const auto limit = std::numeric_limits<std::size_t>::max();
-    if (c.max_orders > (limit - 4) / 2 ||
-        c.max_instruments > (limit - 4 - 2 * c.max_orders) / 2)
+    if (c.max_orders > (limit - 4) / 2 || c.max_instruments > (limit - 4 - 2 * c.max_orders) / 2)
         throw std::length_error("event capacity");
     const auto count = 2 * c.max_orders + 2 * c.max_instruments + 4;
     if (count > limit / sizeof(Event)) throw std::length_error("event storage");
@@ -80,10 +79,10 @@ struct OrderInfo {
 
 // Indicative auction state during a call phase (feeds ITCH NOII 'I').
 struct AuctionIndicative {
-    bool crossed = false;           // false => no executable volume
-    Price price = 0;                // indicative uncross price
-    std::uint64_t paired_qty = 0;   // V(p*)
-    std::uint64_t imbalance_qty = 0; // at price if crossed; total side difference otherwise
+    bool crossed = false;                        // false => no executable volume
+    Price price = 0;                             // indicative uncross price
+    std::uint64_t paired_qty = 0;                // V(p*)
+    std::uint64_t imbalance_qty = 0;             // at price if crossed; total side difference otherwise
     Aggressor imbalance_side = Aggressor::None;  // Buy/Sell surplus, None if balanced
 };
 
