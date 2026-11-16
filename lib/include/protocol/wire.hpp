@@ -9,6 +9,14 @@
 #include <span>
 #include <string_view>
 namespace exsim::protocol {
+// Wire buffers stay char rather than std::byte: the codecs read text fields
+// through std::string_view, and the socket buffers, byte sinks and message
+// stores all take char, so std::byte would add a cast at every boundary.
+//
+// Decoders return Status and fill a struct the caller owns rather than
+// returning std::expected: some callers read the struct after an error (OUCH
+// keeps the token when it rejects an unknown side), and no caller would get
+// shorter.
 enum class Status : std::uint8_t {
     ok,
     incomplete,

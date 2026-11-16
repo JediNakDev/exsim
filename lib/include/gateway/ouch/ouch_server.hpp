@@ -51,7 +51,6 @@
 #include "server/config.hpp"
 #include "server/core/policies.hpp"
 #include "engine/types.hpp"
-#include "util/compiler.hpp"
 
 #include <algorithm>
 #include <array>
@@ -313,7 +312,7 @@ private:
     // One OUCH message from a SoupBinTCP Unsequenced Data packet.
     template <class Context>
     void handle_application_message(std::string_view payload, Context& context) noexcept {
-        if (EXSIM_UNLIKELY(payload.empty())) {
+        if (payload.empty()) [[unlikely]] {
             ++statistics_.malformed_messages_ignored;
             return;
         }
@@ -338,7 +337,7 @@ private:
     // next live sequenced message must stay stored but not be transmitted.
     template <class Context>
     [[nodiscard]] bool consume_outbound_drop(Context& context) noexcept {
-        if (EXSIM_LIKELY(!context.consume_drop_out(session_id_))) return false;
+        if (!context.consume_drop_out(session_id_)) [[likely]] return false;
         ++statistics_.outbound_messages_dropped_by_fault;
         return true;
     }
@@ -396,7 +395,7 @@ private:
         order.price = request.price;
         order.qty = request.shares;
         const char not_applied_reason = submit_to_engine(context, Command{order});
-        if (EXSIM_UNLIKELY(not_applied_reason != kCommandApplied)) {
+        if (not_applied_reason != kCommandApplied) [[unlikely]] {
             reject_at_gateway(request.token, not_applied_reason, context);
         }
     }
@@ -438,7 +437,7 @@ private:
         replace.qty = request.shares;  // OUCH shares = new total quantity
         replace.force_priority_loss = true;
         const char not_applied_reason = submit_to_engine(context, Command{replace});
-        if (EXSIM_UNLIKELY(not_applied_reason != kCommandApplied)) {
+        if (not_applied_reason != kCommandApplied) [[unlikely]] {
             reject_at_gateway(request.replacement_token, not_applied_reason, context);
         }
     }
@@ -493,7 +492,7 @@ private:
     // client may reconnect and replay. The reserve stays for reports on live
     // orders (X, fills, cancel-on-disconnect, end of day).
     [[nodiscard]] bool refuse_request_at_store_reserve() noexcept {
-        if (EXSIM_LIKELY(store_admits_new_requests())) return false;
+        if (store_admits_new_requests()) [[likely]] return false;
         ++statistics_.requests_refused_at_store_reserve;
         if (attached_connection_ != nullptr) attached_connection_->close(OuchCloseReason::StoreReserveReached);
         return true;
@@ -605,7 +604,7 @@ private:
     // could never be complete again (see OuchCloseReason::StoreFull).
     template <class Message, class Context>
     void append_sequenced(const Message& message, Context& context) noexcept {
-        if (EXSIM_UNLIKELY(store_overflowed_)) {
+        if (store_overflowed_) [[unlikely]] {
             ++statistics_.messages_lost_to_store_overflow;
             return;
         }
@@ -616,11 +615,11 @@ private:
             payload_size == 0 ? 0
                               : protocol::soupbintcp::encode(protocol::soupbintcp::SequencedData{{payload, payload_size}},
                                                              frame, sizeof frame);
-        if (EXSIM_UNLIKELY(frame_size == 0)) {
+        if (frame_size == 0) [[unlikely]] {
             ++statistics_.outbound_encode_failures;
             return;
         }
-        if (EXSIM_UNLIKELY(!store_.append({frame, frame_size}))) {
+        if (!store_.append({frame, frame_size})) [[unlikely]] {
             store_overflowed_ = true;
             ++statistics_.messages_lost_to_store_overflow;
             if (attached_connection_ != nullptr) attached_connection_->terminate_for_store_overflow(context.now());
@@ -631,7 +630,7 @@ private:
 
     [[nodiscard]] const OuchOrderInstructions& instructions_for(ClOrdId cl_ord_id) const noexcept {
         static constexpr OuchOrderInstructions kUnknownOrderInstructions{};
-        if (EXSIM_UNLIKELY(cl_ord_id == 0 || cl_ord_id > tokens_.max_tokens())) return kUnknownOrderInstructions;
+        if (cl_ord_id == 0 || cl_ord_id > tokens_.max_tokens()) [[unlikely]] return kUnknownOrderInstructions;
         return instructions_by_cl_ord_id_[cl_ord_id];
     }
 
@@ -960,7 +959,7 @@ private:
                 }
                 continue;
             }
-            if (EXSIM_UNLIKELY(outbound_cut_by_drop_out_)) {  // the fault was cleared mid-cut: never write past a gap
+            if (outbound_cut_by_drop_out_) [[unlikely]] {  // the fault was cleared mid-cut: never write past a gap
                 close(OuchCloseReason::FaultDropOut);
                 return;
             }

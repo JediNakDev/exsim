@@ -1,7 +1,6 @@
 #ifndef EXSIM_UTIL_OBJECT_POOL_HPP
 #define EXSIM_UTIL_OBJECT_POOL_HPP
 
-#include "util/compiler.hpp"
 #include <cstddef>
 #include <memory>
 #include <new>
@@ -32,7 +31,7 @@ public:
     // Returns nullptr when every node is in use.
     template <typename... Args>
     T* create(Args&&... args) {
-        if (EXSIM_UNLIKELY(!free_list_)) {
+        if (!free_list_) [[unlikely]] {
             return nullptr;
         }
 
@@ -53,7 +52,9 @@ public:
         }
 
         object->~T();
-        Node* node = reinterpret_cast<Node*>(object);
+        // The Node union whose storage holds `object` is still alive, so launder
+        // yields a usable pointer to it at the same address.
+        Node* node = std::launder(reinterpret_cast<Node*>(object));
         node->next = free_list_;
         free_list_ = node;
     }

@@ -389,32 +389,6 @@ inline constexpr std::string_view kFrameStartPattern{"8=FIX.4.4\001" "9=", 12};
     return text.substr(value_begin, value_end - value_begin);
 }
 
-// First tag that occurs twice in a frame, or 0 (for Reject RefTagID).
-[[nodiscard]] inline unsigned find_duplicate_tag(std::span<const char> frame) noexcept {
-    constexpr std::size_t kMaxScannedTags = 256;
-    std::array<unsigned, kMaxScannedTags> seen_tags{};
-    std::size_t seen_count = 0;
-    std::size_t position = 0;
-    while (position < frame.size() && seen_count < kMaxScannedTags) {
-        unsigned tag = 0;
-        while (position < frame.size() && frame[position] >= '0' && frame[position] <= '9') {
-            tag = tag * 10 + static_cast<unsigned>(frame[position] - '0');
-            ++position;
-        }
-        for (std::size_t index = 0; index < seen_count; ++index) {
-            if (seen_tags[index] == tag) {
-                return tag;
-            }
-        }
-        seen_tags[seen_count++] = tag;
-        while (position < frame.size() && frame[position] != fix44::soh) {
-            ++position;
-        }
-        ++position;
-    }
-    return 0;
-}
-
 // "MsgSeqNum too low, expecting X but received Y" (FIX session wording) in a
 // caller buffer of at least 96 bytes.
 [[nodiscard]] inline std::string_view format_sequence_too_low(std::span<char> buffer, std::uint64_t expected,
