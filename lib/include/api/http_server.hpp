@@ -34,7 +34,8 @@ struct HttpServerOptions {
     std::uint16_t port = 7600;  // 0 = ephemeral (read it back with port())
     std::size_t max_connections = 32;
     std::size_t max_requests_per_connection = 1000;
-    std::chrono::milliseconds idle_timeout{10'000};   // waiting for (the rest of) a request
+    // How long an idle connection is kept, and how long a started request has to arrive completely.
+    std::chrono::milliseconds idle_timeout{10'000};
     std::chrono::milliseconds write_timeout{10'000};
     HttpLimits limits;
 };
