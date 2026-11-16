@@ -31,18 +31,6 @@ TEST_CASE(flat_hash_map, full_map_rejects_and_keeps_its_capacity) {
     CHECK_EQ(map.capacity(), cap * 2);
 }
 
-TEST_CASE(flat_hash_map, reserve_preserves_entries) {
-    FlatHashMap<std::uint64_t> map(4);
-    for (std::uint64_t i = 1; i <= 10'000; ++i) {
-        if (map.size() == map.capacity() / 2) map.reserve(map.size() + 1);
-        REQUIRE(map.insert(i * 7919, i));
-    }
-    for (std::uint64_t i = 1; i <= 10'000; ++i) {
-        REQUIRE(map.find(i * 7919) != nullptr);
-        CHECK_EQ(*map.find(i * 7919), i);
-    }
-}
-
 // Randomised differential test against std::unordered_map, with heavy
 // erase churn to exercise backward-shift deletion across wrap-around.
 TEST_CASE(flat_hash_map, matches_unordered_map_under_churn) {

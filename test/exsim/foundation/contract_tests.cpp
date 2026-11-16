@@ -16,19 +16,19 @@ TEST_CASE(foundation, zero_and_moved_map) {
     CHECK_EQ(moved.size(), 1u);
     CHECK_EQ(map.capacity(), 0u);
     CHECK(!map.find(2));
-    map.reserve(8);
+    map = exsim::util::FlatHashMap<int>(8);
     CHECK(map.insert(3, 4));
     moved = std::move(map);
     CHECK(!map.find(3));
     CHECK_EQ(map.size(), 0u);
     CHECK(!moved.contains(0));
 }
-TEST_CASE(foundation, reserve_overflow_and_constness) {
+TEST_CASE(foundation, capacity_overflow_and_constness) {
     exsim::util::FlatHashMap<int> map(8);
     CHECK(map.insert(1, 2));
     for (auto n : {std::numeric_limits<std::size_t>::max(), std::size_t{1} << 63}) {
         bool rejected = false;
-        try { map.reserve(n); } catch (const std::length_error&) { rejected = true; }
+        try { exsim::util::FlatHashMap<int> oversized(n); } catch (const std::length_error&) { rejected = true; }
         CHECK(rejected);
         CHECK_EQ(*map.find(1), 2);
     }
