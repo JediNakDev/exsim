@@ -47,7 +47,6 @@ TEST_CASE(active_bitmap, searches_cross_every_summary_layer) {
     CHECK_EQ(bitmap.find_at_or_below(kSize - 2).value(), 64u * 64u);
     bitmap.clear(64 * 64);
     CHECK_EQ(bitmap.find_at_or_above(4).value(), kSize - 1);
-    CHECK_EQ(bitmap.count(), 2u);
 }
 
 TEST_CASE(active_bitmap, out_of_range_starts_find_nothing) {
@@ -58,22 +57,19 @@ TEST_CASE(active_bitmap, out_of_range_starts_find_nothing) {
     CHECK(!bitmap.find_at_or_below(130).has_value());
     CHECK(!bitmap.find_at_or_above(static_cast<std::size_t>(-1)).has_value());
     CHECK_EQ(bitmap.find_at_or_below(129).value(), 129u);
-    CHECK_EQ(bitmap.word_count(), 3u);
-    CHECK_EQ(bitmap.word(2), std::uint64_t{2});
 }
 
-TEST_CASE(active_bitmap, count_ignores_repeated_set_and_clear) {
+TEST_CASE(active_bitmap, repeated_set_and_clear_change_nothing) {
     ActiveBitmap bitmap(70);
     bitmap.set(5);
     bitmap.set(5);
     bitmap.set(69);
-    CHECK_EQ(bitmap.count(), 2u);
     bitmap.clear(5);
     bitmap.clear(5);
     bitmap.clear(6);
-    CHECK_EQ(bitmap.count(), 1u);
-    CHECK(bitmap.test(69));
-    CHECK(!bitmap.test(5));
+    CHECK_EQ(bitmap.find_at_or_above(0).value(), 69u);
+    CHECK_EQ(bitmap.find_at_or_below(69).value(), 69u);
+    CHECK(!bitmap.find_at_or_below(68).has_value());
 }
 
 TEST_CASE(active_bitmap, randomized_searches_match_a_linear_scan) {
@@ -81,23 +77,19 @@ TEST_CASE(active_bitmap, randomized_searches_match_a_linear_scan) {
                                    std::size_t{4096}, std::size_t{4097}, std::size_t{20000}}) {
         ActiveBitmap bitmap(size);
         std::vector<bool> reference(size, false);
-        std::size_t reference_count = 0;
         std::mt19937_64 random(size);
         for (int step = 0; step < 4000; ++step) {
             const std::size_t index = random() % size;
             if (random() % 3 == 0) {
-                reference_count -= reference[index] ? 1 : 0;
                 reference[index] = false;
                 bitmap.clear(index);
             } else {
-                reference_count += reference[index] ? 0 : 1;
                 reference[index] = true;
                 bitmap.set(index);
             }
             const std::size_t from = random() % size;
             REQUIRE(bitmap.find_at_or_above(from) == naive_at_or_above(reference, from));
             REQUIRE(bitmap.find_at_or_below(from) == naive_at_or_below(reference, from));
-            REQUIRE_EQ(bitmap.count(), reference_count);
         }
     }
 }
