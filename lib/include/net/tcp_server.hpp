@@ -53,7 +53,7 @@ struct TcpServerConfig {
     Ipv4Endpoint listen_endpoint = loopback_endpoint(0);  // port 0 = the OS picks a free port
     std::uint32_t max_connections = 64;
     std::size_t receive_buffer_capacity = 64 * 1024;  // per connection; must hold the largest inbound message
-    std::size_t send_buffer_capacity = 1024 * 1024;   // per connection; queued outbound bytes beyond this disconnect
+    std::size_t send_buffer_capacity = 64 * 1024;   // per connection; queued outbound bytes beyond this disconnect
     int listen_backlog = 128;
     int socket_send_buffer_bytes = 0;     // SO_SNDBUF of accepted sockets, 0 = OS default
     int socket_receive_buffer_bytes = 0;  // SO_RCVBUF of accepted sockets, 0 = OS default

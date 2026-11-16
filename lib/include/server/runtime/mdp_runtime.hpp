@@ -55,7 +55,7 @@ public:
         tcp.listen_endpoint = {bind, md.retransmit_port};
         tcp.max_connections = std::min(config.exchange.max_connections, std::uint32_t{4});
         tcp.receive_buffer_capacity = 8192;
-        tcp.send_buffer_capacity = 4 * 1024 * 1024;
+        tcp.send_buffer_capacity = 64 * 1024;
         replay_ = std::make_unique<net::TcpServer>(tcp, poller, net::poll_token_tag(replay_token));
         slots_.reserve(tcp.max_connections);
         for (std::size_t i = 0; i < tcp.max_connections; ++i)
