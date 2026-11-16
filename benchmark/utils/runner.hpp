@@ -1,15 +1,8 @@
 #ifndef EXSIM_BENCH_RUNNER_HPP
 #define EXSIM_BENCH_RUNNER_HPP
 
-// Times a command script against a fresh Scenario per iteration.
-//
-// The clock is read once per batch of kBatchSize commands, not once per
-// command. On macOS std::chrono::steady_clock advances in steps of about
-// 42 ns, as long as most engine operations, so per-command timing would only
-// measure the tick. A batch of 32 commands takes over a microsecond, so one
-// tick is a few percent of it. Each batch time goes into a fixed-bucket
-// histogram. The unused cycle counter was removed: it is not better than the
-// clock on every platform and batching makes it unnecessary.
+// Time batches to amortize clock reads. Percentiles describe batch means,
+// not individual command tails. Setup and warmup are excluded from the CSV.
 
 #include "utils/csv_writer.hpp"
 #include "utils/histogram.hpp"
@@ -46,6 +39,10 @@ void run_commands(benchmark::State& state, const std::string& name, Prepare&& pr
         state.PauseTiming();
         auto scenario = std::make_unique<Scenario>();
         const std::vector<exsim::Command> commands = prepare(*scenario);
+        if (commands.empty() || commands.size() % kBatchSize != 0) {
+            state.SkipWithError("command count must be a nonzero multiple of batch size");
+            break;
+        }
         const bool recorded = iteration++ >= kWarmupIterations;
         auto& engine = scenario->engine();
         auto& events = scenario->events();
@@ -59,6 +56,13 @@ void run_commands(benchmark::State& state, const std::string& name, Prepare&& pr
                 benchmark::DoNotOptimize(result);
                 not_applied += result != exsim::HandleResult::Applied;
                 events_emitted += events.size();
+                // Validate the deterministic script during warmup only.
+                if (!recorded) {
+                    for (const auto& event : events) {
+                        if (event.type == exsim::EventType::Rejected)
+                            throw std::runtime_error("benchmark command rejected");
+                    }
+                }
             }
             commands_run += kBatchSize;
             const auto stop = std::chrono::steady_clock::now();
@@ -69,6 +73,9 @@ void run_commands(benchmark::State& state, const std::string& name, Prepare&& pr
             }
         }
         live_orders_after = engine.live_order_count();
+        state.PauseTiming();
+        scenario.reset();
+        state.ResumeTiming();
     }
 
     if (not_applied != 0) {
@@ -80,7 +87,7 @@ void run_commands(benchmark::State& state, const std::string& name, Prepare&& pr
     state.counters["EventsPerCommand"] =
         static_cast<double>(events_emitted) / static_cast<double>(commands_run);
     state.counters["LiveOrdersAfter"] = static_cast<double>(live_orders_after);
-    state.SetItemsProcessed(static_cast<std::int64_t>(stats.operations));
+    state.SetItemsProcessed(static_cast<std::int64_t>(commands_run));
     if (csv()) csv()->write(name, stats);
 }
 

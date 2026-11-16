@@ -10,6 +10,7 @@
 #include <array>
 #include <bit>
 #include <cstddef>
+#include <cmath>
 #include <cstdint>
 
 namespace bench {
@@ -32,7 +33,7 @@ public:
     // Smallest bucket midpoint such that at least `fraction` of the samples are at or below it.
     [[nodiscard]] std::uint64_t percentile(double fraction) const noexcept {
         if (count_ == 0) return 0;
-        const auto wanted = static_cast<std::uint64_t>(fraction * static_cast<double>(count_)) + 1;
+        const auto wanted = static_cast<std::uint64_t>(std::ceil(fraction * static_cast<double>(count_)));
         std::uint64_t seen = 0;
         for (std::size_t bucket = 0; bucket < counts_.size(); ++bucket) {
             seen += counts_[bucket];

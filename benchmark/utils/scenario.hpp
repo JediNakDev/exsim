@@ -40,7 +40,7 @@ class Scenario {
 public:
     Scenario()
         : engine_(exsim::EngineConfig{.max_instruments = 1, .max_orders = kMaxOrders}),
-          events_(kMaxOrders + 16),
+          events_(exsim::required_event_capacity({.max_instruments = 1, .max_orders = kMaxOrders})),
           rng_(42) {
         exsim::InstrumentConfig config;
         config.symbol = exsim::Symbol("BENCH");
@@ -92,6 +92,10 @@ public:
         events_.clear();
         if (engine_.handle(command, events_) != exsim::HandleResult::Applied) {
             throw std::runtime_error("benchmark setup command not applied");
+        }
+        for (const auto& event : events_) {
+            if (event.type == exsim::EventType::Rejected)
+                throw std::runtime_error("benchmark setup command rejected");
         }
     }
 

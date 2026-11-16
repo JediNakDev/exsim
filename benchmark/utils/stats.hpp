@@ -23,9 +23,8 @@ struct Stats {
     double p9999_ns = 0;
     double min_ns = 0;
     double max_ns = 0;
-    // Operations divided by the summed batch times. It includes the two clock
-    // reads and the histogram update of each batch, about 1 to 2 percent of a
-    // 32-operation batch, and excludes setup between iterations.
+    // Commands divided by summed batch durations, including amortized clock
+    // and loop overhead. Histogram updates and setup are outside those spans.
     double throughput_per_second = 0;
 
     static Stats from(const LatencyHistogram& batches, std::size_t batch_size) {
