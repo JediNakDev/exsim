@@ -72,7 +72,7 @@ void HttpServer::start() {
     stopping_ = false;
     listener_ = std::move(listener);
     try {
-        accept_thread_ = std::jthread([this] { accept_loop(); });
+        accept_thread_ = std::thread([this] { accept_loop(); });
     } catch (...) {
         listener_.close();
         throw;
@@ -119,7 +119,7 @@ void HttpServer::accept_loop() {
             slot.is_finished = false;
             ++active_connections_;
             try {
-                slot.thread = std::jthread([this, &slot] {
+                slot.thread = std::thread([this, &slot] {
                     try {
                         serve_connection(slot.socket.fd());
                     } catch (...) {
