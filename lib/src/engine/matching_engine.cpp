@@ -5,7 +5,7 @@
 // EngineConfig::max_orders. The
 // engine walks and mutates book orders through Order pointers and keeps only
 // engine-only metadata (session, STP, cumulative fills, session and instrument
-// lists) in preallocated arrays.
+// lists) in one preallocated record per order.
 
 #include <engine/matching_engine.hpp>
 
@@ -32,11 +32,9 @@ namespace {
 using engine::cl_ord_id_of;
 using engine::FixedArray;
 using engine::InstrumentBook;
-using engine::InstrumentListLinks;
 using engine::kNilOrder;
 using engine::make_session_token;
-using engine::OrderCold;
-using engine::OrderHot;
+using engine::OrderMetadata;
 using engine::OrderIndex;
 using engine::OrderListEnds;
 using engine::session_of;
@@ -134,13 +132,11 @@ struct MatchingEngine::Impl {
     exsim::book::OrderBookStorage order_storage;
     std::vector<InstrumentBook> books;  // books[id - 1]; reserved up front so pointers stay stable
     exsim::util::FlatHashMap<InstrumentId> instrument_by_symbol;  // key: symbol_key(symbol)
-    FixedArray<OrderHot> hot;
-    FixedArray<OrderCold> cold;
+    FixedArray<OrderMetadata> metadata;  // per order; slot 0 is unused
     OrderIndex free_head = kNilOrder;
     std::uint32_t live_count = 0;
     exsim::util::FlatHashMap<std::uint32_t> order_by_session_token;
     FixedArray<OrderListEnds> orders_by_session;         // per SessionId, ascending OrderId
-    FixedArray<InstrumentListLinks> instrument_links;    // per order, threads orders_by_instrument
     FixedArray<OrderListEnds> orders_by_instrument;      // per InstrumentId, ascending OrderId
     OrderId next_order_id = 1;
     MatchId next_match_id = 1;
@@ -207,16 +203,14 @@ MatchingEngine::Impl::Impl(const EngineConfig& config)
       max_orders(static_cast<std::uint32_t>(config.max_orders)),
       order_storage(max_orders),
       instrument_by_symbol(max_instruments),
-      hot(std::size_t{max_orders} + 1),
-      cold(std::size_t{max_orders} + 1),
+      metadata(std::size_t{max_orders} + 1),
       order_by_session_token(max_orders),
       orders_by_session(kSessionSlots),
-      instrument_links(std::size_t{max_orders} + 1),
       orders_by_instrument(max_instruments + 1) {
     books.reserve(max_instruments);
     // Free-index stack: 1, 2, ..., max_orders (first allocations are sequential).
     for (std::uint32_t i = 1; i < max_orders; ++i) {
-        hot[i].next = i + 1;
+        metadata[i].next_free = i + 1;
     }
     free_head = max_orders == 0 ? kNilOrder : 1;
 }
@@ -281,18 +275,18 @@ void MatchingEngine::Impl::emit_incoming_canceled(const IncomingOrder& order, Ca
 
 void MatchingEngine::Impl::emit_resting_canceled(const InstrumentBook& book, OrderIndex index, CancelReason reason,
                                                  ClOrdId request_cl_ord_id, Timestamp ts, EventBuffer& out) {
-    const OrderHot& order_hot = hot[index];
-    const Order& resting = *order_hot.order;
+    const OrderMetadata& order_metadata = metadata[index];
+    const Order& resting = *order_metadata.order;
     Event event = blank_event(EventType::Canceled, book.id, ts);
     CanceledEvent& canceled = event.canceled;
     canceled.order_id = resting.id;
-    canceled.cl_ord_id = cl_ord_id_of(order_hot.session_token);
+    canceled.cl_ord_id = cl_ord_id_of(order_metadata.session_token);
     canceled.request_cl_ord_id = request_cl_ord_id;
-    canceled.session = session_of(order_hot.session_token);
+    canceled.session = session_of(order_metadata.session_token);
     canceled.side = resting.side;
     canceled.price = book.price_of(resting.tick);
     canceled.canceled_qty = resting.remaining_quantity;
-    canceled.cum_qty = order_hot.cum_qty;
+    canceled.cum_qty = order_metadata.cum_qty;
     canceled.reason = reason;
     canceled.was_resting = true;
     append_event(out, event);
@@ -304,11 +298,11 @@ void MatchingEngine::Impl::emit_resting_canceled(const InstrumentBook& book, Ord
 
 void MatchingEngine::Impl::list_append_in_session(SessionId session, OrderIndex index) noexcept {
     OrderListEnds& list = orders_by_session[session];
-    OrderCold& order_cold = cold[index];
-    order_cold.next_in_session = kNilOrder;
-    order_cold.prev_in_session = list.tail;
+    OrderMetadata& order_metadata = metadata[index];
+    order_metadata.next_in_session = kNilOrder;
+    order_metadata.prev_in_session = list.tail;
     if (list.tail != kNilOrder) {
-        cold[list.tail].next_in_session = index;
+        metadata[list.tail].next_in_session = index;
     } else {
         list.head = index;
     }
@@ -317,26 +311,26 @@ void MatchingEngine::Impl::list_append_in_session(SessionId session, OrderIndex 
 
 void MatchingEngine::Impl::list_unlink_in_session(SessionId session, OrderIndex index) noexcept {
     OrderListEnds& list = orders_by_session[session];
-    const OrderCold& order_cold = cold[index];
-    if (order_cold.prev_in_session != kNilOrder) {
-        cold[order_cold.prev_in_session].next_in_session = order_cold.next_in_session;
+    const OrderMetadata& order_metadata = metadata[index];
+    if (order_metadata.prev_in_session != kNilOrder) {
+        metadata[order_metadata.prev_in_session].next_in_session = order_metadata.next_in_session;
     } else {
-        list.head = order_cold.next_in_session;
+        list.head = order_metadata.next_in_session;
     }
-    if (order_cold.next_in_session != kNilOrder) {
-        cold[order_cold.next_in_session].prev_in_session = order_cold.prev_in_session;
+    if (order_metadata.next_in_session != kNilOrder) {
+        metadata[order_metadata.next_in_session].prev_in_session = order_metadata.prev_in_session;
     } else {
-        list.tail = order_cold.prev_in_session;
+        list.tail = order_metadata.prev_in_session;
     }
 }
 
 void MatchingEngine::Impl::list_append_in_instrument(InstrumentId instrument, OrderIndex index) noexcept {
     OrderListEnds& list = orders_by_instrument[instrument];
-    InstrumentListLinks& links = instrument_links[index];
-    links.next = kNilOrder;
-    links.prev = list.tail;
+    OrderMetadata& order_metadata = metadata[index];
+    order_metadata.next_in_instrument = kNilOrder;
+    order_metadata.prev_in_instrument = list.tail;
     if (list.tail != kNilOrder) {
-        instrument_links[list.tail].next = index;
+        metadata[list.tail].next_in_instrument = index;
     } else {
         list.head = index;
     }
@@ -345,16 +339,16 @@ void MatchingEngine::Impl::list_append_in_instrument(InstrumentId instrument, Or
 
 void MatchingEngine::Impl::list_unlink_in_instrument(InstrumentId instrument, OrderIndex index) noexcept {
     OrderListEnds& list = orders_by_instrument[instrument];
-    const InstrumentListLinks& links = instrument_links[index];
-    if (links.prev != kNilOrder) {
-        instrument_links[links.prev].next = links.next;
+    const OrderMetadata& order_metadata = metadata[index];
+    if (order_metadata.prev_in_instrument != kNilOrder) {
+        metadata[order_metadata.prev_in_instrument].next_in_instrument = order_metadata.next_in_instrument;
     } else {
-        list.head = links.next;
+        list.head = order_metadata.next_in_instrument;
     }
-    if (links.next != kNilOrder) {
-        instrument_links[links.next].prev = links.prev;
+    if (order_metadata.next_in_instrument != kNilOrder) {
+        metadata[order_metadata.next_in_instrument].prev_in_instrument = order_metadata.prev_in_instrument;
     } else {
-        list.tail = links.prev;
+        list.tail = order_metadata.prev_in_instrument;
     }
 }
 
@@ -365,48 +359,48 @@ void MatchingEngine::Impl::list_unlink_in_instrument(InstrumentId instrument, Or
 // Releases everything an order holds outside its price level: list links,
 // the (session, token) map entry and the arena slot.
 void MatchingEngine::Impl::retire(OrderIndex index) {
-    OrderHot& order_hot = hot[index];
-    const SessionId session = session_of(order_hot.session_token);
+    OrderMetadata& order_metadata = metadata[index];
+    const SessionId session = session_of(order_metadata.session_token);
     list_unlink_in_session(session, index);
-    list_unlink_in_instrument(cold[index].instrument, index);
-    const bool erased = order_by_session_token.erase(order_hot.session_token);
+    list_unlink_in_instrument(metadata[index].instrument, index);
+    const bool erased = order_by_session_token.erase(order_metadata.session_token);
     assert(erased);
     (void)erased;
-    order_hot.next = free_head;
+    order_metadata.next_free = free_head;
     free_head = index;
     --live_count;
 }
 
 // Unlinks a resting order from its FIFO (head or anywhere) and retires it.
 void MatchingEngine::Impl::remove_resting(InstrumentBook& book, OrderIndex index) {
-    book.order_book.remove_order(*hot[index].order);
+    book.order_book.remove_order(*metadata[index].order);
     retire(index);
 }
 
 void MatchingEngine::Impl::rest(InstrumentBook& book, const IncomingOrder& order, Timestamp ts, EventBuffer& out) {
     assert(free_head != kNilOrder);
     const OrderIndex index = free_head;
-    OrderHot& order_hot = hot[index];
-    free_head = order_hot.next;
+    OrderMetadata& order_metadata = metadata[index];
+    free_head = order_metadata.next_free;
 
-    order_hot.next = kNilOrder;
-    order_hot.cum_qty = order.cum_qty;
-    order_hot.owner = order.owner;
-    order_hot.session_token = make_session_token(order.session, order.cl_ord_id);
+    order_metadata.cum_qty = order.cum_qty;
+    order_metadata.owner = order.owner;
+    order_metadata.session_token = make_session_token(order.session, order.cl_ord_id);
 
-    OrderCold& order_cold = cold[index];
-    order_cold.instrument = order.instrument;
-    order_cold.tif = order.tif;
-    order_cold.stp = order.stp;
-    order_cold.post_only = order.post_only;
+    order_metadata.instrument = order.instrument;
+    order_metadata.tif = order.tif;
+    order_metadata.stp = order.stp;
+    order_metadata.post_only = order.post_only;
 
     // The order book owns the resting order (ID, tick, leaves), its level and FIFO.
-    order_hot.order = book.order_book.rest_order(order.order_id, order.limit_tick, order.leaves_qty, order.side, index);
-    if (order_hot.order == nullptr) std::abort();  // the storage holds max_orders; admission checked live_count
+    order_metadata.order =
+        book.order_book.rest_order(order.order_id, order.limit_tick, order.leaves_qty, order.side, index);
+    // The storage holds max_orders and admission checked live_count.
+    if (order_metadata.order == nullptr) std::abort();
 
     list_append_in_session(order.session, index);
     list_append_in_instrument(order.instrument, index);
-    const bool inserted = order_by_session_token.insert(order_hot.session_token, index);
+    const bool inserted = order_by_session_token.insert(order_metadata.session_token, index);
     assert(inserted);
     (void)inserted;
     ++live_count;
@@ -442,7 +436,7 @@ bool MatchingEngine::Impl::fill_or_kill_can_fill(const InstrumentBook& book, con
             }
         } else {
             for (const Order* resting = level.head_order; resting != nullptr; resting = resting->next_order) {
-                if (hot[resting->context_index].owner == order.owner) {
+                if (metadata[resting->context_index].owner == order.owner) {
                     if (order.stp == StpMode::CancelResting) {
                         continue;
                     }
@@ -485,9 +479,9 @@ bool MatchingEngine::Impl::match(InstrumentBook& book, IncomingOrder& order, Tim
         do {
             Order* const next_resting = resting->next_order;
             const OrderIndex index = resting->context_index;
-            OrderHot& resting_hot = hot[index];
+            OrderMetadata& resting_metadata = metadata[index];
 
-            if (EXSIM_UNLIKELY(stp_active && resting_hot.owner == order.owner)) {
+            if (EXSIM_UNLIKELY(stp_active && resting_metadata.owner == order.owner)) {
                 const StpMode mode = order.stp;
                 if (mode != StpMode::CancelAggressor) {
                     emit_resting_canceled(book, index, CancelReason::SelfTradePrevention, 0, ts, out);
@@ -503,7 +497,7 @@ bool MatchingEngine::Impl::match(InstrumentBook& book, IncomingOrder& order, Tim
 
             const Quantity fill_qty = std::min(order.leaves_qty, resting->remaining_quantity);
             book.order_book.reduce_order(*resting, fill_qty);
-            resting_hot.cum_qty += fill_qty;
+            resting_metadata.cum_qty += fill_qty;
             order.leaves_qty -= fill_qty;
             order.cum_qty += fill_qty;
             const Quantity resting_leaves = resting->remaining_quantity;
@@ -518,8 +512,9 @@ bool MatchingEngine::Impl::match(InstrumentBook& book, IncomingOrder& order, Tim
             FillLeg& resting_leg = kAggressorSide == Side::BUY ? fill.sell : fill.buy;
             set_fill_leg(aggressor_leg, order.order_id, order.cl_ord_id, order.session, order.owner, order.leaves_qty,
                          order.cum_qty);
-            set_fill_leg(resting_leg, resting->id, cl_ord_id_of(resting_hot.session_token),
-                         session_of(resting_hot.session_token), resting_hot.owner, resting_leaves, resting_hot.cum_qty);
+            set_fill_leg(resting_leg, resting->id, cl_ord_id_of(resting_metadata.session_token),
+                         session_of(resting_metadata.session_token), resting_metadata.owner, resting_leaves,
+                         resting_metadata.cum_qty);
             append_event(out, event);
 
             book.last_trade_price = level_price;
@@ -632,25 +627,25 @@ void MatchingEngine::Impl::on_cancel(const CancelOrder& cmd, EventBuffer& out) {
         append_event(out, event);
         return;
     }
-    InstrumentBook& book = books[cold[index].instrument - 1];
+    InstrumentBook& book = books[metadata[index].instrument - 1];
     if (cmd.reduce_to_total_qty != 0) {
-        OrderHot& order_hot = hot[index];
-        Order& resting = *order_hot.order;
+        OrderMetadata& order_metadata = metadata[index];
+        Order& resting = *order_metadata.order;
         const Quantity leaves_qty = resting.remaining_quantity;
-        const Quantity target = cmd.reduce_to_total_qty > order_hot.cum_qty
-            ? cmd.reduce_to_total_qty - order_hot.cum_qty : 0;
+        const Quantity target = cmd.reduce_to_total_qty > order_metadata.cum_qty
+            ? cmd.reduce_to_total_qty - order_metadata.cum_qty : 0;
         if (target >= leaves_qty) return;
         if (target != 0) {
             Event event = blank_event(EventType::Canceled, book.id, cmd.ts);
             auto& c = event.canceled;
             c.order_id = resting.id;
-            c.cl_ord_id = cl_ord_id_of(order_hot.session_token);
+            c.cl_ord_id = cl_ord_id_of(order_metadata.session_token);
             c.request_cl_ord_id = cmd.cl_ord_id;
             c.session = cmd.session;
             c.side = resting.side;
             c.price = book.price_of(resting.tick);
             c.canceled_qty = leaves_qty - target;
-            c.cum_qty = order_hot.cum_qty;
+            c.cum_qty = order_metadata.cum_qty;
             c.reason = CancelReason::UserRequested;
             c.was_resting = true;
             c.leaves_qty = target;
@@ -672,12 +667,11 @@ void MatchingEngine::Impl::on_replace(const ReplaceOrder& cmd, EventBuffer& out)
     if (EXSIM_UNLIKELY(index == kNilOrder)) {
         return reject_replace(cmd, RejectReason::UnknownOrder, 0, 0, out);
     }
-    OrderHot& order_hot = hot[index];
-    const OrderCold& order_cold = cold[index];
-    Order& resting = *order_hot.order;
-    InstrumentBook& book = books[order_cold.instrument - 1];
+    OrderMetadata& order_metadata = metadata[index];
+    Order& resting = *order_metadata.order;
+    InstrumentBook& book = books[order_metadata.instrument - 1];
     const OrderId old_order_id = resting.id;
-    const InstrumentId instrument = order_cold.instrument;
+    const InstrumentId instrument = order_metadata.instrument;
 
     if (EXSIM_UNLIKELY(cmd.cl_ord_id > kMaxClOrdId)) {
         return reject_replace(cmd, RejectReason::InvalidClOrdId, old_order_id, instrument, out);
@@ -702,13 +696,13 @@ void MatchingEngine::Impl::on_replace(const ReplaceOrder& cmd, EventBuffer& out)
         return reject_replace(cmd, RejectReason::InstrumentHalted, old_order_id, instrument, out);
     }
     const Side side = resting.side;
-    if (EXSIM_UNLIKELY(order_cold.post_only && book.phase == Phase::Continuous &&
+    if (EXSIM_UNLIKELY(order_metadata.post_only && book.phase == Phase::Continuous &&
                      book.crosses_opposite_best(side, new_tick))) {
         return reject_replace(cmd, RejectReason::PostOnlyWouldCross, old_order_id, instrument, out);
     }
 
     // Quantity reduced to (or below) what already executed: the order is done.
-    if (cmd.qty <= order_hot.cum_qty) {
+    if (cmd.qty <= order_metadata.cum_qty) {
         emit_resting_canceled(book, index, CancelReason::UserRequested, cmd.cl_ord_id, cmd.ts, out);
         remove_resting(book, index);
         return;
@@ -717,7 +711,7 @@ void MatchingEngine::Impl::on_replace(const ReplaceOrder& cmd, EventBuffer& out)
     const std::int32_t old_tick = resting.tick;
     const Price old_price = book.price_of(old_tick);
     const Quantity old_leaves_qty = resting.remaining_quantity;
-    const Quantity cum_qty = order_hot.cum_qty;
+    const Quantity cum_qty = order_metadata.cum_qty;
     const Quantity new_leaves_qty = cmd.qty - cum_qty;
     const SessionId session = cmd.session;
 
@@ -739,9 +733,9 @@ void MatchingEngine::Impl::on_replace(const ReplaceOrder& cmd, EventBuffer& out)
         // Priority kept: update in place, FIFO position unchanged.
         book.order_book.reduce_order(resting, old_leaves_qty - new_leaves_qty);
         if (token_changes) {
-            order_by_session_token.erase(order_hot.session_token);
-            order_hot.session_token = make_session_token(session, new_cl_ord_id);
-            const bool inserted = order_by_session_token.insert(order_hot.session_token, index);
+            order_by_session_token.erase(order_metadata.session_token);
+            order_metadata.session_token = make_session_token(session, new_cl_ord_id);
+            const bool inserted = order_by_session_token.insert(order_metadata.session_token, index);
             assert(inserted);
             (void)inserted;
         }
@@ -755,13 +749,13 @@ void MatchingEngine::Impl::on_replace(const ReplaceOrder& cmd, EventBuffer& out)
     const NewOrderData data{
         .instrument = instrument,
         .session = session,
-        .owner = order_hot.owner,
+        .owner = order_metadata.owner,
         .cl_ord_id = new_cl_ord_id,
         .side = side,
         .type = OrdType::Limit,
-        .tif = order_cold.tif,
-        .stp = order_cold.stp,
-        .post_only = order_cold.post_only,
+        .tif = order_metadata.tif,
+        .stp = order_metadata.stp,
+        .post_only = order_metadata.post_only,
         .price = cmd.price,
         .qty = cmd.qty,
     };
@@ -788,8 +782,8 @@ void MatchingEngine::Impl::on_mass_cancel(const MassCancel& cmd, EventBuffer& ou
     std::uint32_t canceled_count = 0;
     OrderIndex index = orders_by_session[cmd.session].head;
     while (index != kNilOrder) {
-        const OrderIndex next = cold[index].next_in_session;
-        const InstrumentId instrument = cold[index].instrument;
+        const OrderIndex next = metadata[index].next_in_session;
+        const InstrumentId instrument = metadata[index].instrument;
         if (cmd.instrument == 0 || instrument == cmd.instrument) {
             InstrumentBook& book = books[instrument - 1];
             emit_resting_canceled(book, index, reason, cmd.cl_ord_id, cmd.ts, out);
@@ -886,13 +880,13 @@ void MatchingEngine::Impl::uncross(InstrumentBook& book, Timestamp ts, EventBuff
         Order& sell = *order_book.price_level(Side::SELL, order_book.best_ask_tick())->head_order;
         const OrderIndex buy_index = buy.context_index;
         const OrderIndex sell_index = sell.context_index;
-        OrderHot& buy_hot = hot[buy_index];
-        OrderHot& sell_hot = hot[sell_index];
+        OrderMetadata& buy_metadata = metadata[buy_index];
+        OrderMetadata& sell_metadata = metadata[sell_index];
         const Quantity fill_qty = std::min(buy.remaining_quantity, sell.remaining_quantity);
         order_book.reduce_order(buy, fill_qty);
         order_book.reduce_order(sell, fill_qty);
-        buy_hot.cum_qty += fill_qty;
-        sell_hot.cum_qty += fill_qty;
+        buy_metadata.cum_qty += fill_qty;
+        sell_metadata.cum_qty += fill_qty;
         const Quantity buy_leaves = buy.remaining_quantity;
         const Quantity sell_leaves = sell.remaining_quantity;
 
@@ -902,10 +896,10 @@ void MatchingEngine::Impl::uncross(InstrumentBook& book, Timestamp ts, EventBuff
         fill.price = uncross_price;
         fill.qty = fill_qty;
         fill.aggressor = Aggressor::None;
-        set_fill_leg(fill.buy, buy.id, cl_ord_id_of(buy_hot.session_token), session_of(buy_hot.session_token),
-                     buy_hot.owner, buy_leaves, buy_hot.cum_qty);
-        set_fill_leg(fill.sell, sell.id, cl_ord_id_of(sell_hot.session_token), session_of(sell_hot.session_token),
-                     sell_hot.owner, sell_leaves, sell_hot.cum_qty);
+        set_fill_leg(fill.buy, buy.id, cl_ord_id_of(buy_metadata.session_token), session_of(buy_metadata.session_token),
+                     buy_metadata.owner, buy_leaves, buy_metadata.cum_qty);
+        set_fill_leg(fill.sell, sell.id, cl_ord_id_of(sell_metadata.session_token),
+                     session_of(sell_metadata.session_token), sell_metadata.owner, sell_leaves, sell_metadata.cum_qty);
         append_event(out, event);
 
         if (buy_leaves == 0) {
@@ -927,8 +921,8 @@ void MatchingEngine::Impl::uncross(InstrumentBook& book, Timestamp ts, EventBuff
 void MatchingEngine::Impl::expire_day_orders(InstrumentBook& book, Timestamp ts, EventBuffer& out) {
     OrderIndex index = orders_by_instrument[book.id].head;
     while (index != kNilOrder) {
-        const OrderIndex next = instrument_links[index].next;
-        if (cold[index].tif == TimeInForce::Day) {
+        const OrderIndex next = metadata[index].next_in_instrument;
+        if (metadata[index].tif == TimeInForce::Day) {
             emit_resting_canceled(book, index, CancelReason::EndOfDay, 0, ts, out);
             remove_resting(book, index);
         }
@@ -983,25 +977,24 @@ void MatchingEngine::Impl::on_set_phase(const SetPhase& cmd, EventBuffer& out) {
 // ===========================================================================
 
 OrderInfo MatchingEngine::Impl::order_info(OrderIndex index) const noexcept {
-    const OrderHot& order_hot = hot[index];
-    const OrderCold& order_cold = cold[index];
-    const Order& resting = *order_hot.order;
-    const InstrumentBook& book = books[order_cold.instrument - 1];
+    const OrderMetadata& order_metadata = metadata[index];
+    const Order& resting = *order_metadata.order;
+    const InstrumentBook& book = books[order_metadata.instrument - 1];
     const Quantity leaves_qty = resting.remaining_quantity;
     return OrderInfo{
         .order_id = resting.id,
-        .cl_ord_id = cl_ord_id_of(order_hot.session_token),
-        .instrument = order_cold.instrument,
-        .session = session_of(order_hot.session_token),
-        .owner = order_hot.owner,
+        .cl_ord_id = cl_ord_id_of(order_metadata.session_token),
+        .instrument = order_metadata.instrument,
+        .session = session_of(order_metadata.session_token),
+        .owner = order_metadata.owner,
         .side = resting.side,
-        .tif = order_cold.tif,
-        .stp = order_cold.stp,
-        .post_only = order_cold.post_only,
+        .tif = order_metadata.tif,
+        .stp = order_metadata.stp,
+        .post_only = order_metadata.post_only,
         .price = book.price_of(resting.tick),
-        .qty = leaves_qty + order_hot.cum_qty,
+        .qty = leaves_qty + order_metadata.cum_qty,
         .leaves_qty = leaves_qty,
-        .cum_qty = order_hot.cum_qty,
+        .cum_qty = order_metadata.cum_qty,
     };
 }
 
