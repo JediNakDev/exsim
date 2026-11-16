@@ -1,4 +1,4 @@
-#include "md/publisher.hpp"
+#include "md/itch_publisher.hpp"
 #include "server/config.hpp"
 #include "common/price_text.hpp"
 #include "../../framework/test.hpp"

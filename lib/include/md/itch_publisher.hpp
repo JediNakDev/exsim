@@ -1,5 +1,5 @@
-#ifndef EXSIM_MD_PUBLISHER_HPP
-#define EXSIM_MD_PUBLISHER_HPP
+#ifndef EXSIM_MD_ITCH_PUBLISHER_HPP
+#define EXSIM_MD_ITCH_PUBLISHER_HPP
 
 // MarketDataPublisher: engine event batches -> ITCH 5.0 messages ->
 // MoldUDP64 packets.

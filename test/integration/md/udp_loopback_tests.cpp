@@ -4,7 +4,7 @@
 // that answers requests on its own UDP socket.
 
 #include "test/exsim/support/clients/itch_book_builder.hpp"
-#include <md/publisher.hpp>
+#include <md/itch_publisher.hpp>
 #include "test/exsim/support/clients/moldudp64_receiver.hpp"
 #include <md/retransmission_server.hpp>
 #include <common/clocks.hpp>

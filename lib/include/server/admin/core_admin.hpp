@@ -10,7 +10,7 @@
 //
 // Replies are '\n'-terminated lines ending with "OK" or "ERR <message>".
 
-#include "md/publisher.hpp"
+#include "md/itch_publisher.hpp"
 #include "server/admin/admin_command.hpp"
 #include "server/config.hpp"
 #include "server/admin/admin_text.hpp"

@@ -2,7 +2,7 @@
 #define EXSIM_MD_MDP_PUBLISHER_HPP
 
 #include "engine/matching_engine.hpp"
-#include "md/publisher.hpp"
+#include "md/itch_publisher.hpp"
 #include "common/clocks.hpp"
 #include "protocol/mdp3.hpp"
 #include "server/config.hpp"
