@@ -1,3 +1,4 @@
+#include "test/exsim/protocol/moldudp64_reader.hpp"
 #ifndef EXSIM_TESTS_MD_TEST_SUPPORT_HPP
 #define EXSIM_TESTS_MD_TEST_SUPPORT_HPP
 
