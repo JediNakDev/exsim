@@ -208,7 +208,7 @@ public:
     Timestamp last_send_time = 0;
     server::ConnectionId reserved_by = 0;
     std::optional<Sink> sink;
-    bool output_failed = false, gap_pending = false;
+    bool output_failed = false, transport_failed = false, gap_pending = false;
 
 private:
     template <class M, class Core>
@@ -265,10 +265,10 @@ private:
             output_failed = true;
             return;
         }
-        if (!sink || core.consume_drop_out(config.session_id)) return;
+        if (!sink || transport_failed || core.consume_drop_out(config.session_id)) return;
         char* output = sink->prepare(size);
         if (!output) {
-            output_failed = true;
+            transport_failed = true;
             return;
         }
         std::memcpy(output, bytes.data(), size);

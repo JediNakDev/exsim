@@ -270,3 +270,22 @@ TEST_CASE(ilink_orders, steady_state_order_path_does_not_allocate) {
       consumed = alice.connection.on_data(bytes, exchange.core); allocations = scope.count(); }
     CHECK_EQ(consumed, bytes.size()); CHECK_EQ(allocations, 0u);
 }
+
+TEST_CASE(ilink_session, transport_overflow_recovers_by_reconnect_and_replay) {
+    Exchange exchange; Client alice(exchange, 1); alice.login();
+    alice.memory.bytes.resize(1);
+    alice.send(order(alice.user_config(), 1, 1, "BUY"));
+    REQUIRE(alice.connection.wants_close());
+    CHECK_EQ(exchange.user(1).store.last_seq(), 1u);
+    alice.connection.on_closed(exchange.core);
+    Client resumed(exchange, 1, 101); resumed.login(false, 2);
+    using R = schema::RetransmitRequest508;
+    wire::Root<R> request; request.set(R::UUID, resumed.uuid); request.set(R::FromSeqNo, 1); request.set(R::MsgCount, 1);
+    request.set(R::RequestTimestamp, exchange.clock.realtime_ns()); resumed.send(request);
+    const auto replayed = frames(resumed.memory); REQUIRE_EQ(replayed.size(), 2u);
+    CHECK_EQ(replayed[0].id(), 509); CHECK_EQ(replayed[1].id(), 522);
+    resumed.memory.clear();
+    resumed.send(order(resumed.user_config(), 2, 2, "NEXT"));
+    REQUIRE_EQ(frames(resumed.memory).size(), 1u);
+    CHECK_EQ(frames(resumed.memory)[0].id(), 522);
+}

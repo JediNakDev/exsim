@@ -53,15 +53,15 @@ public:
     }
     template<class Core> void on_closed(Core& core) noexcept {
         if (user_ && user_->reserved_by == id_) {
-            user_->sink.reset(); user_->reserved_by = 0;
+            user_->sink.reset(); user_->reserved_by = 0; user_->transport_failed = false;
             if (established_) core.unbind(user_->config.session_id, id_);
         }
         user_ = nullptr; established_ = false;
     }
     template<class Core> void shutdown(Core& core) noexcept { terminate("end of day", core); }
     [[nodiscard]] SessionId bound_session() const noexcept { return established_ && user_ ? user_->config.session_id : 0; }
-    [[nodiscard]] bool wants_close() const noexcept { return close_ || (user_ && user_->output_failed); }
-    [[nodiscard]] bool flush_before_close() const noexcept { return !overflow_ && (!user_ || !user_->output_failed); }
+    [[nodiscard]] bool wants_close() const noexcept { return close_ || (user_ && (user_->output_failed || user_->transport_failed)); }
+    [[nodiscard]] bool flush_before_close() const noexcept { return !overflow_ && (!user_ || (!user_->output_failed && !user_->transport_failed)); }
 private:
     template<class M, class Core> void send(const wire::Root<M>& message, Core& core,
                                            std::span<const char> tail = M::empty_tail) noexcept {
