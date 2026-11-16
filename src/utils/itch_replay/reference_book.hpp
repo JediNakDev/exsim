@@ -3,11 +3,11 @@
 
 // Reference implementation of a price-time priority limit order book.
 // Deliberately simple (std::map + std::list) so it's obviously correct.
-// Used as the oracle when validating the production OrderBook against an
-// ITCH 5.0 feed: both books are driven by the same event stream and their
-// snapshots compared after every message.
+// Used as the oracle when validating the matching engine's book against an
+// ITCH 5.0 feed: both are driven by the same message stream and their
+// depth compared after every message.
 
-#include <book/types.hpp>
+#include <engine/types.hpp>
 #include <cstdint>
 #include <list>
 #include <map>
@@ -15,11 +15,6 @@
 #include <vector>
 
 namespace exsim::itch_replay {
-
-using book::OrderId;
-using book::Price;
-using book::Quantity;
-using book::Side;
 
 class ReferenceBook {
 public:
@@ -31,7 +26,7 @@ public:
     };
     struct Level {
         Price    price;
-        Quantity total_qty;
+        std::uint64_t total_qty;
         std::size_t order_count;
     };
     struct Snapshot {
@@ -111,7 +106,7 @@ private:
     };
 
     static Level aggregate(Price p, const std::list<Order>& q) {
-        Quantity total = 0;
+        std::uint64_t total = 0;
         for (auto const& o : q) total += o.quantity;
         return {p, total, q.size()};
     }
