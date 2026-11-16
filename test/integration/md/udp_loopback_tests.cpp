@@ -4,10 +4,10 @@
 // that answers requests on its own UDP socket.
 
 #include "test/exsim/support/clients/itch_book_builder.hpp"
-#include <md/publisher.hpp>
+#include <md/itch_publisher.hpp>
 #include "test/exsim/support/clients/moldudp64_receiver.hpp"
 #include <md/retransmission_server.hpp>
-#include <net/clocks.hpp>
+#include <common/clocks.hpp>
 #include <net/poller.hpp>
 #include <net/udp.hpp>
 #include <md/packet_faults.hpp>
@@ -92,7 +92,7 @@ TEST_CASE(md_udp, loopback_round_trip_with_retransmission) {
             }
             any = true;
             CHECK(receiver.on_packet(std::span<const char>(datagram.data(), static_cast<std::size_t>(length)),
-                                     net::monotonic_ns()) == md::PacketStatus::Accepted);
+                                     common::monotonic_ns()) == md::PacketStatus::Accepted);
         }
         for (;;) {
             const ssize_t length = retransmission_socket.receive_from(datagram, peer);
@@ -117,9 +117,9 @@ TEST_CASE(md_udp, loopback_round_trip_with_retransmission) {
             any = true;
             CHECK(peer == retransmission_endpoint);
             CHECK(receiver.on_packet(std::span<const char>(datagram.data(), static_cast<std::size_t>(length)),
-                                     net::monotonic_ns()) == md::PacketStatus::Accepted);
+                                     common::monotonic_ns()) == md::PacketStatus::Accepted);
         }
-        receiver.poll(net::monotonic_ns());
+        receiver.poll(common::monotonic_ns());
         return any;
     };
 
@@ -146,8 +146,8 @@ TEST_CASE(md_udp, loopback_round_trip_with_retransmission) {
     }
     REQUIRE(publisher.end_of_day(now + 1'000'000) == md::PublishStatus::Ok);
 
-    const std::uint64_t deadline = net::monotonic_ns() + 5'000'000'000ULL;
-    while (!receiver.end_of_session_reached() && net::monotonic_ns() < deadline) {
+    const std::uint64_t deadline = common::monotonic_ns() + 5'000'000'000ULL;
+    while (!receiver.end_of_session_reached() && common::monotonic_ns() < deadline) {
         if (!service_sockets()) (void)poller.wait(1);
     }
     REQUIRE(receiver.end_of_session_reached());

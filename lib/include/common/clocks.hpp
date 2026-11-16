@@ -1,8 +1,8 @@
-#ifndef EXSIM_NET_CLOCKS_HPP
-#define EXSIM_NET_CLOCKS_HPP
+#ifndef EXSIM_COMMON_CLOCKS_HPP
+#define EXSIM_COMMON_CLOCKS_HPP
 #include <cstdint>
 #include <ctime>
-namespace exsim::net {
+namespace exsim::common {
 inline constexpr std::uint64_t kNanosecondsPerSecond = 1000000000;
 // The one ns-per-day constant: trading-day bounds, ITCH timestamps, CME trade dates.
 inline constexpr std::uint64_t kNanosecondsPerDay = 86400 * kNanosecondsPerSecond;
@@ -34,5 +34,5 @@ public:
 private:
     std::int64_t offset_seconds_ = 0;
 };
-}  // namespace exsim::net
+}  // namespace exsim::common
 #endif

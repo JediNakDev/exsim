@@ -4,7 +4,7 @@
 #include <array>
 #include <cstdio>
 #include <cstring>
-#include <net/clocks.hpp>
+#include <common/clocks.hpp>
 #include "test/exsim/support/clients/tcp_client.hpp"
 #include <net/tcp_server.hpp>
 #include <net/udp.hpp>
@@ -12,6 +12,7 @@
 
 #include "test/framework/test.hpp"
 
+using namespace exsim::common;
 using namespace exsim::net;
 namespace {
 constexpr std::uint64_t kTimeout = 5 * kNanosecondsPerSecond;

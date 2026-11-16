@@ -12,7 +12,9 @@
 //   * FixTestConnection: one exchange-side FixConnection fed with raw frames
 
 #include "test/exsim/support/clients/fix_client.hpp"
-#include "gateway/fix/fix_gateway.hpp"
+#include "gateway/fix/fix_common.hpp"
+#include "gateway/fix/fix_connection.hpp"
+#include "gateway/fix/fix_user_state.hpp"
 #include "engine/matching_engine.hpp"
 #include "server/config.hpp"
 #include "server/core/session_dispatch_set.hpp"

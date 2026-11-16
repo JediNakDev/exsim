@@ -1,4 +1,5 @@
 #include "protocol/mdp3.hpp"
+#include "test/exsim/protocol/mdp3_decode.hpp"
 #include "test/framework/test.hpp"
 
 #include <vector>

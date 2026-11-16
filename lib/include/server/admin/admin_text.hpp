@@ -8,7 +8,7 @@
 #include "engine/matching_engine.hpp"
 #include "server/core/user_faults.hpp"
 #include "md/packet_faults.hpp"
-#include "engine/types.hpp"
+#include "common/types.hpp"
 
 #include <cstddef>
 #include <string>

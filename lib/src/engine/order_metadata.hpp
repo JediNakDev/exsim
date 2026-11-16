@@ -7,7 +7,7 @@
 // session and STP attributes, cumulative fills, and the links of the
 // per-session and per-instrument order lists. Index 0 means no metadata slot.
 
-#include <engine/types.hpp>
+#include <common/types.hpp>
 #include <book/order.hpp>
 
 #include <cstdint>

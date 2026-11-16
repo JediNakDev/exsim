@@ -1,8 +1,9 @@
 #include "api/api_json.hpp"
 #include "api/exchange_service.hpp"
-#include "server/server_runtime.hpp"
+#include "server/runtime/server_runtime.hpp"
 #include "test/exsim/gateway/fix/fix_test_support.hpp"
 #include "test/exsim/gateway/ilink/ilink_test_support.hpp"
+#include "test/exsim/protocol/mdp3_decode.hpp"
 #include "test/framework/test.hpp"
 
 #include <arpa/inet.h>
@@ -49,8 +50,8 @@ void wait_readable(int fd, const Pump& pump) {
 }
 std::vector<char> datagram(net::UdpReceiver& socket, const Pump& pump, unsigned template_id) {
     std::array<char, 65507> bytes{};
-    const auto deadline = net::monotonic_ns() + 2000000000;
-    while (net::monotonic_ns() < deadline) {
+    const auto deadline = common::monotonic_ns() + 2000000000;
+    while (common::monotonic_ns() < deadline) {
         wait_readable(socket.fd(), pump);
         net::Ipv4Endpoint peer{};
         const auto size = socket.receive_from(bytes, peer);
@@ -86,8 +87,8 @@ void send_text(int fd, std::string_view text) {
 std::vector<char> read_exact(int fd, std::size_t size, const Pump& pump) {
     std::vector<char> bytes(size);
     std::size_t used = 0;
-    const auto deadline = net::monotonic_ns() + 2000000000;
-    while (used < size && net::monotonic_ns() < deadline) {
+    const auto deadline = common::monotonic_ns() + 2000000000;
+    while (used < size && common::monotonic_ns() < deadline) {
         wait_readable(fd, pump);
         const auto count = ::recv(fd, bytes.data() + used, size - used, 0);
         if (count > 0)
@@ -115,9 +116,9 @@ void expect_template(const std::vector<char>& bytes, unsigned id, unsigned schem
 void fix_exchange(int fd, std::string_view message, const Pump& pump) {
     send_text(fd, message);
     std::string response;
-    const auto deadline = net::monotonic_ns() + 2000000000;
+    const auto deadline = common::monotonic_ns() + 2000000000;
     std::array<char, 8192> bytes{};
-    while (net::monotonic_ns() < deadline) {
+    while (common::monotonic_ns() < deadline) {
         wait_readable(fd, pump);
         const auto count = ::recv(fd, bytes.data(), bytes.size(), 0);
         if (count > 0)
@@ -179,9 +180,9 @@ void ilink_send(int fd, const protocol::ilink3::Root<M>& root) {
     REQUIRE_EQ(net::send_some(fd, bytes.data(), bytes.size()), static_cast<ssize_t>(bytes.size()));
 }
 void ilink_logon(int fd, const server::UserConfig& user, std::uint64_t uuid, const Pump& pump) {
-    ilink_send(fd, ilink_test::negotiation(user, uuid, net::realtime_ns()));
+    ilink_send(fd, ilink_test::negotiation(user, uuid, common::realtime_ns()));
     REQUIRE_EQ(ilink_packet(fd, pump).id(), 501);
-    ilink_send(fd, ilink_test::establishment(user, uuid, net::realtime_ns(), 1));
+    ilink_send(fd, ilink_test::establishment(user, uuid, common::realtime_ns(), 1));
     REQUIRE_EQ(ilink_packet(fd, pump).id(), 504);
 }
 }  // namespace
@@ -240,8 +241,8 @@ TEST_CASE(mdp_runtime, fix_orders_udp_redundancy_snapshots_and_tcp_recovery) {
     }
     CHECK(recovered);
     runtime.request_shutdown();
-    const auto deadline = net::monotonic_ns() + 4000000000;
-    while (!runtime.finished() && net::monotonic_ns() < deadline) runtime.poll_once();
+    const auto deadline = common::monotonic_ns() + 4000000000;
+    while (!runtime.finished() && common::monotonic_ns() < deadline) runtime.poll_once();
     CHECK(runtime.finished());
 }
 
@@ -345,7 +346,7 @@ TEST_CASE(ilink_runtime, private_fills_correlate_with_mdp_and_replay_over_real_s
     replay.set(schema::RetransmitRequest508::UUID, uuid);
     replay.set(schema::RetransmitRequest508::FromSeqNo, 2);
     replay.set(schema::RetransmitRequest508::MsgCount, 1);
-    replay.set(schema::RetransmitRequest508::RequestTimestamp, net::realtime_ns());
+    replay.set(schema::RetransmitRequest508::RequestTimestamp, common::realtime_ns());
     ilink_send(trader.fd(), replay);
     REQUIRE_EQ(ilink_packet(trader.fd(), pump).id(), 509);
     const auto recovered = ilink_packet(trader.fd(), pump);
@@ -353,12 +354,12 @@ TEST_CASE(ilink_runtime, private_fills_correlate_with_mdp_and_replay_over_real_s
     CHECK_EQ(ilink::get(recovered.view(), schema::ExecutionReportTradeOutright525::SeqNum), 2u);
     CHECK_EQ(ilink::get(recovered.view(), schema::ExecutionReportTradeOutright525::PossRetransFlag), 1);
     trader.close();
-    const auto deadline = net::monotonic_ns() + 2000000000;
-    while (runtime.core().engine().live_order_count() && net::monotonic_ns() < deadline) runtime.poll_once();
+    const auto deadline = common::monotonic_ns() + 2000000000;
+    while (runtime.core().engine().live_order_count() && common::monotonic_ns() < deadline) runtime.poll_once();
     CHECK_EQ(runtime.core().engine().live_order_count(), 0u);
     bob.close();
     runtime.request_shutdown();
-    const auto stopped = net::monotonic_ns() + 4000000000;
-    while (!runtime.finished() && net::monotonic_ns() < stopped) runtime.poll_once();
+    const auto stopped = common::monotonic_ns() + 4000000000;
+    while (!runtime.finished() && common::monotonic_ns() < stopped) runtime.poll_once();
     CHECK(runtime.finished());
 }

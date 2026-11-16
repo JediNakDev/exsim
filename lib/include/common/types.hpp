@@ -1,5 +1,5 @@
-#ifndef EXSIM_ENGINE_TYPES_HPP
-#define EXSIM_ENGINE_TYPES_HPP
+#ifndef EXSIM_COMMON_TYPES_HPP
+#define EXSIM_COMMON_TYPES_HPP
 
 // Core vocabulary of the exchange simulator. Every protocol gateway
 // translates its wire format into these types, and every subsystem

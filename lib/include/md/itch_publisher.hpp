@@ -1,5 +1,5 @@
-#ifndef EXSIM_MD_PUBLISHER_HPP
-#define EXSIM_MD_PUBLISHER_HPP
+#ifndef EXSIM_MD_ITCH_PUBLISHER_HPP
+#define EXSIM_MD_ITCH_PUBLISHER_HPP
 
 // MarketDataPublisher: engine event batches -> ITCH 5.0 messages ->
 // MoldUDP64 packets.
@@ -92,7 +92,7 @@ struct PublisherStats {
         return PublishStatus::InvalidConfig;
     if (config.heartbeat_interval_ns == 0) return PublishStatus::InvalidConfig;
     // The whole trading day must be representable on the command clock.
-    if (config.day_origin > std::numeric_limits<Timestamp>::max() - net::kNanosecondsPerDay)
+    if (config.day_origin > std::numeric_limits<Timestamp>::max() - common::kNanosecondsPerDay)
         return PublishStatus::InvalidConfig;
     return PublishStatus::Ok;
 }

@@ -41,8 +41,8 @@
 
 #include "engine/instrument.hpp"
 #include "engine/matching_engine.hpp"
-#include "engine/types.hpp"
-#include "net/clocks.hpp"
+#include "common/types.hpp"
+#include "common/clocks.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -91,7 +91,7 @@ struct ExchangeSection {
     // Commands are accepted only while their stamped timestamp (ns since
     // local midnight) is in [trading_day_start_ns, trading_day_end_ns).
     Timestamp trading_day_start_ns = 0;
-    Timestamp trading_day_end_ns = net::kNanosecondsPerDay;
+    Timestamp trading_day_end_ns = common::kNanosecondsPerDay;
 };
 
 enum class MarketDataProtocol : std::uint8_t { Itch50, Mdp3 };
