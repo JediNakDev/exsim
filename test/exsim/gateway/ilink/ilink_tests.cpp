@@ -289,3 +289,26 @@ TEST_CASE(ilink_session, transport_overflow_recovers_by_reconnect_and_replay) {
     REQUIRE_EQ(frames(resumed.memory).size(), 1u);
     CHECK_EQ(frames(resumed.memory)[0].id(), 522);
 }
+
+TEST_CASE(ilink_orders, replace_at_or_below_cum_identifies_replacement) {
+    for (const auto quantity : {3u, 4u}) {
+        Exchange exchange; Client alice(exchange, 1), bob(exchange, 2); alice.login(); bob.login();
+        alice.send(order(alice.user_config(), 1, 1, "BUY"));
+        const auto accepted = frames(alice.memory);
+        const auto id = wire::get(accepted[0].view(), schema::ExecutionReportNew522::OrderID);
+        bob.send(order(bob.user_config(), 1, 1, "SELL", 2, 4));
+        alice.memory.clear();
+        using R = schema::OrderCancelReplaceRequest515;
+        wire::Root<R> replace; request_fields(replace, alice.user_config(), 2, 42);
+        replace.set(R::OrderID, id); replace.set(R::ClOrdID, "REPLACED"); replace.set(R::SecurityID, 800001);
+        replace.set(R::Side, 1); replace.set(R::Price, 150000000000ll); replace.set(R::OrderQty, quantity);
+        replace.set(R::OrdType, '2'); replace.set(R::TimeInForce, 0); replace.set(R::OFMOverride, 0);
+        alice.send(replace);
+        const auto reports = frames(alice.memory); REQUIRE_EQ(reports.size(), 1u); REQUIRE_EQ(reports[0].id(), 534);
+        using C = schema::ExecutionReportCancel534;
+        CHECK_EQ(wire::get(reports[0].view(), C::ClOrdID), std::string_view("REPLACED"));
+        CHECK_EQ(wire::get(reports[0].view(), C::OrderRequestID), 42u);
+        CHECK_EQ(wire::get(reports[0].view(), C::CumQty), 4u);
+        CHECK_EQ(exchange.core.engine().live_order_count(), 0u);
+    }
+}

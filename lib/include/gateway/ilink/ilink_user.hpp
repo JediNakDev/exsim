@@ -113,7 +113,8 @@ public:
                     if (event.canceled.session == config.session_id) {
                         const auto& canceled = event.canceled;
                         const auto& metadata =
-                            pending_command_ == CommandType::Cancel && canceled.request_cl_ord_id == pending_token_
+                            (pending_command_ == CommandType::Cancel || pending_command_ == CommandType::Replace) &&
+                                    canceled.request_cl_ord_id == pending_token_
                                 ? pending_
                                 : metadata_[canceled.cl_ord_id];
                         if (canceled.reason == CancelReason::ImmediateOrCancel ||
@@ -492,6 +493,7 @@ private:
         value.order_id = order->order_id;
         metadata_[token.id] = value;
         pending_ = value;
+        pending_token_ = token.id;
         ReplaceOrder replace;
         replace.session = config.session_id;
         replace.orig_cl_ord_id = order->cl_ord_id;
