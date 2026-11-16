@@ -31,8 +31,10 @@
 // shutdown handling are shared.
 
 #include "engine/event.hpp"
-#include "gateway/fix/fix_gateway.hpp"
-#include "gateway/ouch/ouch_server.hpp"
+#include "gateway/fix/fix_connection.hpp"
+#include "gateway/fix/fix_user_state.hpp"
+#include "gateway/ouch/ouch_connection.hpp"
+#include "gateway/ouch/ouch_user_state.hpp"
 #include "gateway/ilink/ilink_connection.hpp"
 #include "server/config.hpp"
 #include "server/core/policies.hpp"

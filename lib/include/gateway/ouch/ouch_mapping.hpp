@@ -2,7 +2,7 @@
 #define EXSIM_GATEWAY_OUCH_OUCH_MAPPING_HPP
 
 // OUCH 4.2 <-> engine vocabulary for the simulator's supported OUCH profile.
-// Pure constexpr functions; the session code in ouch_server.hpp applies them.
+// Pure constexpr functions; the session code in ouch_user_state.hpp applies them.
 //
 // Engine-to-wire reason mappings live here; codecs handle wire layouts only.
 
