@@ -8,11 +8,11 @@ Each side has an array indexed by price tick. A slot points to a price level. Ea
 
 This gives direct access to a price level and constant-time FIFO append and unlink. Cached best prices make best bid and ask queries constant time.
 
-A bitmap marks occupied ticks. Summary layers above it mark nonzero 64-bit words, up to a single top word. When a level empties, the book finds the next occupied price by reading at most two words per layer, so a search takes O(log64 P) words however sparse the band is. Each side also keeps its occupied-level count and the sum of its resting leaves, so those reads are constant time.
+A bitmap marks occupied ticks. Summary layers above it mark nonzero 64-bit words, up to a single top word. When a level empties, the book finds the next occupied price by reading at most two words per layer, so a search takes O(log64 P) words however sparse the band is. Each side also keeps the sum of its resting leaves, so that read is constant time.
 
 The tradeoff is memory. Arrays cover the configured price band, including empty ticks. The production engine allows at most 2^24 ticks per instrument side. A narrow band saves memory.
 
-See [price levels](../lib/include/book/price_level.hpp), [order book](../lib/include/book/order_book.hpp), [occupancy bitmap](../lib/include/book/active_bitmap.hpp), and [instrument books](../lib/src/engine/price_ladder.hpp).
+See [price levels](../lib/include/book/price_level.hpp), [order book](../lib/include/book/order_book.hpp), [occupancy bitmap](../lib/include/book/active_bitmap.hpp), and [instrument books](../lib/src/engine/instrument_book.hpp).
 
 ## Order lookup and storage
 
@@ -20,11 +20,9 @@ An open-addressing hash map maps order IDs to order pointers. It uses linear pro
 
 Lookup, insertion, and deletion take expected constant time. Collisions can make them linear in the table size. They are not worst-case constant time.
 
-Free-list pools store orders and price levels. The production engine reserves them before trading and disables growth. A free slot can be taken or returned in constant time without a heap allocation.
+Free-list pools store orders and price levels. The engine allocates them once, at construction, and they never grow. A free slot can be taken or returned in constant time without a heap allocation.
 
 The engine's instrument books share one order pool, one level pool, and one order ID map, each sized by the engine's order limit. Every live level holds at least one live order, so the order limit also bounds levels. Each book only sees and changes the orders resting on its own ladders.
-
-The standalone order book can allow growth for replay. That mode can allocate pools, rehash the map, and expand ladders while processing orders.
 
 See [hash map](../lib/include/util/flat_hash_map.hpp) and [object pool](../lib/include/util/object_pool.hpp).
 
@@ -32,7 +30,7 @@ See [hash map](../lib/include/util/flat_hash_map.hpp) and [object pool](../lib/i
 
 Continuous trading walks the opposite side from its best price. At each price, it fills the oldest resting order first. It stops when the incoming order is filled or no longer crosses.
 
-The engine adds validation, self-trade prevention, time-in-force rules, and private and public events. It uses the book's passive storage operations so the book does not run a second matching pass. It walks the book's orders by pointer and executes, amends, or removes them in place, with no ID lookup.
+The engine adds validation, self-trade prevention, time-in-force rules, and private and public events. It uses the book's passive storage operations so the book does not run a second matching pass. It walks the book's orders by pointer and reduces or removes them in place, with no ID lookup.
 
 A simple aggressive order takes expected O(1 + F + L log64 P) work, where F is the number of resting orders filled and L the price levels it empties. Rules that inspect liquidity or remove other orders add their own traversal work.
 
@@ -42,9 +40,9 @@ See [matching engine](../lib/src/engine/matching_engine.cpp).
 
 ## Exchange metadata
 
-Preallocated arrays hold frequently used order fields separately from session and query metadata. A hash map finds an order by session and client order ID.
+One preallocated 64-byte record per order holds what the book does not store: session and self-trade attributes, cumulative fills, and list links. A hash map finds an order by session and client order ID.
 
-Intrusive lists track active orders globally, by session, and by instrument. This lets disconnect handling visit a session's orders without scanning every slot. Bulk cancellation still takes work proportional to the orders visited.
+Intrusive lists track active orders by session and by instrument. This lets disconnect handling visit a session's orders without scanning every slot. Bulk cancellation still takes work proportional to the orders visited.
 
 A hash map finds an instrument by its symbol.
 
@@ -54,7 +52,7 @@ See [order metadata](../lib/src/engine/order_metadata.hpp) and [engine interface
 
 ## Operation time complexity
 
-These costs apply after setup with growth disabled. Hash-table operations use expected costs; a collision chain can take O(H), where H is the number of slots in that table.
+These costs apply after setup. Nothing grows afterwards. Hash-table operations use expected costs; a collision chain can take O(H), where H is the number of slots in that table.
 
 - I: configured instruments.
 - N: live orders.
@@ -71,21 +69,14 @@ These costs apply after setup with growth disabled. Hash-table operations use ex
 | --- | --- | --- |
 | Find an order by ID | O(1) | Worst case O(H) |
 | Read a price level | O(1) | Direct tick lookup |
-| Read best bid, ask, spread, mid-price, or top quantity | O(1) | Cached best levels |
-| Read total order count | O(1) | Stored per-book counter |
+| Read best bid or ask | O(1) | Cached best ticks |
 | Read one side's total resting leaves | O(1) | Stored per-side sum |
 | Append or unlink a known order at a level | O(1) | Intrusive FIFO links |
 | Take or return a reserved pool slot | O(1) | Free-list head |
-| Add a non-crossing order | O(1) | Hash insertion, pool slot, and FIFO append |
-| Execute, amend, or remove a known order | O(1 + log64 P) | Pointer operation; the search runs only when the best level empties |
-| Add an aggressive order | O(1 + F + L log64 P) | L is the levels emptied |
-| Cancel an order | O(1 + log64 P) | The search runs only when the best level empties |
-| Modify quantity | O(1 + log64 P) | Removing the order can empty the best level |
-| Count occupied bid or ask levels | O(1) | Stored bitmap count |
+| Rest an order | O(1) | One hash insertion, pool slot, and FIFO append |
+| Reduce a known order | O(1) | Pointer operation; the order keeps its FIFO position |
+| Remove a known order | O(1 + log64 P) | Pointer operation; the search runs only when the best level empties |
 | Find the next occupied price | O(log64 P) | At most two words per summary layer |
-| Read a depth snapshot | O(1 + L log64 P) | Walks levels and allocates result vectors |
-
-The standalone add path can cancel an unfilled remainder when its fill buffer or storage is exhausted. Growth-enabled replay can allocate, rehash, or resize a ladder, so it does not have the bounded-path costs above.
 
 ### Matching engine
 

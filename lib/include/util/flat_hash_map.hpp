@@ -20,8 +20,7 @@ namespace exsim::util {
  * - Backward-shift deletion: no tombstones, so probe lengths stay short under
  *   the insert/erase churn of an order-id workload (most orders are cancelled).
  * - All memory is allocated (and pre-faulted) by reserve(). insert() never
- *   allocates unless growth was explicitly enabled; when the map is full and
- *   growth is disabled, insert() fails instead.
+ *   allocates; when the map is full it fails instead.
  */
 template <typename V>
 class FlatHashMap {
@@ -61,8 +60,6 @@ public:
         rehash(capacity);
     }
 
-    void set_allow_growth(bool allow_growth) noexcept { allow_growth_ = allow_growth; }
-
     [[nodiscard]] V* find(Key key) noexcept {
         if (EXSIM_UNLIKELY(mask_ == 0 || key == 0)) {
             return nullptr;
@@ -85,16 +82,13 @@ public:
     [[nodiscard]] bool contains(Key key) const noexcept { return find(key) != nullptr; }
 
     // Inserts key -> value. Returns false if the key already exists, the key
-    // is 0, or the map is full and growth is disabled.
+    // is 0, or the map is full.
     [[nodiscard]] bool insert(Key key, const V& value) {
         if (EXSIM_UNLIKELY(key == 0)) {
             return false;
         }
         if (EXSIM_UNLIKELY(size_ >= max_entries_)) {
-            if (!allow_growth_) {
-                return false;
-            }
-            reserve(max_entries_ == 0 ? 8 : max_entries_ + 1);
+            return false;
         }
         for (std::size_t i = slot_of(key);; i = (i + 1) & mask_) {
             Slot& slot = slots_[i];
@@ -171,7 +165,6 @@ private:
         swap(size_, other.size_);
         swap(max_entries_, other.max_entries_);
         swap(shift_, other.shift_);
-        swap(allow_growth_, other.allow_growth_);
     }
 
     struct Slot {
@@ -217,7 +210,6 @@ private:
     std::size_t size_ = 0;
     std::size_t max_entries_ = 0;
     unsigned shift_ = 64;
-    bool allow_growth_ = false;
 };
 
 }  // namespace exsim::util

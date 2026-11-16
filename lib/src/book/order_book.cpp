@@ -3,13 +3,9 @@
 
 namespace exsim::book {
 
-OrderBookStorage::OrderBookStorage(std::size_t max_orders) : orders(max_orders) {
-    // Every live level holds at least one live order, so max_orders bounds both pools.
-    order_pool.reserve(max_orders);
-    level_pool.reserve(max_orders);
-    order_pool.set_allow_growth(false);
-    level_pool.set_allow_growth(false);
-}
+// Every live level holds at least one live order, so max_orders bounds both pools.
+OrderBookStorage::OrderBookStorage(std::size_t max_orders)
+    : orders(max_orders), order_pool(max_orders), level_pool(max_orders) {}
 
 OrderBook::OrderBook(std::uint32_t tick_count, OrderBookStorage& storage)
     : storage_(storage)
