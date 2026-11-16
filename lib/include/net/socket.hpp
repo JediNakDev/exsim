@@ -103,15 +103,12 @@ ErrorCode set_reuse_address(int fd, bool enabled) noexcept;
 // For TCP, set the receive size before connect/listen so the window scale accounts for it.
 ErrorCode set_send_buffer_size(int fd, int bytes) noexcept;
 ErrorCode set_receive_buffer_size(int fd, int bytes) noexcept;
-ErrorCode get_send_buffer_size(int fd, int& bytes_out) noexcept;
-ErrorCode get_receive_buffer_size(int fd, int& bytes_out) noexcept;
 // SO_NOSIGPIPE where available (macOS/BSD); a successful no-op elsewhere.
 ErrorCode set_no_sigpipe(int fd) noexcept;
 
 // --- addressing and connection setup ---------------------------------------
 
 ErrorCode bind_ipv4(int fd, Ipv4Endpoint local) noexcept;
-ErrorCode listen_for_connections(int fd, int backlog) noexcept;
 
 // Opens a TCP listener: SO_REUSEADDR, optional SO_SNDBUF/SO_RCVBUF (0 = OS
 // default; accepted sockets inherit them), bind, listen. Bind port 0 to let
@@ -124,20 +121,7 @@ ErrorCode open_tcp_listener(Ipv4Endpoint local, int backlog, int send_buffer_byt
 // SIGPIPE-safe.
 ErrorCode accept_connection(int listen_fd, Socket& accepted_out, Ipv4Endpoint& peer_out) noexcept;
 
-// Starts a non-blocking connect. Returns 0 when the connection completed
-// immediately, EINPROGRESS when it completes later (wait for the socket to
-// become writable, then call connect_result()), otherwise the error.
-ErrorCode start_connect(int fd, Ipv4Endpoint remote) noexcept;
-
-// Outcome of an in-progress non-blocking connect: 0 = connected, EINPROGRESS
-// = not finished yet, otherwise the connect error (e.g. ECONNREFUSED).
-ErrorCode connect_result(int fd) noexcept;
-
-// SO_ERROR: the socket's pending error (clears it), 0 if none.
-ErrorCode take_socket_error(int fd) noexcept;
-
 ErrorCode local_endpoint(int fd, Ipv4Endpoint& endpoint_out) noexcept;
-ErrorCode peer_endpoint(int fd, Ipv4Endpoint& endpoint_out) noexcept;
 
 // --- per-message I/O ---------------------------------------------------------
 

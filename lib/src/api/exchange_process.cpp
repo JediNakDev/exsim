@@ -38,9 +38,9 @@ bool ExchangeProcess::spawn(const std::filesystem::path& executable, const std::
     flags |= POSIX_SPAWN_CLOEXEC_DEFAULT;
 #endif
     posix_spawnattr_setflags(&attributes, flags);
-    const std::string binary = executable.string(), config = config_path.string();
-    char* arguments[] = {const_cast<char*>(binary.c_str()), const_cast<char*>("--config"), const_cast<char*>(config.c_str()),
-                         const_cast<char*>("--control-fd"), const_cast<char*>("3"), nullptr};
+    std::string binary = executable.string(), config = config_path.string();
+    char config_option[] = "--config", control_option[] = "--control-fd", control_fd[] = "3";
+    char* arguments[] = {binary.data(), config_option, config.data(), control_option, control_fd, nullptr};
     const int result = ::posix_spawn(&pid_, binary.c_str(), &actions, &attributes, arguments, environ);
     posix_spawnattr_destroy(&attributes);
     posix_spawn_file_actions_destroy(&actions);
@@ -53,7 +53,7 @@ bool ExchangeProcess::spawn(const std::filesystem::path& executable, const std::
     }
     control_ = std::move(parent);
     try {
-        exit_watcher_ = std::thread([this, child_pid = pid_] {
+        exit_watcher_ = std::jthread([this, child_pid = pid_] {
             siginfo_t information{};
             while (::waitid(P_PID, static_cast<id_t>(child_pid), &information, WEXITED | WNOWAIT) != 0 && errno == EINTR) {}
             {
