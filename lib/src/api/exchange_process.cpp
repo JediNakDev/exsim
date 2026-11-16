@@ -23,11 +23,18 @@ bool ExchangeProcess::spawn(const std::filesystem::path& executable, const std::
     (void)net::set_non_blocking(parent.fd());
     ::fcntl(parent.fd(), F_SETFD, FD_CLOEXEC);
     ::fcntl(child.fd(), F_SETFD, FD_CLOEXEC);
+    // macOS keeps close-on-exec on a dup2 onto the same descriptor, so the child end must not already be fd 3.
+    if (child.fd() == 3) child = net::Socket(::fcntl(child.fd(), F_DUPFD_CLOEXEC, 4));
     posix_spawn_file_actions_t actions;
     posix_spawn_file_actions_init(&actions);
     posix_spawn_file_actions_adddup2(&actions, child.fd(), 3);
 #ifdef __linux__
     posix_spawn_file_actions_addclosefrom_np(&actions, 4);
+#elif defined(__APPLE__)
+    // POSIX_SPAWN_CLOEXEC_DEFAULT below closes every descriptor not named here, stdio included.
+    // Inherit stdin, stdout and stderr as Linux does: unless they are close-on-exec.
+    for (int standard_fd = 0; standard_fd <= 2; ++standard_fd)
+        if (::fcntl(standard_fd, F_GETFD) == 0) posix_spawn_file_actions_addinherit_np(&actions, standard_fd);
 #endif
     posix_spawnattr_t attributes;
     posix_spawnattr_init(&attributes);
