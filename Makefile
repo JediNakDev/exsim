@@ -36,7 +36,7 @@ TEST_LIB_OBJS := $(call obj,$(TEST_LIB_SRCS))
 # Both hold *_tests.cpp only; shared helpers under test/exsim/support are not picked up here.
 UNIT_SRCS := $(shell find test/exsim test/framework -name '*_tests.cpp' | sort) test/framework/alloc_counter.cpp
 INTEGRATION_SRCS := $(shell find test/integration -name '*_tests.cpp' | sort) test/framework/alloc_counter.cpp
-.PHONY: all apps test unit integration clean
+.PHONY: all apps test unit integration clean format format-check
 all: apps
 apps: $(BUILD)/exsim_api $(BUILD)/exsim_exchanged
 $(BUILD)/obj/%.o: %.cpp Makefile
@@ -60,6 +60,13 @@ integration: apps $(BUILD)/integration_tests
 test: unit integration
 clean:
 	rm -rf $(BUILD)
+# One pinned clang-format for local runs and CI. Generated files are skipped through .clang-format-ignore.
+CLANG_FORMAT ?= clang-format-18
+FORMAT_SRCS = $(shell git ls-files '*.cpp' '*.hpp')
+format:
+	$(CLANG_FORMAT) -i $(FORMAT_SRCS)
+format-check:
+	$(CLANG_FORMAT) --dry-run --Werror $(FORMAT_SRCS)
 -include $(shell find $(BUILD)/obj -name '*.d' 2>/dev/null)
 
 # The ITCH replay tool and the benchmarks link only the matching engine and its order book.
