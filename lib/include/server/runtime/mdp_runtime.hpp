@@ -11,6 +11,15 @@
 #include "server/runtime/tcp_send_sink.hpp"
 #include "md/packet_faults.hpp"
 
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <memory>
+#include <span>
+#include <string>
+#include <vector>
+
 namespace exsim::server::runtime {
 
 // CME MDP 3.0 market data policy: incremental A/B feeds through the packet
