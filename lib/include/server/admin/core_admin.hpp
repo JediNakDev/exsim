@@ -18,7 +18,7 @@
 #include "server/core/user_faults.hpp"
 #include "server/exchange_core.hpp"
 #include "md/packet_faults.hpp"
-#include "engine/price_text.hpp"
+#include "common/price_text.hpp"
 
 #include <concepts>
 #include <cstddef>

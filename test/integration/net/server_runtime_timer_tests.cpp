@@ -1,7 +1,7 @@
 // poll_once runs gateway timers in a timer pass at most once per
 // idle_poll_timeout_ms, not on every iteration of a busy-polling loop.
 
-#include "net/clocks.hpp"
+#include "common/clocks.hpp"
 #include "server/server_runtime.hpp"
 #include "test/framework/test.hpp"
 
@@ -54,9 +54,9 @@ struct ConnectedRuntime {
         address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
         address.sin_port = htons(runtime.listen_endpoint<CountingOuchGateway>().port);
         REQUIRE_EQ(::connect(client, reinterpret_cast<const sockaddr*>(&address), sizeof address), 0);
-        const std::uint64_t deadline = net::monotonic_ns() + 2'000'000'000;
+        const std::uint64_t deadline = common::monotonic_ns() + 2'000'000'000;
         auto& endpoint = runtime.endpoint<CountingOuchGateway>();
-        while (endpoint.transport_connection_count() == 0 && net::monotonic_ns() < deadline) runtime.poll_once();
+        while (endpoint.transport_connection_count() == 0 && common::monotonic_ns() < deadline) runtime.poll_once();
         REQUIRE_EQ(endpoint.transport_connection_count(), 1u);
     }
     ~ConnectedRuntime() { ::close(client); }
@@ -75,22 +75,22 @@ struct ConnectedRuntime {
 TEST_CASE(server_runtime_timers, busy_poll_iterations_skip_timers_until_the_next_pass_is_due) {
     ConnectedRuntime connected(5'000);
     const std::uint64_t calls_before = gateway_timer_calls;
-    const std::uint64_t started = net::monotonic_ns();
+    const std::uint64_t started = common::monotonic_ns();
     for (int iteration = 0; iteration < 2'000; ++iteration) connected.runtime.poll_once();
-    REQUIRE(net::monotonic_ns() - started < 5'000'000'000);  // the next pass is not due yet
+    REQUIRE(common::monotonic_ns() - started < 5'000'000'000);  // the next pass is not due yet
     CHECK_EQ(gateway_timer_calls - calls_before, 0u);
 }
 
 TEST_CASE(server_runtime_timers, timer_passes_run_once_per_interval) {
     ConnectedRuntime connected(1);
     const std::uint64_t calls_before = gateway_timer_calls;
-    const std::uint64_t started = net::monotonic_ns();
+    const std::uint64_t started = common::monotonic_ns();
     std::uint64_t iterations = 0;
-    while (net::monotonic_ns() - started < 50'000'000) {
+    while (common::monotonic_ns() - started < 50'000'000) {
         connected.runtime.poll_once();
         ++iterations;
     }
-    const std::uint64_t elapsed_ms = (net::monotonic_ns() - started) / 1'000'000;
+    const std::uint64_t elapsed_ms = (common::monotonic_ns() - started) / 1'000'000;
     const std::uint64_t calls = gateway_timer_calls - calls_before;
     CHECK_GE(calls, 5u);              // the connection's timers still run
     CHECK_LE(calls, elapsed_ms + 1);  // but at most once per millisecond

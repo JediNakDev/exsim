@@ -88,7 +88,7 @@ int main(int argc, char** argv) {
             (void)exsim::net::set_no_sigpipe(control.fd());
         }
         const auto session =
-            std::to_string(static_cast<unsigned long>(::getpid())) + std::to_string(exsim::net::monotonic_ns());
+            std::to_string(static_cast<unsigned long>(::getpid())) + std::to_string(exsim::common::monotonic_ns());
         config.market_data.session = session.substr(session.size() - 10);
         config.exchange.soup_session = config.market_data.session;
         exsim::server::ServerRuntimeOptions options;

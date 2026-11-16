@@ -1,5 +1,5 @@
-#ifndef EXSIM_ENGINE_PRICE_TEXT_HPP
-#define EXSIM_ENGINE_PRICE_TEXT_HPP
+#ifndef EXSIM_COMMON_PRICE_TEXT_HPP
+#define EXSIM_COMMON_PRICE_TEXT_HPP
 
 // The one fixed-point Price (4 implied decimals) to decimal text formatter.
 // Trailing fraction zeros are trimmed down to `minimum_decimals` (at most 4):

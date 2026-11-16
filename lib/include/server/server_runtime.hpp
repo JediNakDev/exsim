@@ -30,7 +30,7 @@
 // allocate except on operator paths (admin commands, logging a connection
 // failure). Gateways are compile-time template arguments: no virtual calls.
 
-#include "net/clocks.hpp"
+#include "common/clocks.hpp"
 #include "net/poller.hpp"
 #include "net/tcp_server.hpp"
 #include "server/config.hpp"
@@ -120,7 +120,7 @@ public:
         if (poller_.wait(timeout_ms) > 0) {
             for (const net::PollEvent& event : poller_.events()) route_event(event);
         }
-        if (const std::uint64_t now = net::monotonic_ns(); now >= next_timer_pass_ns_) {
+        if (const std::uint64_t now = common::monotonic_ns(); now >= next_timer_pass_ns_) {
             next_timer_pass_ns_ = now + std::uint64_t(options_.idle_poll_timeout_ms) * 1'000'000;
             core_.timer(clock_.day_ns());
             (endpoint<Gateways>().run_timers(), ...);
@@ -277,7 +277,7 @@ private:
     // connection, then wait (bounded) for the sessions to close and flush.
     void progress_shutdown() noexcept {
         if (finished_) return;
-        const std::uint64_t now = net::monotonic_ns();
+        const std::uint64_t now = common::monotonic_ns();
         if (!end_of_day_started_) {
             end_of_day_started_ = true;
             drain_deadline_ns_ = now + options_.end_of_day_drain_timeout_ns;

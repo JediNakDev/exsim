@@ -16,7 +16,7 @@ A small exchange simulator. A management API starts empty exchange processes; ex
 | Path | Holds |
 |---|---|
 | `lib/include/book`, `lib/src/book` | Order book storage |
-| `lib/include/common` | Shared vocabulary: ids, enums, prices |
+| `lib/include/common` | Shared vocabulary: ids, enums, prices, clocks, price text |
 | `lib/include/engine`, `lib/src/engine` | Matching engine, commands, events |
 | `lib/include/protocol` | Wire codecs |
 | `lib/include/gateway` | Order entry sessions per protocol |

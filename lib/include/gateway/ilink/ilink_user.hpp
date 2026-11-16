@@ -2,7 +2,7 @@
 #define EXSIM_GATEWAY_ILINK_USER_HPP
 #include "gateway/sequenced_store.hpp"
 #include "gateway/token_table.hpp"
-#include "net/clocks.hpp"
+#include "common/clocks.hpp"
 #include "protocol/ilink3.hpp"
 #include "server/config.hpp"
 #include "server/core/policies.hpp"
@@ -304,7 +304,7 @@ private:
                        ? 1
                        : 0);
         report.set(M::Ownership, 0);
-        report.set(M::TradeDate, static_cast<std::uint16_t>(core.realtime_ns() / net::kNanosecondsPerDay));
+        report.set(M::TradeDate, static_cast<std::uint16_t>(core.realtime_ns() / common::kNanosecondsPerDay));
         std::array<char, 62> tail{};
         protocol::cme::store_le(tail.data(), std::uint16_t{15});
         tail[2] = 1;
