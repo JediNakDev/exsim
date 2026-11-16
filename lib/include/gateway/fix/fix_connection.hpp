@@ -287,8 +287,8 @@ private:
         FixCancelRequest request;
         request.original_client_order_id = reader.required_text(41);
         request.client_order_id = reader.required_text(11);
-        reader.required_text(55);
-        reader.required_char(54, "12");
+        request.symbol = reader.required_text(55);
+        request.side = decode_side(reader.required_char(54, "12"));
         reader.required_timestamp(60);
         if (!reader.ok()) {
             return this->send_session_reject(frame, reader.problem());
@@ -301,8 +301,8 @@ private:
         FixReplaceRequest request;
         request.original_client_order_id = reader.required_text(41);
         request.client_order_id = reader.required_text(11);
-        reader.required_text(55);
-        reader.required_char(54, "12");
+        request.symbol = reader.required_text(55);
+        request.side = decode_side(reader.required_char(54, "12"));
         reader.required_timestamp(60);
         request.order_qty = reader.required_uint(38);
         request.order_type_code = reader.required_char(40, {});
