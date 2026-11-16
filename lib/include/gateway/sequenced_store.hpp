@@ -13,7 +13,6 @@
 // allocates and fails (returning false, store unchanged) when
 // either limit is reached, so the gateway can apply its overflow policy.
 
-
 #include <cstddef>
 #include <cstdint>
 #include <cstring>

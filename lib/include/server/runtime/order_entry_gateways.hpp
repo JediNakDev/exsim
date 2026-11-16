@@ -51,7 +51,7 @@ namespace exsim::server::runtime {
 
 // ---- OUCH 4.2 over SoupBinTCP 3.0 ------------------------------------------------
 
-template<class ByteSink>
+template <class ByteSink>
 struct BasicOuchGateway {
     static constexpr std::string_view name = "ouch";
     using UserDirectory = gateway::ouch::OuchUserStateDirectory<ByteSink>;
@@ -101,7 +101,7 @@ struct BasicOuchGateway {
 
 // ---- FIX 4.4 -----------------------------------------------------------------------
 
-template<class ByteSink>
+template <class ByteSink>
 struct BasicFixGateway {
     static constexpr std::string_view name = "fix";
     using UserDirectory = gateway::fix::FixUserDirectory<ByteSink>;
@@ -164,7 +164,8 @@ struct BasicFixGateway {
 using FixGateway = BasicFixGateway<TcpSendSink>;
 using OuchGateway = BasicOuchGateway<TcpSendSink>;
 
-template<class ByteSink> struct BasicIlinkGateway {
+template <class ByteSink>
+struct BasicIlinkGateway {
     static constexpr std::string_view name = "ilink3";
     using UserDirectory = gateway::ilink::IlinkUsers<ByteSink>;
     using User = gateway::ilink::IlinkUser<ByteSink>;
@@ -173,11 +174,14 @@ template<class ByteSink> struct BasicIlinkGateway {
     }
     static std::uint16_t configured_port(const ServerConfig& config) noexcept { return config.exchange.ilink_port; }
     static bool enabled(const ServerConfig& config) noexcept {
-        return config.exchange.ilink_port != 0 || std::any_of(config.users.begin(), config.users.end(),
-            [](const auto& user) { return user.protocol == Protocol::Ilink3; });
+        return config.exchange.ilink_port != 0 ||
+               std::any_of(config.users.begin(), config.users.end(),
+                           [](const auto& user) { return user.protocol == Protocol::Ilink3; });
     }
-    template<class Core> static void on_shutdown(UserDirectory&, Timestamp, Core&) noexcept {}
-    template<class Core> class Connection {
+    template <class Core>
+    static void on_shutdown(UserDirectory&, Timestamp, Core&) noexcept {}
+    template <class Core>
+    class Connection {
     public:
         explicit Connection(UserDirectory& users) : session_(users) {}
         void open(ByteSink sink, server::ConnectionId id, Core& core) noexcept { session_.open(sink, id, core); }
@@ -188,6 +192,7 @@ template<class ByteSink> struct BasicIlinkGateway {
         void close_for_end_of_day(Core& core) noexcept { session_.shutdown(core); }
         void on_closed(Core& core) noexcept { session_.on_closed(core); }
         SessionId bound_session() const noexcept { return session_.bound_session(); }
+
     private:
         gateway::ilink::IlinkConnection<ByteSink> session_;
     };

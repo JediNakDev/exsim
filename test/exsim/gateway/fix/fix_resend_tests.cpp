@@ -34,13 +34,11 @@ TEST_CASE(gateway_fix_resend, possdup_resend_golden) {
     client.send("2", "7=1|16=0|");
     messages = client.drain();
     REQUIRE_EQ(messages.size(), std::size_t{2});
-    CHECK_EQ(messages[0].pipes(),
-             with_pipes(fix_frame("35=4|49=EXSIM|56=CLIENT1|34=1|43=Y|52=20261103-09:30:01.000|"
-                                  "122=20261103-09:30:01.000|123=Y|36=2|")));
-    CHECK_EQ(messages[1].pipes(),
-             with_pipes(fix_frame("35=8|49=EXSIM|56=CLIENT1|34=2|43=Y|52=20261103-09:30:01.000|"
-                                  "122=20261103-09:30:00.000|" +
-                                  kAcceptedBody)));
+    CHECK_EQ(messages[0].pipes(), with_pipes(fix_frame("35=4|49=EXSIM|56=CLIENT1|34=1|43=Y|52=20261103-09:30:01.000|"
+                                                       "122=20261103-09:30:01.000|123=Y|36=2|")));
+    CHECK_EQ(messages[1].pipes(), with_pipes(fix_frame("35=8|49=EXSIM|56=CLIENT1|34=2|43=Y|52=20261103-09:30:01.000|"
+                                                       "122=20261103-09:30:00.000|" +
+                                                       kAcceptedBody)));
     // Resends do not consume outbound sequence numbers.
     CHECK_EQ(exchange.user(1).session_day_state().next_outbound_seq(), 3u);
 }
@@ -50,8 +48,8 @@ TEST_CASE(gateway_fix_resend, session_messages_in_range_become_gap_fills) {
     FixTestConnection client(exchange, "CLIENT1");
     client.logon();
     client.send("D", new_order_fields("ORD1", "1", 100, "150.25"));  // ER 2
-    client.tick(30 * kSecond);                                        // Heartbeat 3
-    client.send("1", "112=X|");                                       // Heartbeat 4
+    client.tick(30 * kSecond);                                       // Heartbeat 3
+    client.send("1", "112=X|");                                      // Heartbeat 4
     client.send("D", new_order_fields("ORD2", "1", 100, "150.25"));  // ER 5
     client.drain();
 

@@ -178,8 +178,9 @@ private:
                     } else {
                         injector.configure(md::PacketFaultConfig{});
                         if (!injector.idle()) {
-                            append_line(reply, "note: pending one-shot faults or held packets remain "
-                                               "(market data exposes no reset_packet_faults)");
+                            append_line(reply,
+                                        "note: pending one-shot faults or held packets remain "
+                                        "(market data exposes no reset_packet_faults)");
                         }
                     }
                     break;
@@ -256,7 +257,8 @@ private:
         for (std::size_t id = 1; id <= engine.instrument_count(); ++id) {
             const auto instrument_id = static_cast<InstrumentId>(id);
             std::string line = "instrument " + std::string(engine.instrument(instrument_id)->symbol.view()) +
-                               " id=" + std::to_string(id) + " phase=" + std::string(to_string(engine.phase(instrument_id)));
+                               " id=" + std::to_string(id) +
+                               " phase=" + std::string(to_string(engine.phase(instrument_id)));
             const auto bid = engine.best_bid(instrument_id);
             const auto ask = engine.best_ask(instrument_id);
             const auto last = engine.last_trade_price(instrument_id);

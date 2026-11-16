@@ -115,8 +115,9 @@ TEST_CASE(server_core_admin, status_reports_every_part_of_the_core) {
     CHECK(reply.rfind("exchange EXSIM shutdown=no\n", 0) == 0);
     CHECK(contains(reply, "trading_day start=00:00:00 end=24:00:00 last_command_ts=1000000000\n"));
     CHECK(contains(reply, "connections bound=1 users=5\n"));
-    CHECK(contains(reply, "user ALICE session=1 protocol=ouch42 bound=yes connection=42 "
-                          "reject=0 delay_us=0 drop_out=0 disconnect=no\n"));
+    CHECK(contains(reply,
+                   "user ALICE session=1 protocol=ouch42 bound=yes connection=42 "
+                   "reject=0 delay_us=0 drop_out=0 disconnect=no\n"));
     CHECK(contains(reply, "user CAROL session=3 protocol=fix44 bound=no reject=0"));
     CHECK(contains(reply, "orders live=1\n"));
     CHECK(contains(reply, "instrument AAPL id=1 phase=CONTINUOUS bid=149.99 ask=- last=-\n"));
@@ -124,8 +125,9 @@ TEST_CASE(server_core_admin, status_reports_every_part_of_the_core) {
     CHECK(contains(reply, "md next_sequence=2\n"));
     CHECK(contains(reply, "md faults drop_ppm=0 dup_ppm=0 reorder_ppm=0 delay=1 seed=1 held=0 idle=yes"));
     CHECK(contains(reply, "journal state=disabled records=0 failures=0 on_failure=shutdown\n"));
-    CHECK(contains(reply, "commands applied=1 outside_trading_day=0 after_shutdown=0 output_capacity_failures=0 deferred=0 "
-                          "deferred_overflows=0\n"));
+    CHECK(contains(reply,
+                   "commands applied=1 outside_trading_day=0 after_shutdown=0 output_capacity_failures=0 deferred=0 "
+                   "deferred_overflows=0\n"));
     CHECK(ends_with_ok(reply));
 }
 
@@ -203,8 +205,8 @@ TEST_CASE(server_core_admin, md_off_without_reset_hook_clears_rates_and_reports_
 
 TEST_CASE(server_core_admin, md_faults_without_an_injector_are_an_error) {
     HarnessWith<MinimalMarketData> h(parse_test_config());
-    for (const char* line : {"fault md drop 1", "fault md dup 1", "fault md reorder 1", "fault md rate drop=5",
-                             "fault md off"}) {
+    for (const char* line :
+         {"fault md drop 1", "fault md dup 1", "fault md reorder 1", "fault md rate drop=5", "fault md off"}) {
         CHECK_EQ(h.admin(line), std::string("ERR market data exposes no packet fault injector\n"));
     }
 }

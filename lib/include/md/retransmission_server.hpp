@@ -36,17 +36,17 @@
 namespace exsim::md {
 
 struct RetransmissionConfig {
-    std::string_view session = "EXSIM";        // must equal the publisher's session
-    std::size_t max_payload = 1400;            // bytes per response packet including header
+    std::string_view session = "EXSIM";  // must equal the publisher's session
+    std::size_t max_payload = 1400;      // bytes per response packet including header
     std::uint16_t max_messages_per_response = 1024;
 };
 
 enum class RetransmitStatus : std::uint8_t {
-    Answered = 0,       // one response packet sent
-    MalformedRequest,   // not a 20-byte request, sequence 0 or count 0
+    Answered = 0,      // one response packet sent
+    MalformedRequest,  // not a 20-byte request, sequence 0 or count 0
     WrongSession,
-    OutsideRing,        // first requested message no longer held
-    NotYetPublished,    // first requested message has not been sent yet
+    OutsideRing,      // first requested message no longer held
+    NotYetPublished,  // first requested message has not been sent yet
 };
 
 struct RetransmitResult {
@@ -95,8 +95,8 @@ public:
         if (newest == 0 || request.sequence > newest) return ignore(result, RetransmitStatus::NotYetPublished);
         if (request.sequence < ring_.oldest_sequence()) return ignore(result, RetransmitStatus::OutsideRing);
 
-        const std::uint64_t wanted = request.count < max_messages_per_response_ ? request.count
-                                                                                 : max_messages_per_response_;
+        const std::uint64_t wanted =
+            request.count < max_messages_per_response_ ? request.count : max_messages_per_response_;
         const std::uint64_t available = newest - request.sequence + 1;
         const std::uint64_t limit = wanted < available ? wanted : available;
 

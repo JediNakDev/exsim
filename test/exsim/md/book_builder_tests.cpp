@@ -102,7 +102,9 @@ std::uint64_t digest(const md::ItchBookBuilder& builder) {
                        [&](InstrumentId id) { return builder.trading_state(id); });
 }
 
-md::BookUpdateStatus apply_message(md::ItchBookBuilder& builder, const Bytes& message) { return builder.apply(message); }
+md::BookUpdateStatus apply_message(md::ItchBookBuilder& builder, const Bytes& message) {
+    return builder.apply(message);
+}
 
 }  // namespace
 
@@ -164,7 +166,8 @@ TEST_CASE(md_book_builder, levels_in_priority_order_and_crossed_book) {
 TEST_CASE(md_book_builder, reductions_keep_position_and_removal_empties_levels) {
     md::ItchBookBuilder builder({4, 64, 16});
     for (OrderId reference = 1; reference <= 4; ++reference)
-        REQUIRE(apply_message(builder, add_order(1, reference, Side::SELL, 10, 2'000)) == md::BookUpdateStatus::Applied);
+        REQUIRE(apply_message(builder, add_order(1, reference, Side::SELL, 10, 2'000)) ==
+                md::BookUpdateStatus::Applied);
     CHECK(apply_message(builder, cancel(1, 1, 4)) == md::BookUpdateStatus::Applied);
     CHECK(apply_message(builder, executed(1, 2, 3)) == md::BookUpdateStatus::Applied);
     CHECK(apply_message(builder, executed_with_price(1, 3, 1)) == md::BookUpdateStatus::Applied);
@@ -240,7 +243,8 @@ TEST_CASE(md_book_builder, capacity_limits_are_checked_before_changes) {
     md::ItchBookBuilder orders_limited({1, 2, 16});
     REQUIRE(apply_message(orders_limited, add_order(1, 1, Side::BUY, 1, 1'000)) == md::BookUpdateStatus::Applied);
     REQUIRE(apply_message(orders_limited, add_order(1, 2, Side::BUY, 1, 1'000)) == md::BookUpdateStatus::Applied);
-    CHECK(apply_message(orders_limited, add_order(1, 3, Side::BUY, 1, 1'000)) == md::BookUpdateStatus::CapacityExceeded);
+    CHECK(apply_message(orders_limited, add_order(1, 3, Side::BUY, 1, 1'000)) ==
+          md::BookUpdateStatus::CapacityExceeded);
     // A replace frees its original slot first, so it fits.
     CHECK(apply_message(orders_limited, replace(1, 1, 3, 1, 1'000)) == md::BookUpdateStatus::Applied);
 
@@ -249,8 +253,10 @@ TEST_CASE(md_book_builder, capacity_limits_are_checked_before_changes) {
     REQUIRE(apply_message(levels_limited, add_order(1, 2, Side::BUY, 1, 1'000)) == md::BookUpdateStatus::Applied);
     REQUIRE(apply_message(levels_limited, add_order(1, 3, Side::BUY, 1, 900)) == md::BookUpdateStatus::Applied);
     CHECK(apply_message(levels_limited, add_order(1, 4, Side::BUY, 1, 800)) == md::BookUpdateStatus::CapacityExceeded);
-    CHECK(apply_message(levels_limited, add_order(1, 4, Side::BUY, 1, 900)) == md::BookUpdateStatus::Applied);  // existing level
-    CHECK(apply_message(levels_limited, add_order(1, 5, Side::SELL, 1, 800)) == md::BookUpdateStatus::Applied);  // other side
+    CHECK(apply_message(levels_limited, add_order(1, 4, Side::BUY, 1, 900)) ==
+          md::BookUpdateStatus::Applied);  // existing level
+    CHECK(apply_message(levels_limited, add_order(1, 5, Side::SELL, 1, 800)) ==
+          md::BookUpdateStatus::Applied);  // other side
     const std::uint64_t before = digest(levels_limited);
     // Order 1 shares its level: moving it to a third price needs a new level.
     CHECK(apply_message(levels_limited, replace(1, 1, 6, 1, 700)) == md::BookUpdateStatus::CapacityExceeded);

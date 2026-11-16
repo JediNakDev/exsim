@@ -3,9 +3,7 @@
 
 #include <net/poller.hpp>
 namespace exsim::net {
-Poller::~Poller() {
-    close();
-}
+Poller::~Poller() { close(); }
 ErrorCode Poller::open() noexcept {
     if (is_open()) return EALREADY;
 #ifdef EXSIM_NET_POLLER_EPOLL
@@ -42,9 +40,7 @@ ErrorCode Poller::add(int fd, std::uint64_t token, PollInterest interest) noexce
 ErrorCode Poller::modify(int fd, std::uint64_t token, PollInterest interest) noexcept {
     return change(poll_fd_, EPOLL_CTL_MOD, fd, token, interest);
 }
-ErrorCode Poller::remove(int fd) noexcept {
-    return epoll_ctl(poll_fd_, EPOLL_CTL_DEL, fd, nullptr) < 0 ? errno : 0;
-}
+ErrorCode Poller::remove(int fd) noexcept { return epoll_ctl(poll_fd_, EPOLL_CTL_DEL, fd, nullptr) < 0 ? errno : 0; }
 #else
 namespace {
 ErrorCode change(int poll_fd, int fd, std::uint64_t token, PollInterest interest) noexcept {
@@ -69,7 +65,7 @@ ErrorCode Poller::modify(int fd, std::uint64_t token, PollInterest interest) noe
 ErrorCode Poller::remove(int fd) noexcept {
     int error = 0;
     for (auto filter : {EVFILT_READ, EVFILT_WRITE}) {
-        struct kevent event{};
+        struct kevent event {};
         EV_SET(&event, fd, filter, EV_DELETE, 0, 0, nullptr);
         if (kevent(poll_fd_, &event, 1, nullptr, 0, nullptr) < 0 && errno != ENOENT) error = errno;
     }

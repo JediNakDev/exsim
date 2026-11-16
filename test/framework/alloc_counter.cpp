@@ -48,10 +48,18 @@ void* operator new[](std::size_t n) { return allocate(n); }
 void* operator new(std::size_t n, std::align_val_t a) { return allocate(n, static_cast<std::size_t>(a)); }
 void* operator new[](std::size_t n, std::align_val_t a) { return allocate(n, static_cast<std::size_t>(a)); }
 void* operator new(std::size_t n, const std::nothrow_t&) noexcept {
-    try { return allocate(n); } catch (...) { return nullptr; }
+    try {
+        return allocate(n);
+    } catch (...) {
+        return nullptr;
+    }
 }
 void* operator new[](std::size_t n, const std::nothrow_t&) noexcept {
-    try { return allocate(n); } catch (...) { return nullptr; }
+    try {
+        return allocate(n);
+    } catch (...) {
+        return nullptr;
+    }
 }
 void operator delete(void* p) noexcept { std::free(p); }
 void operator delete[](void* p) noexcept { std::free(p); }

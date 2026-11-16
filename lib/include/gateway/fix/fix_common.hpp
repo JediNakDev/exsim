@@ -52,8 +52,8 @@ inline constexpr std::uint64_t kMaxMsgSeqNum = UINT64_MAX - 1;
 using FixParser = fix44::Parser<kParserFieldCapacity>;
 
 struct FixSessionSettings {
-    std::size_t max_inbound_message_bytes = 4096;   // larger frames are garbled
-    std::size_t held_inbound_message_slots = 16;    // early (high MsgSeqNum) messages kept for in-order replay
+    std::size_t max_inbound_message_bytes = 4096;  // larger frames are garbled
+    std::size_t held_inbound_message_slots = 16;   // early (high MsgSeqNum) messages kept for in-order replay
     std::uint64_t max_heartbeat_interval_seconds = 300;
     Timestamp logon_timeout_ns = 10 * kNanosecondsPerSecond;
     Timestamp logout_timeout_ns = 2 * kNanosecondsPerSecond;
@@ -131,12 +131,10 @@ public:
         }
     }
 
-    std::string_view required_text(unsigned tag,
-                                   std::size_t max_length = kMaxInboundTextFieldLength) noexcept {
+    std::string_view required_text(unsigned tag, std::size_t max_length = kMaxInboundTextFieldLength) noexcept {
         return present(tag, true) ? bounded_text(tag, max_length) : std::string_view{};
     }
-    std::string_view optional_text(unsigned tag,
-                                   std::size_t max_length = kMaxInboundTextFieldLength) noexcept {
+    std::string_view optional_text(unsigned tag, std::size_t max_length = kMaxInboundTextFieldLength) noexcept {
         return present(tag, false) ? bounded_text(tag, max_length) : std::string_view{};
     }
 
@@ -248,9 +246,7 @@ public:
         return true;
     }
     bool field(unsigned tag, char value) noexcept { return field(tag, std::string_view(&value, 1)); }
-    bool uint_field(unsigned tag, std::uint64_t value) noexcept {
-        return field(tag, DecimalText(value).view());
-    }
+    bool uint_field(unsigned tag, std::uint64_t value) noexcept { return field(tag, DecimalText(value).view()); }
     bool timestamp_field(unsigned tag, std::uint64_t realtime_ns) noexcept {
         char text[21];
         fix44::format_timestamp(realtime_ns, text, sizeof text);
@@ -274,7 +270,9 @@ public:
             return 0;
         }
         const std::size_t body_length = used_ - kBodyOffset;
-        char head[40] = "8=FIX.4.4\001" "9=";
+        char head[40] =
+            "8=FIX.4.4\001"
+            "9=";
         const std::size_t digits = fix44::format_uint(body_length, head + 12, 20);
         const std::size_t head_length = 12 + digits + 1;
         head[head_length - 1] = fix44::soh;
@@ -311,7 +309,10 @@ private:
 };
 
 // "8=FIX.4.4<SOH>9=", the only valid start of a FIX 4.4 frame.
-inline constexpr std::string_view kFrameStartPattern{"8=FIX.4.4\001" "9=", 12};
+inline constexpr std::string_view kFrameStartPattern{
+    "8=FIX.4.4\001"
+    "9=",
+    12};
 
 // True when MsgType(35) is the third field, right after BeginString(8) and
 // BodyLength(9). `frame` must start with kFrameStartPattern.
@@ -342,8 +343,7 @@ inline constexpr std::string_view kFrameStartPattern{"8=FIX.4.4\001" "9=", 12};
 // First position >= from where a frame may start: a full pattern match, or a
 // partial match that runs into the end of `bytes` (more input may complete
 // it). Returns bytes.size() when there is neither.
-[[nodiscard]] inline std::size_t find_frame_start(std::span<const char> bytes,
-                                                  std::size_t from) noexcept {
+[[nodiscard]] inline std::size_t find_frame_start(std::span<const char> bytes, std::size_t from) noexcept {
     for (std::size_t position = from; position < bytes.size(); ++position) {
         if (bytes[position] != '8') {
             continue;
@@ -392,7 +392,7 @@ inline constexpr std::string_view kFrameStartPattern{"8=FIX.4.4\001" "9=", 12};
 // "MsgSeqNum too low, expecting X but received Y" (FIX session wording) in a
 // caller buffer of at least 96 bytes.
 [[nodiscard]] inline std::string_view format_sequence_too_low(std::span<char> buffer, std::uint64_t expected,
-                                                            std::uint64_t received) noexcept {
+                                                              std::uint64_t received) noexcept {
     constexpr std::string_view kPrefix = "MsgSeqNum too low, expecting ";
     constexpr std::string_view kMiddle = " but received ";
     if (buffer.size() < kPrefix.size() + kMiddle.size() + 40) {
@@ -418,7 +418,9 @@ inline constexpr std::string_view kFrameStartPattern{"8=FIX.4.4\001" "9=", 12};
                                                           std::uint64_t sending_time_ns,
                                                           std::span<char> output) noexcept {
     const std::string_view text(original.data(), original.size());
-    const std::size_t sending_time_tag = text.find("\001" "52=");
+    const std::size_t sending_time_tag = text.find(
+        "\001"
+        "52=");
     if (sending_time_tag == std::string_view::npos || original.size() < 7) {
         return 0;
     }

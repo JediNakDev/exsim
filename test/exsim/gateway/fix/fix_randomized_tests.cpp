@@ -94,9 +94,10 @@ private:
             const std::string token = "N" + std::to_string(++token_counter_);
             const exsim::Side side = roll(2) == 0 ? exsim::Side::BUY : exsim::Side::SELL;
             const std::string_view symbol = roll(4) == 0 ? "MSFT" : "AAPL";
-            if (client.send_new_order_single(make_new_order_single(token, side, static_cast<exsim::Quantity>(1 + roll(200)),
-                                                                   random_price(), symbol),
-                                             now)) {
+            if (client.send_new_order_single(
+                    make_new_order_single(token, side, static_cast<exsim::Quantity>(1 + roll(200)), random_price(),
+                                          symbol),
+                    now)) {
                 intended_.push_back("D:" + token);
                 order_tokens_.push_back({token, side, std::string(symbol)});
             }
@@ -111,8 +112,8 @@ private:
             const OrderToken target = order_tokens_[roll(order_tokens_.size())];
             const std::string token = "R" + std::to_string(++token_counter_);
             if (client.send_order_cancel_replace_request(
-                    make_replace_request(target.token, token, target.side,
-                                         static_cast<exsim::Quantity>(1 + roll(200)), random_price(), target.symbol),
+                    make_replace_request(target.token, token, target.side, static_cast<exsim::Quantity>(1 + roll(200)),
+                                         random_price(), target.symbol),
                     now)) {
                 intended_.push_back("G:" + token);
                 order_tokens_.push_back({token, target.side, target.symbol});
@@ -127,8 +128,8 @@ private:
         } else if (action < 72) {
             const std::string token = "L" + std::to_string(++token_counter_);
             const bool buy = roll(2) == 0;
-            liquidity_.send("D", new_order_fields(token, buy ? "1" : "2", 1 + roll(300),
-                                                  std::to_string(149 + roll(3)), roll(4) == 0 ? "MSFT" : "AAPL"));
+            liquidity_.send("D", new_order_fields(token, buy ? "1" : "2", 1 + roll(300), std::to_string(149 + roll(3)),
+                                                  roll(4) == 0 ? "MSFT" : "AAPL"));
         } else if (action < 90) {
             exchange_.advance(roll(3 * kSecond));
             wire_.connection().on_timer(exchange_);
@@ -144,9 +145,7 @@ private:
         wire_.connect(false);
     }
 
-    void feed_exchange(std::string_view frame) {
-        wire_.connection().on_data({frame.data(), frame.size()}, exchange_);
-    }
+    void feed_exchange(std::string_view frame) { wire_.connection().on_data({frame.data(), frame.size()}, exchange_); }
 
     // Delivers queued bytes both ways until quiet (bounded), injecting faults
     // on the client-to-exchange direction when asked.

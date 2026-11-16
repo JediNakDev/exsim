@@ -32,10 +32,14 @@ inline Bytes hex_bytes(std::string_view hex) {
     int high = -1;
     for (char c : hex) {
         int value = -1;
-        if (c >= '0' && c <= '9') value = c - '0';
-        else if (c >= 'a' && c <= 'f') value = c - 'a' + 10;
-        else if (c >= 'A' && c <= 'F') value = c - 'A' + 10;
-        else continue;
+        if (c >= '0' && c <= '9')
+            value = c - '0';
+        else if (c >= 'a' && c <= 'f')
+            value = c - 'a' + 10;
+        else if (c >= 'A' && c <= 'F')
+            value = c - 'A' + 10;
+        else
+            continue;
         if (high < 0) {
             high = value;
         } else {
@@ -130,15 +134,13 @@ inline NewOrder limit_order(Timestamp ts, InstrumentId instrument, SessionId ses
     return order;
 }
 
-inline void set_command_time(Command& command, Timestamp ts) {
-    command.timestamp = ts;
-}
+inline void set_command_time(Command& command, Timestamp ts) { command.timestamp = ts; }
 
 // First difference between two books exposing depth()/level_orders(), or
 // an empty string. Also compares the ITCH trading state of each instrument.
 template <class EngineBook>
-std::string book_difference(const EngineBook& engine, const md::ItchBookBuilder& builder,
-                            std::size_t instrument_count, std::size_t max_orders) {
+std::string book_difference(const EngineBook& engine, const md::ItchBookBuilder& builder, std::size_t instrument_count,
+                            std::size_t max_orders) {
     std::vector<LevelInfo> engine_levels(max_orders + 1), builder_levels(max_orders + 1);
     std::vector<OrderId> engine_ids(max_orders + 1), builder_ids(max_orders + 1);
     for (std::size_t index = 1; index <= instrument_count; ++index) {
@@ -160,11 +162,11 @@ std::string book_difference(const EngineBook& engine, const md::ItchBookBuilder&
                 if (e.price != b.price || e.qty != b.qty || e.order_count != b.order_count)
                     return where + " level " + std::to_string(level) + " builder " + std::to_string(b.price) + "x" +
                            std::to_string(b.qty) + "/" + std::to_string(b.order_count) + " engine " +
-                           std::to_string(e.price) + "x" + std::to_string(e.qty) + "/" +
-                           std::to_string(e.order_count);
-                const std::size_t engine_fifo = exsim::testsupport::level_orders(engine, id, side, e.price, engine_ids.data(), engine_ids.size());
-                const std::size_t builder_fifo =
-                    exsim::testsupport::level_orders(builder, id, side, e.price, builder_ids.data(), builder_ids.size());
+                           std::to_string(e.price) + "x" + std::to_string(e.qty) + "/" + std::to_string(e.order_count);
+                const std::size_t engine_fifo =
+                    exsim::testsupport::level_orders(engine, id, side, e.price, engine_ids.data(), engine_ids.size());
+                const std::size_t builder_fifo = exsim::testsupport::level_orders(
+                    builder, id, side, e.price, builder_ids.data(), builder_ids.size());
                 if (engine_fifo != builder_fifo ||
                     !std::equal(engine_ids.begin(), engine_ids.begin() + static_cast<std::ptrdiff_t>(engine_fifo),
                                 builder_ids.begin()))
@@ -197,7 +199,8 @@ std::uint64_t book_digest(const Book& book, std::size_t instrument_count, std::v
                 mix(static_cast<std::uint64_t>(levels[level].price));
                 mix(levels[level].qty);
                 mix(levels[level].order_count);
-                const std::size_t fifo = exsim::testsupport::level_orders(book, id, side, levels[level].price, ids.data(), ids.size());
+                const std::size_t fifo =
+                    exsim::testsupport::level_orders(book, id, side, levels[level].price, ids.data(), ids.size());
                 for (std::size_t order = 0; order < fifo; ++order) mix(ids[order]);
             }
         }

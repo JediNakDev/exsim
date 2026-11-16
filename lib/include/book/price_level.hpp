@@ -50,6 +50,6 @@ public:
     }
 };
 
-}
+}  // namespace exsim::book
 
 #endif

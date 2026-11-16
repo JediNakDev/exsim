@@ -43,15 +43,14 @@ public:
         InternStatus status;
     };
 
-    explicit TokenTable(std::uint32_t max_tokens)
-        : max_tokens_(max_tokens == 0 ? 1 : max_tokens) {
+    explicit TokenTable(std::uint32_t max_tokens) : max_tokens_(max_tokens == 0 ? 1 : max_tokens) {
         std::size_t cap = 16;
         while (cap < std::size_t{max_tokens_} * 2) {
             cap <<= 1;
         }
         mask_ = cap - 1;
-        slots_ = std::make_unique<std::uint64_t[]>(cap);       // zeroed: all empty
-        entries_ = std::make_unique<Entry[]>(max_tokens_);     // value-initialised
+        slots_ = std::make_unique<std::uint64_t[]>(cap);    // zeroed: all empty
+        entries_ = std::make_unique<Entry[]>(max_tokens_);  // value-initialised
     }
 
     TokenTable(const TokenTable&) = delete;

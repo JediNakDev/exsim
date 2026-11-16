@@ -35,16 +35,16 @@ inline constexpr unsigned kSessionTokenShift = 48;
 
 // One cache line, so a rest, fill or cancel reads one metadata line per order.
 struct alignas(64) OrderMetadata {
-    exsim::book::Order* order;      // the resting book order; its context_index is this slot
-    std::uint64_t session_token;    // make_session_token(session, cl_ord_id)
+    exsim::book::Order* order;    // the resting book order; its context_index is this slot
+    std::uint64_t session_token;  // make_session_token(session, cl_ord_id)
     Quantity cum_qty;
     OwnerId owner;
-    OrderIndex next_free;           // free-list link while the slot is free
+    OrderIndex next_free;  // free-list link while the slot is free
     InstrumentId instrument;
     TimeInForce tif;
     StpMode stp;
     bool post_only;
-    OrderIndex next_in_session;     // per-session list, ascending OrderId
+    OrderIndex next_in_session;  // per-session list, ascending OrderId
     OrderIndex prev_in_session;
     OrderIndex next_in_instrument;  // per-instrument list, ascending OrderId
     OrderIndex prev_in_instrument;

@@ -74,7 +74,6 @@ enum class CloseReason : std::uint8_t {
     SendBufferOverflow,  // more than send_buffer_capacity bytes queued: the peer reads too slowly
 };
 
-
 template <class Handler>
 concept TcpServerHandler = requires(Handler& handler, ConnectionId id, Ipv4Endpoint peer, ReceiveBuffer& received,
                                     CloseReason reason, ErrorCode error) {
@@ -84,7 +83,7 @@ concept TcpServerHandler = requires(Handler& handler, ConnectionId id, Ipv4Endpo
 };
 
 class TcpServer {
-   public:
+public:
     // token_tag becomes the top 8 bits of every poll token this server
     // registers; route an event here when poll_token_tag(event.token) == token_tag.
     TcpServer(const TcpServerConfig& config, Poller& poller, std::uint8_t token_tag);
@@ -186,7 +185,7 @@ class TcpServer {
     std::uint32_t connection_count() const noexcept { return connection_count_; }  // open + closing
     std::uint64_t rejected_connection_count() const noexcept { return rejected_connection_count_; }
 
-   private:
+private:
     enum class SlotState : std::uint8_t { Free, Open, Closing };
 
     struct Slot {
@@ -326,11 +325,8 @@ void TcpServer::handle_event(const PollEvent& event, Handler& handler) noexcept 
                     return;
                 }
                 break;
-            case ReceiveStatus::WouldBlock:
-                break;
-            case ReceiveStatus::PeerClosed:
-                close_and_report(slot_index, CloseReason::PeerClosed, 0, handler);
-                return;
+            case ReceiveStatus::WouldBlock: break;
+            case ReceiveStatus::PeerClosed: close_and_report(slot_index, CloseReason::PeerClosed, 0, handler); return;
             case ReceiveStatus::BufferFull:
                 close_and_report(slot_index, CloseReason::ReceiveBufferFull, 0, handler);
                 return;

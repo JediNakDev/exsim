@@ -80,6 +80,6 @@ private:
     std::uint64_t leaves_by_side_[2] = {0, 0};  // BUY, SELL
 };
 
-}
+}  // namespace exsim::book
 
 #endif

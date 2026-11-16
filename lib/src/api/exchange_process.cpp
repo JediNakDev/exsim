@@ -16,7 +16,8 @@ namespace exsim::api {
 ExchangeProcess::~ExchangeProcess() { stop(); }
 bool ExchangeProcess::spawn(const std::filesystem::path& executable, const std::filesystem::path& config_path) {
     int descriptors[2];
-    if (::socketpair(AF_UNIX, SOCK_STREAM, 0, descriptors) != 0) throw std::runtime_error("cannot create control socket");
+    if (::socketpair(AF_UNIX, SOCK_STREAM, 0, descriptors) != 0)
+        throw std::runtime_error("cannot create control socket");
     net::Socket parent(descriptors[0]), child(descriptors[1]);
     (void)net::set_no_sigpipe(parent.fd());
     (void)net::set_non_blocking(parent.fd());
@@ -55,7 +56,8 @@ bool ExchangeProcess::spawn(const std::filesystem::path& executable, const std::
     try {
         exit_watcher_ = std::jthread([this, child_pid = pid_] {
             siginfo_t information{};
-            while (::waitid(P_PID, static_cast<id_t>(child_pid), &information, WEXITED | WNOWAIT) != 0 && errno == EINTR) {}
+            while (::waitid(P_PID, static_cast<id_t>(child_pid), &information, WEXITED | WNOWAIT) != 0 &&
+                   errno == EINTR) {}
             {
                 std::lock_guard guard(exit_mutex_);
                 exited_ = true;
@@ -77,7 +79,8 @@ bool ExchangeProcess::await_readiness() {
         snapshot_ = ipc::receive_control(control_.fd(), 10000);
         const auto ready = parse_json(snapshot_);
         if (ready.find("error")) throw std::runtime_error(ready.find("error")->text);
-        if (!ready.find("state") || ready.find("state")->text != "running") throw std::runtime_error("exchange did not report readiness");
+        if (!ready.find("state") || ready.find("state")->text != "running")
+            throw std::runtime_error("exchange did not report readiness");
     } catch (const std::exception& error) {
         stop_after_failure(error.what());
         return false;
@@ -90,7 +93,8 @@ bool ExchangeProcess::read_status() {
     try {
         ipc::send_control(control_.fd(), "status");
         snapshot_ = ipc::receive_control(control_.fd());
-        if (!parse_json(snapshot_).find("connections")) throw std::runtime_error("exchange snapshot has no connections");
+        if (!parse_json(snapshot_).find("connections"))
+            throw std::runtime_error("exchange snapshot has no connections");
         return true;
     } catch (const std::exception&) {
         stop_after_failure("exchange control failed");
@@ -121,7 +125,8 @@ void ExchangeProcess::stop() noexcept {
     request_stop();
     {
         std::unique_lock guard(exit_mutex_);
-        if (!exit_condition_.wait_for(guard, std::chrono::milliseconds(4500), [this] { return exited_; })) ::kill(pid_, SIGKILL);
+        if (!exit_condition_.wait_for(guard, std::chrono::milliseconds(4500), [this] { return exited_; }))
+            ::kill(pid_, SIGKILL);
     }
     (void)reap();
     state_ = ExchangeProcessState::Stopped;
@@ -155,4 +160,4 @@ void ExchangeProcess::stop_after_failure(std::string message) noexcept {
     state_ = ExchangeProcessState::Failed;
     error_ = std::move(message);
 }
-}
+}  // namespace exsim::api

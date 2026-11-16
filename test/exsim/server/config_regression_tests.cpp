@@ -52,12 +52,12 @@ TEST_CASE(server_config_review, fix_credentials_must_fit_gateway_fields) {
         for (const auto password_length : {64u, 65u}) {
             ServerConfig config;
             std::string error;
-            const auto text = std::string(kMinimalWithSmallPayload).substr(0, std::string(kMinimalWithSmallPayload).find("[user")) +
-                "[user " + std::string(username_length, 'U') + "]\nprotocol=fix44\nsession_id=1\npassword=" +
-                std::string(password_length, 'P') + "\n";
+            const auto text =
+                std::string(kMinimalWithSmallPayload).substr(0, std::string(kMinimalWithSmallPayload).find("[user")) +
+                "[user " + std::string(username_length, 'U') +
+                "]\nprotocol=fix44\nsession_id=1\npassword=" + std::string(password_length, 'P') + "\n";
             CHECK_EQ(parse_config(text, config, error), username_length == 64 && password_length == 64);
-            if (username_length > 64 || password_length > 64)
-                CHECK(error.find("FIX") != std::string::npos);
+            if (username_length > 64 || password_length > 64) CHECK(error.find("FIX") != std::string::npos);
         }
     }
 }

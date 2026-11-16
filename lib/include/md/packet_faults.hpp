@@ -82,8 +82,8 @@ public:
     // True when no fault can fire and nothing is held: callers may bypass
     // the injector entirely.
     [[nodiscard]] bool idle() const noexcept {
-        return held_ == 0 && drop_next_ == 0 && duplicate_next_ == 0 && reorder_next_ == 0 &&
-               cfg_.drop_ppm == 0 && cfg_.duplicate_ppm == 0 && cfg_.reorder_ppm == 0;
+        return held_ == 0 && drop_next_ == 0 && duplicate_next_ == 0 && reorder_next_ == 0 && cfg_.drop_ppm == 0 &&
+               cfg_.duplicate_ppm == 0 && cfg_.reorder_ppm == 0;
     }
 
     // Sink: callable as sink(std::span<const char>).
@@ -169,8 +169,7 @@ private:
                 --slots_[i].remaining;
             }
         }
-        while (held_ != 0 && release_oldest(sink, /*only_due=*/true)) {
-        }
+        while (held_ != 0 && release_oldest(sink, /*only_due=*/true)) {}
     }
 
     template <typename Sink>

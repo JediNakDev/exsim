@@ -105,14 +105,14 @@ TEST_CASE(md_allocation, steady_state_feed_allocates_nothing) {
     md::RetransmissionConfig server_config;
     server_config.max_payload = kPayload;
     md::RetransmissionServer server(publisher.ring(), server_config);
-    md::ItchBookBuilder builder(md::BookBuilderConfig{setup.engine.max_instruments, setup.engine.max_orders,
-                                                      setup.engine.max_orders});
+    md::ItchBookBuilder builder(
+        md::BookBuilderConfig{setup.engine.max_instruments, setup.engine.max_orders, setup.engine.max_orders});
     md::ReceiverConfig receiver_config;
     receiver_config.session = "EXSIM";
     receiver_config.request_timeout_ns = 3'000'000;
     receiver_config.max_request_attempts = 1'000;
     md::MoldUdp64Receiver<md::ItchBookBuilder, FixedQueueSink> receiver(receiver_config, builder,
-                                                                         FixedQueueSink{&request_queue});
+                                                                        FixedQueueSink{&request_queue});
     auto datagram = std::make_unique<char[]>(kPayload);
     const std::span<char> datagram_buffer(datagram.get(), kPayload);
 

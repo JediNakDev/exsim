@@ -21,12 +21,12 @@ int main(int argc, char** argv) {
     auto resolution = std::chrono::nanoseconds::max();
     for (int i = 0; i < 10000; ++i) {
         const auto start = std::chrono::steady_clock::now();
-        const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
-            std::chrono::steady_clock::now() - start);
+        const auto elapsed =
+            std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - start);
         if (elapsed.count() > 0 && elapsed < resolution) resolution = elapsed;
     }
-    std::cout << "Timer: steady_clock, minimum observed positive delta "
-              << resolution.count() << " ns; batches of 32 commands\n";
+    std::cout << "Timer: steady_clock, minimum observed positive delta " << resolution.count()
+              << " ns; batches of 32 commands\n";
 
     int target_core = 0;
     std::string csv_path = "build/bench/exsim_results.csv";

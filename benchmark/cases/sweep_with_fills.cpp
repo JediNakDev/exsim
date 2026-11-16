@@ -21,8 +21,8 @@ static void BM_SweepWithFills(benchmark::State& state) {
         for (std::size_t i = 0; i < 32768; ++i) {
             const exsim::Side side = i % 2 == 0 ? exsim::Side::BUY : exsim::Side::SELL;
             const exsim::Side opposite = side == exsim::Side::BUY ? exsim::Side::SELL : exsim::Side::BUY;
-            commands.push_back(scenario.new_order(scenario.next_cl_ord_id(), side,
-                                                  price_at(opposite, kLevelsPerSide), kAggressorQuantity));
+            commands.push_back(scenario.new_order(scenario.next_cl_ord_id(), side, price_at(opposite, kLevelsPerSide),
+                                                  kAggressorQuantity));
         }
         return commands;
     });

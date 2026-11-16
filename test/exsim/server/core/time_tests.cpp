@@ -16,7 +16,7 @@ namespace {
 constexpr InstrumentId kAapl = 1;
 constexpr Timestamp kHour = 3600 * kSecond;
 constexpr Timestamp kDayStart = 9 * kHour + 30 * 60 * kSecond;  // 09:30
-constexpr Timestamp kDayEnd = 16 * kHour;                        // 16:00
+constexpr Timestamp kDayEnd = 16 * kHour;                       // 16:00
 
 const char* const kTradingDay = R"(
 [exchange]
@@ -43,8 +43,7 @@ TEST_CASE(server_core_time, command_timestamps_strictly_increase_when_the_clock_
     for (ClOrdId token = 1; token <= 3; ++token) {
         REQUIRE_EQ(h.core.submit(limit_order(1, token, kAapl, Side::BUY, 1'000'000, 10)), SubmitResult::Applied);
     }
-    CHECK(stamps_of_batches(h.recorder) ==
-          (std::vector<Timestamp>{5 * kSecond, 5 * kSecond + 1, 5 * kSecond + 2}));
+    CHECK(stamps_of_batches(h.recorder) == (std::vector<Timestamp>{5 * kSecond, 5 * kSecond + 1, 5 * kSecond + 2}));
     CHECK_EQ(h.core.last_command_timestamp(), 5 * kSecond + 2);
 }
 
@@ -56,8 +55,7 @@ TEST_CASE(server_core_time, command_timestamps_strictly_increase_when_the_clock_
     REQUIRE_EQ(h.core.submit(limit_order(1, 2, kAapl, Side::BUY, 1'000'000, 10)), SubmitResult::Applied);
     h.clock.day = 10 * kSecond;
     REQUIRE_EQ(h.core.submit(limit_order(1, 3, kAapl, Side::BUY, 1'000'000, 10)), SubmitResult::Applied);
-    CHECK(stamps_of_batches(h.recorder) ==
-          (std::vector<Timestamp>{5 * kSecond, 5 * kSecond + 1, 10 * kSecond}));
+    CHECK(stamps_of_batches(h.recorder) == (std::vector<Timestamp>{5 * kSecond, 5 * kSecond + 1, 10 * kSecond}));
 }
 
 TEST_CASE(server_core_time, first_command_may_be_stamped_at_midnight) {

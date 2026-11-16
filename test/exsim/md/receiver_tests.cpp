@@ -371,7 +371,7 @@ TEST_CASE(md_receiver, typed_dispatch_through_receiver) {
     std::deque<Bytes> requests;
     md::ReceiverConfig config;
     md::MoldUdp64Receiver<md::TypedItchHandler<TypedRecorder>, PacketQueueSink> receiver(config, typed,
-                                                                                          PacketQueueSink{&requests});
+                                                                                         PacketQueueSink{&requests});
     const Bytes system = hex_bytes("53 0000 0000 000000000010 4F");
     const Bytes add = hex_bytes("41 0001 0000 000000000020 0000000000000007 42 00000064 4141412020202020 000F4240");
     const Bytes delete_message = hex_bytes("44 0001 0000 000000000020 0000000000000007");  // no on_itch overload

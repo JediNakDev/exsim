@@ -148,7 +148,8 @@ public:
             if constexpr (requires { handler_.on_server_timeout(); }) handler_.on_server_timeout();
             return;
         }
-        if (state_ == OuchClientState::LoggedIn && elapsed(last_sent_ns_, now) >= settings_.client_heartbeat_interval_ns) {
+        if (state_ == OuchClientState::LoggedIn &&
+            elapsed(last_sent_ns_, now) >= settings_.client_heartbeat_interval_ns) {
             send_frame(protocol::soupbintcp::ClientHeartbeat{}, now);
         }
     }
@@ -270,31 +271,40 @@ private:
     }
 
     void notify(const protocol::ouch42::SystemEvent& message, std::uint64_t sequence) noexcept {
-        if constexpr (requires { handler_.on_system_event(message, sequence); }) handler_.on_system_event(message, sequence);
+        if constexpr (requires { handler_.on_system_event(message, sequence); })
+            handler_.on_system_event(message, sequence);
     }
     void notify(const protocol::ouch42::OrderAccepted& message, std::uint64_t sequence) noexcept {
-        if constexpr (requires { handler_.on_order_accepted(message, sequence); }) handler_.on_order_accepted(message, sequence);
+        if constexpr (requires { handler_.on_order_accepted(message, sequence); })
+            handler_.on_order_accepted(message, sequence);
     }
     void notify(const protocol::ouch42::OrderReplaced& message, std::uint64_t sequence) noexcept {
-        if constexpr (requires { handler_.on_order_replaced(message, sequence); }) handler_.on_order_replaced(message, sequence);
+        if constexpr (requires { handler_.on_order_replaced(message, sequence); })
+            handler_.on_order_replaced(message, sequence);
     }
     void notify(const protocol::ouch42::OrderCanceled& message, std::uint64_t sequence) noexcept {
-        if constexpr (requires { handler_.on_order_canceled(message, sequence); }) handler_.on_order_canceled(message, sequence);
+        if constexpr (requires { handler_.on_order_canceled(message, sequence); })
+            handler_.on_order_canceled(message, sequence);
     }
     void notify(const protocol::ouch42::OrderExecuted& message, std::uint64_t sequence) noexcept {
-        if constexpr (requires { handler_.on_order_executed(message, sequence); }) handler_.on_order_executed(message, sequence);
+        if constexpr (requires { handler_.on_order_executed(message, sequence); })
+            handler_.on_order_executed(message, sequence);
     }
     void notify(const protocol::ouch42::OrderRejected& message, std::uint64_t sequence) noexcept {
-        if constexpr (requires { handler_.on_order_rejected(message, sequence); }) handler_.on_order_rejected(message, sequence);
+        if constexpr (requires { handler_.on_order_rejected(message, sequence); })
+            handler_.on_order_rejected(message, sequence);
     }
     void notify(const protocol::ouch42::CancelPending& message, std::uint64_t sequence) noexcept {
-        if constexpr (requires { handler_.on_cancel_pending(message, sequence); }) handler_.on_cancel_pending(message, sequence);
+        if constexpr (requires { handler_.on_cancel_pending(message, sequence); })
+            handler_.on_cancel_pending(message, sequence);
     }
     void notify(const protocol::ouch42::CancelReject& message, std::uint64_t sequence) noexcept {
-        if constexpr (requires { handler_.on_cancel_reject(message, sequence); }) handler_.on_cancel_reject(message, sequence);
+        if constexpr (requires { handler_.on_cancel_reject(message, sequence); })
+            handler_.on_cancel_reject(message, sequence);
     }
     void notify(const protocol::ouch42::OrderModified& message, std::uint64_t sequence) noexcept {
-        if constexpr (requires { handler_.on_order_modified(message, sequence); }) handler_.on_order_modified(message, sequence);
+        if constexpr (requires { handler_.on_order_modified(message, sequence); })
+            handler_.on_order_modified(message, sequence);
     }
 
     void report_unknown(std::string_view payload, std::uint64_t sequence) noexcept {

@@ -26,8 +26,7 @@ template <class T>
     requires(std::is_integral_v<T> && !std::is_same_v<T, bool>)
 constexpr void store_le(char* bytes, T value) noexcept {
     const auto bits = std::bit_cast<std::make_unsigned_t<T>>(value);
-    for (std::size_t i = 0; i < sizeof(T); ++i)
-        bytes[i] = static_cast<char>((bits >> (8 * i)) & 0xff);
+    for (std::size_t i = 0; i < sizeof(T); ++i) bytes[i] = static_cast<char>((bits >> (8 * i)) & 0xff);
 }
 
 inline constexpr std::uint16_t kEncoding = 0xcafe;
@@ -44,8 +43,8 @@ struct Header {
 };
 
 [[nodiscard]] inline Header decode_header(const char* bytes) noexcept {
-    return {load_le<std::uint16_t>(bytes), load_le<std::uint16_t>(bytes + 2),
-            load_le<std::uint16_t>(bytes + 4), load_le<std::uint16_t>(bytes + 6)};
+    return {load_le<std::uint16_t>(bytes), load_le<std::uint16_t>(bytes + 2), load_le<std::uint16_t>(bytes + 4),
+            load_le<std::uint16_t>(bytes + 6)};
 }
 
 inline void encode_header(char* bytes, Header header) noexcept {
@@ -92,7 +91,7 @@ struct MessageView {
 // Returns zero without writing if the frame does not fit. body must not
 // overlap output, except at its final position after the framing header.
 [[nodiscard]] inline std::size_t encode_ilink(Header header, std::span<const char> body,
-                                             std::span<char> output) noexcept {
+                                              std::span<char> output) noexcept {
     if (body.size() > UINT16_MAX - kIlinkHeaderSize || header.block_length > body.size()) return 0;
     const std::size_t size = kIlinkHeaderSize + body.size();
     if (output.size() < size) return 0;
@@ -105,7 +104,7 @@ struct MessageView {
 }
 
 [[nodiscard]] inline std::size_t encode_mdp_message(Header header, std::span<const char> body,
-                                                   std::span<char> output) noexcept {
+                                                    std::span<char> output) noexcept {
     if (body.size() > UINT16_MAX - kMdpMessageHeaderSize || header.block_length > body.size()) return 0;
     const std::size_t size = kMdpMessageHeaderSize + body.size();
     if (output.size() < size) return 0;
@@ -139,9 +138,10 @@ struct MdpPacketView {
 }
 
 [[nodiscard]] inline std::size_t encode_mdp_packet(std::uint32_t sequence, std::uint64_t sending_time,
-                                                  std::span<const char> messages, std::span<char> output) noexcept {
+                                                   std::span<const char> messages, std::span<char> output) noexcept {
     if (messages.empty() || messages.size() > 65507 - kMdpPacketHeaderSize ||
-        output.size() < kMdpPacketHeaderSize + messages.size()) return 0;
+        output.size() < kMdpPacketHeaderSize + messages.size())
+        return 0;
     auto remaining = messages;
     while (!remaining.empty()) {
         MessageView message;

@@ -55,8 +55,10 @@ struct TestControlHandler {
         ++handler.readable_callbacks;
         try {
             const auto command = ipc::receive_control(handler.fd);
-            if (command == "stop") handler.runtime->request_shutdown();
-            else if (command != "status") throw std::runtime_error("invalid control command");
+            if (command == "stop")
+                handler.runtime->request_shutdown();
+            else if (command != "status")
+                throw std::runtime_error("invalid control command");
             ipc::send_control(handler.fd, ipc::runtime_snapshot_json(*handler.runtime));
             ++handler.commands_handled;
         } catch (...) {
