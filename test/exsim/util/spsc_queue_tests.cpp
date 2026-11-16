@@ -4,9 +4,14 @@
 #include <util/spsc_queue.hpp>
 
 #include <cstdint>
+#include <new>
 #include <thread>
 
 using exsim::util::SPSCQueue;
+
+// The consumer index, the producer index and the ring each start a new
+// destructive-interference block, so the two threads never share a line.
+static_assert(alignof(SPSCQueue<std::uint64_t, 4>) == std::hardware_destructive_interference_size);
 
 TEST_CASE(spsc_queue, holds_capacity_minus_one_and_keeps_fifo_across_wraparound) {
     SPSCQueue<std::uint64_t, 4> queue;

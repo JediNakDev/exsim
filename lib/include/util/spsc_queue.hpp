@@ -4,6 +4,7 @@
 #include <array>
 #include <atomic>
 #include <cstddef>
+#include <new>
 
 namespace exsim::util {
 
@@ -57,12 +58,12 @@ private:
     }
 
     // Consumer-owned line.
-    alignas(128) std::atomic<std::size_t> head_{0};
+    alignas(std::hardware_destructive_interference_size) std::atomic<std::size_t> head_{0};
     std::size_t consumer_cached_tail_ = 0;
     // Producer-owned line.
-    alignas(128) std::atomic<std::size_t> tail_{0};
+    alignas(std::hardware_destructive_interference_size) std::atomic<std::size_t> tail_{0};
     std::size_t producer_cached_head_ = 0;
-    alignas(128) std::array<T, Capacity> buffer_{};
+    alignas(std::hardware_destructive_interference_size) std::array<T, Capacity> buffer_{};
 };
 
 }  // namespace exsim::util
