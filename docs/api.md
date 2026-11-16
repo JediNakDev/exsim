@@ -126,7 +126,7 @@ Defaults are sized for a small test day; memory is allocated at startup, so rais
 | `[engine] max_tokens_per_session` | 65536 | client order IDs per user per day |
 | `[engine] store_messages_per_session` | 65536 | outbound messages kept per user for replay |
 | `[engine] store_bytes_per_session` | 8 MiB | their bytes, prefaulted at startup |
-| `[market_data] retransmit_buffer` | 65536 | ITCH messages kept for MoldUDP64 retransmission (64 B each) |
+| `[market_data] retransmit_buffer` | 65536 | ITCH messages kept for MoldUDP64 retransmission (64 B each), rounded up to a power of two |
 
 A session that reaches a token or store limit gets rejects or is disconnected, depending on the protocol; ITCH messages older than the buffer cannot be retransmitted. With the defaults, `exsim_exchanged` with one instrument, one OUCH and one FIX user has about 60 MiB resident after startup. Each further user adds about 13 MiB, an iLink user about 31 MiB (it keeps two stores).
 

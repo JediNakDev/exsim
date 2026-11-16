@@ -5,6 +5,7 @@
 #include <test/exsim/md/md_test_support.hpp>
 #include <test/framework/test.hpp>
 
+#include <bit>
 #include <stdexcept>
 #include <string>
 
@@ -69,14 +70,34 @@ TEST_CASE(md_retransmission, ring_append_rules) {
     CHECK_EQ(ring.oldest_sequence(), 1u);
     CHECK_EQ(ring.newest_sequence(), 2u);
 
-    // A ring may start at any sequence (the first append fixes it).
+    // A ring may start at any sequence (the first append fixes it). The
+    // capacity is rounded up to a power of two: 3 holds 4 messages.
     md::RetransmissionRing late(3);
-    fill_ring(late, 100, 104);
+    CHECK_EQ(late.capacity(), 4u);
+    fill_ring(late, 100, 105);
     CHECK_EQ(late.oldest_sequence(), 102u);
-    CHECK_EQ(late.newest_sequence(), 104u);
+    CHECK_EQ(late.newest_sequence(), 105u);
     CHECK(late.find(101).empty());
-    CHECK_EQ(hex_of(late.find(103)), hex_of(fake_message(103)));
-    CHECK(late.find(105).empty());
+    CHECK_EQ(hex_of(late.find(102)), hex_of(fake_message(102)));
+    CHECK_EQ(hex_of(late.find(105)), hex_of(fake_message(105)));
+    CHECK(late.find(106).empty());
+}
+
+TEST_CASE(md_retransmission, ring_capacity_is_a_power_of_two) {
+    for (const std::size_t requested : {1u, 2u, 5u, 64u, 65u, 100'000u}) {
+        md::RetransmissionRing ring(requested);
+        CHECK(std::has_single_bit(ring.capacity()));
+        CHECK_GE(ring.capacity(), requested);
+        CHECK_LT(ring.capacity(), 2 * requested);
+    }
+    // Wrapping several times keeps exactly the newest capacity() messages.
+    md::RetransmissionRing ring(5);
+    fill_ring(ring, 1, 8 * 3 + 5);
+    CHECK_EQ(ring.oldest_sequence(), 22u);
+    CHECK(ring.find(21).empty());
+    for (std::uint64_t sequence = 22; sequence <= 29; ++sequence) {
+        CHECK_EQ(hex_of(ring.find(sequence)), hex_of(fake_message(sequence)));
+    }
 }
 
 TEST_CASE(md_retransmission, server_config_rules) {

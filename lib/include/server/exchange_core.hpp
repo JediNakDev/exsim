@@ -81,7 +81,8 @@ enum class JournalState : std::uint8_t { Disabled = 0, Healthy = 1, Failed = 2 }
 
 // Deferred-queue slots for ordinary commands are users + kDeferredCommandSlack.
 // A further one slot per user is reserved for the cancel-on-disconnect
-// MassCancel of unbind, so it is never refused.
+// MassCancel of unbind, so it is never refused. (The queue rounds its
+// capacity up to a power of two; the extra slots only add to that reserve.)
 inline constexpr std::size_t kDeferredCommandSlack = 64;
 
 template <class Core>
@@ -219,7 +220,7 @@ public:
     // meanwhile) has reached the sessions and market data. Nothing else is
     // applied, journaled or dispatched.
     SubmitResult submit(const Command& command) noexcept {
-        return submit_or_defer(command, deferred_.capacity() - users_.size());
+        return submit_or_defer(command, users_.size() + kDeferredCommandSlack);
     }
 
     // ns since local midnight: the Clock, never earlier than a value already
