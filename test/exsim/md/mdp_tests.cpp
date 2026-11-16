@@ -14,7 +14,7 @@ struct Capture {
     std::vector<Packet>* packets;
     void operator()(std::span<const char> bytes, md::MdpStream stream) { packets->push_back({{bytes.begin(), bytes.end()}, stream}); }
 };
-server::ServerConfig mdp_config() {
+server::ServerConfig mdp_config(std::size_t instrument_count = 1) {
     server::ServerConfig config;
     config.engine.engine = {2, 32};
     config.market_data.protocol = server::MarketDataProtocol::Mdp3;
@@ -22,27 +22,36 @@ server::ServerConfig mdp_config() {
     config.market_data.replay_username = "CME";
     config.market_data.replay_password = "secret";
     config.market_data.snapshot_interval_ms = 1;
-    InstrumentConfig instrument;
-    instrument.symbol = Symbol("ES");
-    instrument.cme_security_id = 800001;
-    instrument.tick_size = 100;
-    instrument.min_price = 100;
-    instrument.max_price = 100000;
-    instrument.reference_price = 10000;
-    instrument.max_order_qty = 1000000000;
-    const std::string_view name = "LONG-CME-SYMBOL-1234";
-    std::copy(name.begin(), name.end(), instrument.cme_symbol.begin());
-    config.instruments.push_back(instrument);
+    for (std::size_t index = 0; index < instrument_count; ++index) {
+        InstrumentConfig instrument;
+        instrument.symbol = Symbol(index == 0 ? "ES" : "NQ");
+        instrument.cme_security_id = 800001 + static_cast<std::int32_t>(index);
+        instrument.tick_size = 100;
+        instrument.min_price = 100;
+        instrument.max_price = 100000;
+        instrument.reference_price = 10000;
+        instrument.max_order_qty = 1000000000;
+        if (index == 0) {
+            const std::string_view name = "LONG-CME-SYMBOL-1234";
+            std::copy(name.begin(), name.end(), instrument.cme_symbol.begin());
+        }
+        config.instruments.push_back(instrument);
+    }
     return config;
 }
 
-// Independent MBP consumer: applies New/Change/Delete rank semantics and
-// checks report sequence continuity using the schema's wire offsets.
+// Independent MBP consumer. Every snapshot entry and incremental entry is dispatched by SecurityID to that
+// instrument's own book, which applies New/Change/Delete rank semantics and checks its own RptSeq continuity.
+// Event flags are channel-wide: one batch ends with exactly one EndOfEvent, on its last message.
 struct Book {
     struct Level { std::int64_t price; std::int32_t qty; std::int32_t orders; };
     std::vector<Level> bids, asks;
     std::uint32_t report = 0;
+};
+struct Consumer {
+    std::map<std::int32_t, Book> books;
     unsigned end_events = 0;
+    bool batch_ended = false;
     void packet(const Packet& packet) {
         cme::MdpPacketView view;
         REQUIRE_EQ(cme::decode_mdp_packet(packet.bytes, view), protocol::Status::ok);
@@ -50,30 +59,33 @@ struct Book {
         REQUIRE_EQ(cme::decode_mdp_message(view.messages, message), protocol::Status::ok);
         if (packet.stream == md::MdpStream::Snapshot) {
             REQUIRE_EQ(message.header.template_id, 52);
-            report = cme::load_le<std::uint32_t>(message.body.data() + 12);
-            bids.clear(); asks.clear();
+            auto& book = books[cme::load_le<std::int32_t>(message.body.data() + 8)];
+            book.report = cme::load_le<std::uint32_t>(message.body.data() + 12);
+            book.bids.clear(); book.asks.clear();
             cme::GroupView entries;
             REQUIRE_EQ(cme::decode_group(message.trailing(), 22, entries), protocol::Status::ok);
             for (unsigned i = 0; i < entries.count; ++i) {
                 const auto entry = entries.entry(i);
-                auto& side = entry[21] == '0' ? bids : asks;
+                auto& side = entry[21] == '0' ? book.bids : book.asks;
                 side.push_back({cme::load_le<std::int64_t>(entry.data()), cme::load_le<std::int32_t>(entry.data() + 8),
                                 cme::load_le<std::int32_t>(entry.data() + 12)});
             }
         } else if (packet.stream == md::MdpStream::Incremental &&
                    (message.header.template_id == 46 || message.header.template_id == 48)) {
-            if (static_cast<unsigned char>(message.body[8]) & 0x80) ++end_events;
+            CHECK(!batch_ended);
+            if (static_cast<unsigned char>(message.body[8]) & 0x80) { ++end_events; batch_ended = true; }
             cme::GroupView entries;
             REQUIRE_EQ(cme::decode_group(message.trailing(), 32, entries), protocol::Status::ok);
             for (unsigned i = 0; i < entries.count; ++i) {
                 const auto entry = entries.entry(i);
-                CHECK_EQ(cme::load_le<std::uint32_t>(entry.data() + 16), ++report);
+                auto& book = books[cme::load_le<std::int32_t>(entry.data() + 12)];
+                CHECK_EQ(cme::load_le<std::uint32_t>(entry.data() + 16), ++book.report);
                 if (message.header.template_id == 48) continue;
-                auto& side = entry[26] == '0' ? bids : asks;
+                auto& side = entry[26] == '0' ? book.bids : book.asks;
                 const auto rank = static_cast<std::size_t>(static_cast<unsigned char>(entry[24]) - 1);
                 const auto action = static_cast<unsigned char>(entry[25]);
-                Level level{cme::load_le<std::int64_t>(entry.data()), cme::load_le<std::int32_t>(entry.data() + 8),
-                            cme::load_le<std::int32_t>(entry.data() + 20)};
+                Book::Level level{cme::load_le<std::int64_t>(entry.data()), cme::load_le<std::int32_t>(entry.data() + 8),
+                                  cme::load_le<std::int32_t>(entry.data() + 20)};
                 if (action == 0) {
                     REQUIRE(rank <= side.size());
                     side.insert(side.begin() + rank, level);
@@ -89,44 +101,57 @@ struct Book {
             }
         }
     }
-    void compare(const MatchingEngine& engine) {
-        for (const auto side : {Side::BUY, Side::SELL}) {
-            std::array<LevelInfo, 10> levels{};
-            const auto count = engine.depth(1, side, levels.data(), levels.size());
-            const auto& actual = side == Side::BUY ? bids : asks;
-            REQUIRE_EQ(actual.size(), count);
-            for (std::size_t i = 0; i < count; ++i) {
-                CHECK_EQ(actual[i].price, levels[i].price * 100000);
-                CHECK_EQ(static_cast<std::uint64_t>(actual[i].qty), levels[i].qty);
-                CHECK_EQ(static_cast<std::uint32_t>(actual[i].orders), levels[i].order_count);
+    // Instrument n of the config is engine instrument n + 1.
+    void compare(const MatchingEngine& engine, const std::vector<InstrumentConfig>& instruments) {
+        for (std::size_t instrument = 0; instrument < instruments.size(); ++instrument) {
+            const auto& book = books[instruments[instrument].cme_security_id];
+            for (const auto side : {Side::BUY, Side::SELL}) {
+                std::array<LevelInfo, 10> levels{};
+                const auto count = engine.depth(static_cast<InstrumentId>(instrument + 1), side, levels.data(), levels.size());
+                const auto& actual = side == Side::BUY ? book.bids : book.asks;
+                REQUIRE_EQ(actual.size(), count);
+                for (std::size_t i = 0; i < count; ++i) {
+                    CHECK_EQ(actual[i].price, levels[i].price * 100000);
+                    CHECK_EQ(static_cast<std::uint64_t>(actual[i].qty), levels[i].qty);
+                    CHECK_EQ(static_cast<std::uint32_t>(actual[i].orders), levels[i].order_count);
+                }
             }
         }
     }
 };
 struct Exchange {
-    server::ServerConfig config = mdp_config();
-    MatchingEngine engine{config.engine.engine};
-    EventBuffer events{required_event_capacity(config.engine.engine)};
+    server::ServerConfig config;
+    MatchingEngine engine;
+    EventBuffer events;
     std::vector<Packet> packets;
-    md::MdpPublisher<Capture> publisher{config, Capture{&packets}};
+    md::MdpPublisher<Capture> publisher;
     Timestamp now = 1000;
-    Exchange() {
-        REQUIRE_EQ(engine.add_instrument(config.instruments[0]), 1);
+    explicit Exchange(std::size_t instrument_count = 1)
+        : config(mdp_config(instrument_count)), engine(config.engine.engine),
+          events(required_event_capacity(config.engine.engine)), publisher(config, Capture{&packets}) {
+        for (std::size_t instrument = 0; instrument < instrument_count; ++instrument)
+            REQUIRE_EQ(engine.add_instrument(config.instruments[instrument]), instrument + 1);
         REQUIRE_EQ(publisher.start(now, 1700000000000000000ull + now, engine), md::PublishStatus::Ok);
     }
-    void submit(Command command, Book* book = nullptr) {
+    void submit(Command command, Consumer* consumer = nullptr) {
         events.clear(); packets.clear();
         ++now;
         command.timestamp = now;
         REQUIRE_EQ(engine.handle(command, events), HandleResult::Applied);
         REQUIRE_EQ(publisher.on_events({events.begin(), events.size()}), md::PublishStatus::Ok);
-        if (book) { for (const auto& packet : packets) book->packet(packet); book->compare(engine); }
+        if (consumer) {
+            consumer->batch_ended = false;
+            for (const auto& packet : packets) consumer->packet(packet);
+            if (!packets.empty()) CHECK(consumer->batch_ended);
+            consumer->compare(engine, config.instruments);
+        }
     }
-    void order(ClOrdId id, Side side, Price price, Quantity quantity, Book* book = nullptr) {
+    void order(ClOrdId id, Side side, Price price, Quantity quantity, Consumer* consumer = nullptr,
+               InstrumentId instrument = 1) {
         NewOrder order;
-        order.instrument = 1; order.session = 1; order.cl_ord_id = id;
+        order.instrument = instrument; order.session = 1; order.cl_ord_id = id;
         order.side = side; order.price = price; order.qty = quantity;
-        submit(Command{order}, book);
+        submit(Command{order}, consumer);
     }
 };
 struct Sink {
@@ -176,48 +201,74 @@ TEST_CASE(mdp_publisher, startup_definitions_and_empty_snapshot) {
     REQUIRE_EQ(message.header.template_id, 54);
     CHECK_EQ(cme::load_le<std::int32_t>(message.body.data() + 55), 800001);
     CHECK_EQ(std::string_view(message.body.data() + 35, 20), "LONG-CME-SYMBOL-1234");
-    Book book;
-    book.packet(exchange.packets[2]);
-    book.compare(exchange.engine);
-    CHECK_EQ(book.report, 0u);
+    Consumer consumer;
+    consumer.packet(exchange.packets[2]);
+    consumer.compare(exchange.engine, exchange.config.instruments);
+    CHECK_EQ(consumer.books.at(800001).report, 0u);
     CHECK_EQ(exchange.publisher.ring().next_sequence(), 2u);
 }
 
 TEST_CASE(mdp_publisher, matching_cancel_replace_and_rank_changes_reconstruct) {
     Exchange exchange;
-    Book book;
-    exchange.order(1, Side::BUY, 10000, 5, &book);
-    exchange.order(2, Side::BUY, 9900, 7, &book);
-    exchange.order(3, Side::BUY, 10100, 2, &book);
-    exchange.order(4, Side::SELL, 10100, 1, &book);
+    Consumer consumer;
+    exchange.order(1, Side::BUY, 10000, 5, &consumer);
+    exchange.order(2, Side::BUY, 9900, 7, &consumer);
+    exchange.order(3, Side::BUY, 10100, 2, &consumer);
+    exchange.order(4, Side::SELL, 10100, 1, &consumer);
     CancelOrder cancel; cancel.session = 1; cancel.orig_cl_ord_id = 3;
-    exchange.submit(Command{cancel}, &book);
+    exchange.submit(Command{cancel}, &consumer);
     ReplaceOrder replace; replace.session = 1; replace.orig_cl_ord_id = 2;
     replace.cl_ord_id = 5; replace.price = 10200; replace.qty = 6;
-    exchange.submit(Command{replace}, &book);
+    exchange.submit(Command{replace}, &consumer);
     MassCancel mass; mass.session = 1;
-    exchange.submit(Command{mass}, &book);
-    CHECK(book.bids.empty());
-    CHECK(book.asks.empty());
-    CHECK_EQ(book.end_events, 7u);
+    exchange.submit(Command{mass}, &consumer);
+    CHECK(consumer.books.at(800001).bids.empty());
+    CHECK(consumer.books.at(800001).asks.empty());
+    CHECK_EQ(consumer.end_events, 7u);
 }
 
 TEST_CASE(mdp_publisher, seeded_command_stream_matches_engine_at_every_boundary) {
     Exchange exchange;
-    Book book;
+    Consumer consumer;
     std::mt19937 random(8173);
     for (ClOrdId id = 1; id <= 500; ++id) {
         if (id % 17 == 0) {
             MassCancel cancel; cancel.session = 1;
-            exchange.submit(Command{cancel}, &book);
+            exchange.submit(Command{cancel}, &consumer);
         } else exchange.order(id, (random() & 1) ? Side::BUY : Side::SELL,
-                               9000 + (random() % 21) * 100, 1 + random() % 9, &book);
+                               9000 + (random() % 21) * 100, 1 + random() % 9, &consumer);
     }
+}
+
+TEST_CASE(mdp_publisher, one_batch_changing_two_instruments_keeps_books_flags_and_report_sequences_apart) {
+    constexpr std::int32_t kFirst = 800001, kSecond = 800002;
+    Exchange exchange(2);
+    Consumer consumer;
+    exchange.order(1, Side::BUY, 10000, 5, &consumer, 1);
+    exchange.order(2, Side::BUY, 9900, 3, &consumer, 1);
+    exchange.order(3, Side::BUY, 9800, 2, &consumer, 1);
+    exchange.order(4, Side::SELL, 10100, 4, &consumer, 2);
+    exchange.order(5, Side::BUY, 10100, 1, &consumer, 2);  // trade plus a changed ask level
+    CHECK_EQ(consumer.books.at(kFirst).report, 3u);
+    CHECK_EQ(consumer.books.at(kSecond).report, 3u);
+    CHECK_EQ(consumer.books.at(kFirst).bids.size(), 3u);
+    CHECK_EQ(consumer.books.at(kSecond).asks.size(), 1u);
+    const auto end_events_before = consumer.end_events;
+
+    // One mass cancel is one batch that deletes 3 bid levels of the first instrument and the ask level of the second.
+    MassCancel mass; mass.session = 1;
+    exchange.submit(Command{mass}, &consumer);
+    CHECK_EQ(exchange.packets.size(), 2u);
+    CHECK_EQ(consumer.end_events, end_events_before + 1);
+    CHECK(consumer.books.at(kFirst).bids.empty());
+    CHECK(consumer.books.at(kSecond).asks.empty());
+    CHECK_EQ(consumer.books.at(kFirst).report, 6u);
+    CHECK_EQ(consumer.books.at(kSecond).report, 4u);
 }
 
 TEST_CASE(mdp_publisher, snapshot_boundary_recovers_a_missed_incremental) {
     Exchange exchange;
-    Book book;
+    Consumer consumer;
     exchange.order(1, Side::BUY, 10000, 4);  // lost by the consumer
     exchange.order(2, Side::SELL, 11000, 9);
     exchange.packets.clear();
@@ -226,15 +277,15 @@ TEST_CASE(mdp_publisher, snapshot_boundary_recovers_a_missed_incremental) {
     bool snapshot_seen = false;
     for (const auto& packet : exchange.packets) {
         if (packet.stream != md::MdpStream::Snapshot) continue;
-        book.packet(packet); snapshot_seen = true;
+        consumer.packet(packet); snapshot_seen = true;
         cme::MdpPacketView view; cme::MessageView message;
         REQUIRE_EQ(cme::decode_mdp_packet(packet.bytes, view), protocol::Status::ok);
         REQUIRE_EQ(cme::decode_mdp_message(view.messages, message), protocol::Status::ok);
         CHECK_EQ(cme::load_le<std::uint32_t>(message.body.data()), exchange.publisher.next_sequence() - 1);
     }
     REQUIRE(snapshot_seen);
-    book.compare(exchange.engine);
-    exchange.order(3, Side::BUY, 11000, 3, &book);
+    consumer.compare(exchange.engine, exchange.config.instruments);
+    exchange.order(3, Side::BUY, 11000, 3, &consumer);
 }
 
 TEST_CASE(mdp_publisher, unrepresentable_aggregate_stops_before_partial_event) {
