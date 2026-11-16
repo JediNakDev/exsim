@@ -11,7 +11,11 @@
 //                                 increase of command timestamps itself)
 //               c.realtime_ns()   ns since the Unix epoch (FIX SendingTime)
 //   MarketData  md.on_events(std::span<const Event>)   one call per batch
-//               md.flush()                            emit the open packet
+//               md.flush()                            send pending output: after
+//                                 each batch and each poll iteration.
+//                                 ITCH: the open MoldUDP64 packet. MDP:
+//                                 queued replay TCP bytes (its UDP packets
+//                                 are sent as they are built).
 //   Sessions    s.on_events(SessionId, const SessionEvents&, Core&)
 //                                 once per distinct session of a batch,
 //                                 first-appearance order, with that
