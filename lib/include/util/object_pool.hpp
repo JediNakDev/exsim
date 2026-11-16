@@ -52,7 +52,9 @@ public:
         }
 
         object->~T();
-        Node* node = reinterpret_cast<Node*>(object);
+        // The Node union whose storage holds `object` is still alive, so launder
+        // yields a usable pointer to it at the same address.
+        Node* node = std::launder(reinterpret_cast<Node*>(object));
         node->next = free_list_;
         free_list_ = node;
     }
