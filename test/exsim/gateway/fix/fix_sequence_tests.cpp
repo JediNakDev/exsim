@@ -321,3 +321,21 @@ TEST_CASE(gateway_fix_sequence, unexpected_logon_while_active_logs_out) {
     CHECK(client.connection().wants_disconnect());
     CHECK_EQ(exchange.user(2).session_day_state().next_outbound_seq(), 3u);  // no reset happened
 }
+
+TEST_CASE(gateway_fix_sequence, sequence_reset_validates_timestamps_before_sequence_change) {
+    for (const auto mode : {"Y", "N"}) {
+        for (const auto header : {"", "52=bad|", "52=20261103-09:30:00.000|43=Y|",
+                                  "52=20261103-09:30:00.000|43=Y|122=bad|",
+                                  "52=20261103-09:30:00.000|43=Y|122=20261103-09:31:00.000|"}) {
+            FixTestExchange exchange;
+            FixTestConnection client(exchange, "CLIENT2");
+            client.logon(30, false, {});
+            client.feed(fix_frame("35=4|49=CLIENT2|56=EXSIM|34=2|" + std::string(header) +
+                                  "123=" + mode + "|36=50|"));
+            const auto messages = client.drain();
+            REQUIRE(!messages.empty());
+            CHECK_EQ(messages[0].type(), std::string("3"));
+            CHECK_EQ(expected_inbound(exchange), 2u);
+        }
+    }
+}
