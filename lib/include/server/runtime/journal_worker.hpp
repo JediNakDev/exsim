@@ -27,6 +27,8 @@ public:
 
     ~JournalWorker() {
         state_->stopping.store(true, std::memory_order_release);
+        state_->wake.fetch_add(1, std::memory_order_release);
+        state_->wake.notify_one();
         // The writer drains, closes and signals completion; wait up to 100 ms.
         std::unique_lock lock(state_->completion_mutex);
         const bool writer_done =
@@ -49,7 +51,8 @@ public:
         last_operation_flush_ = false;
         return true;
     }
-    // Acceptance of a flush request, not a durability acknowledgement.
+    // Accepts a request to write to the page cache; drained() acknowledges it.
+    // Neither operation guarantees persistence across power loss.
     [[nodiscard]] bool flush() noexcept {
         if (!healthy()) return false;
         if (last_operation_flush_) return true;
@@ -64,6 +67,8 @@ public:
     void abort() noexcept {
         state_->failed.store(true, std::memory_order_release);
         state_->stopping.store(true, std::memory_order_release);
+        state_->wake.fetch_add(1, std::memory_order_release);
+        state_->wake.notify_one();
     }
 
 private:
@@ -75,6 +80,7 @@ private:
         State(const std::string& path, const journal::JournalSetup& setup) : writer(std::in_place, path, setup) {}
         std::optional<Writer> writer;  // closed by the persistence thread
         exsim::util::SPSCQueue<Entry, Capacity> queue;
+        std::atomic<std::uint64_t> wake{0};
         std::atomic<bool> stopping{false};
         std::atomic<bool> failed{false};
         std::mutex completion_mutex;
@@ -90,6 +96,8 @@ private:
             return false;
         }
         ++submitted_operations_;
+        state_->wake.fetch_add(1, std::memory_order_release);
+        state_->wake.notify_one();
         return true;
     }
 
@@ -97,6 +105,7 @@ private:
         std::uint64_t processed = 0;
         bool io_ok = true;
         for (;;) {
+            const auto wake = state.wake.load(std::memory_order_acquire);
             Entry entry{};
             if (state.queue.try_pop(entry)) {
                 ++processed;
@@ -111,7 +120,7 @@ private:
                 if (io_ok) state.flushed_operations.store(processed, std::memory_order_release);
                 break;
             } else {
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                state.wake.wait(wake, std::memory_order_acquire);
             }
         }
         if (!io_ok) state.failed.store(true, std::memory_order_release);
@@ -126,6 +135,7 @@ private:
     std::shared_ptr<State> state_;
     std::uint64_t submitted_operations_ = 0;  // reactor-owned
     bool last_operation_flush_ = false;
+    // jthread cannot interrupt file I/O; retain bounded shutdown and detach.
     std::thread worker_;
 };
 

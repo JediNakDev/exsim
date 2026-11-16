@@ -5,7 +5,7 @@
 // its header, record checksums, sequence numbers and footer before returning
 // the first command. Tests use it to replay journals.
 
-#include <server/journal/canonical.hpp>
+#include "test/exsim/support/journal_canonical.hpp"
 #include <server/journal/journal.hpp>
 
 #include <algorithm>
@@ -42,7 +42,7 @@ inline JournalReader::JournalReader(const std::string& path) {
     setup_.engine.max_instruments=get();setup_.engine.max_orders=get();
     (void)required_event_capacity(setup_.engine);
     auto count=get();
-    if(count>setup_.engine.max_instruments || count>(bytes_.size()-offset_)/64)
+    if(count>setup_.engine.max_instruments || count>(bytes_.size()-offset_)/108)
         throw std::runtime_error("instrument count");
     for(std::uint64_t n=0;n<count;++n) {
         InstrumentConfig i;
@@ -55,6 +55,10 @@ inline JournalReader::JournalReader(const std::string& path) {
         i.reference_price=std::bit_cast<Price>(get());auto phase=get();
         if(phase>4) throw std::runtime_error("phase");
         i.initial_phase=static_cast<Phase>(phase);
+        i.cme_security_id=std::bit_cast<std::int32_t>(static_cast<std::uint32_t>(get()));
+        for(auto& c:i.cme_symbol) c=static_cast<char>(bytes_[offset_++]);
+        i.cme_maturity_date=static_cast<std::uint32_t>(get());
+        i.cme_contract_size=static_cast<std::uint32_t>(get());
         if(!valid_instrument_config(i)) throw std::runtime_error("instrument config");
         for(const auto& prior:setup_.instruments) if(prior.symbol==i.symbol) throw std::runtime_error("duplicate symbol");
         setup_.instruments.push_back(i);
@@ -64,26 +68,38 @@ inline JournalReader::JournalReader(const std::string& path) {
     if(bytes_.size()-offset_<24) throw std::runtime_error("missing journal footer");
     auto tail=bytes_.size()-24;
     if(server::journal::load64(bytes_.data()+tail)!=0x455853494d454e44ull ||
-       server::journal::load64(bytes_.data()+tail+16)!=server::journal::hash_bytes({bytes_.data()+tail,16}) ||
-       server::journal::load64(bytes_.data()+tail+8)!=(tail-offset_)/280)
-        throw std::runtime_error("journal footer/count");
+       server::journal::load64(bytes_.data()+tail+16)!=server::journal::hash_bytes({bytes_.data()+tail,16}))
+        throw std::runtime_error("journal footer");
+    const auto count_records=server::journal::load64(bytes_.data()+tail+8);
     bytes_.resize(tail);
     // Validate the entire stream before exposing even its first command.
-    if((bytes_.size()-offset_)%280) throw std::runtime_error("truncated record");
-    for(auto p=offset_;p<bytes_.size();p+=280) {
-        if(server::journal::load64(bytes_.data()+p)!=(p-offset_)/280 ||
-           server::journal::load64(bytes_.data()+p+272)!=server::journal::hash_bytes({bytes_.data()+p,272}))
+    std::uint64_t sequence=0;
+    for(auto p=offset_;p<bytes_.size();++sequence) {
+        if(bytes_.size()-p<24) throw std::runtime_error("truncated record");
+        const auto size=server::journal::load64(bytes_.data()+p+8);
+        if(size<32 || size>104 || size%8 || size+24>bytes_.size()-p)
+            throw std::runtime_error("record length");
+        if(server::journal::load64(bytes_.data()+p)!=sequence ||
+           server::journal::load64(bytes_.data()+p+16+size)!=server::journal::hash_bytes({bytes_.data()+p,16+size}))
             throw std::runtime_error("record sequence/checksum");
-        auto c=server::journal::decode_command(std::span<const unsigned char,264>(bytes_.data()+p+8,264));
+        std::array<unsigned char,264> padded{};
+        std::copy_n(bytes_.data()+p+16,size,padded.data());
+        auto c=server::journal::decode_command(padded);
         auto canonical=server::journal::encode(c);
-        if(!std::equal(canonical.begin(),canonical.end(),bytes_.data()+p+8))
-            throw std::runtime_error("noncanonical record");
+        std::size_t expected=8;
+        server::journal::visit_fields(c,[&](const auto&){expected+=8;});
+        if(size!=expected || canonical!=padded) throw std::runtime_error("noncanonical record");
+        p+=size+24;
     }
+    if(sequence!=count_records) throw std::runtime_error("journal count");
 }
 inline bool JournalReader::next(Command& c) {
     if(offset_==bytes_.size()) return false;
-    c=server::journal::decode_command(std::span<const unsigned char,264>(bytes_.data()+offset_+8,264));
-    offset_+=280;++sequence_;return true;
+    const auto size=server::journal::load64(bytes_.data()+offset_+8);
+    std::array<unsigned char,264> padded{};
+    std::copy_n(bytes_.data()+offset_+16,size,padded.data());
+    c=server::journal::decode_command(padded);
+    offset_+=size+24;++sequence_;return true;
 }
 
 }  // namespace exsim::testsupport

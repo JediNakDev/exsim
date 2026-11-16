@@ -9,6 +9,7 @@
 #include <csignal>
 #include <cstdio>
 #include <iostream>
+#include <fstream>
 #include <stdexcept>
 #include <string>
 #include <sys/resource.h>
@@ -289,4 +290,83 @@ TEST_CASE(server_core_journal, disabled_journal_reports_disabled) {
     REQUIRE_EQ(h.core.submit(limit_order(1, 1, kAapl, Side::BUY, 1'000'000, 10)), SubmitResult::Applied);
     CHECK_EQ(h.core.counters().journal_records, 0u);
     CHECK(!h.core.shutdown_requested());
+}
+
+TEST_CASE(server_core_journal, header_preserves_full_instrument_identity_and_records_are_compact) {
+    const TempFile file{temp_journal_path("identity")};
+    auto config = parse_test_config();
+    auto& instrument = config.instruments.front();
+    instrument.cme_security_id = -123;
+    instrument.cme_symbol.fill('X');
+    instrument.cme_maturity_date = 20301220;
+    instrument.cme_contract_size = 50;
+    journal::JournalWriter writer(file.path, {config.engine.engine, config.instruments});
+    const auto header_size = file_size(file.path);
+    REQUIRE(writer.flush());
+    CHECK_EQ(file_size(file.path), header_size + 24);
+    const auto before = file_size(file.path);
+    REQUIRE(writer.append(Command{SetPhase{123, 1, Phase::Halted}}));
+    // Append remains buffered; a successful flush makes it readable by another fd.
+    CHECK_EQ(file_size(file.path), before);
+    REQUIRE(writer.flush());
+    CHECK_EQ(file_size(file.path), before + 56);
+    testsupport::JournalReader reader(file.path);
+    const auto& actual = reader.setup().instruments.front();
+    CHECK(actual.symbol == instrument.symbol);
+    CHECK_EQ(actual.tick_size, instrument.tick_size);
+    CHECK_EQ(actual.lot_size, instrument.lot_size);
+    CHECK_EQ(actual.max_order_qty, instrument.max_order_qty);
+    CHECK_EQ(actual.min_price, instrument.min_price);
+    CHECK_EQ(actual.max_price, instrument.max_price);
+    CHECK_EQ(actual.reference_price, instrument.reference_price);
+    CHECK(actual.initial_phase == instrument.initial_phase);
+    CHECK_EQ(actual.cme_security_id, instrument.cme_security_id);
+    CHECK(actual.cme_symbol == instrument.cme_symbol);
+    CHECK_EQ(actual.cme_maturity_date, instrument.cme_maturity_date);
+    CHECK_EQ(actual.cme_contract_size, instrument.cme_contract_size);
+    Command command;
+    REQUIRE(reader.next(command));
+    CHECK(command.type == CommandType::SetPhase);
+    CHECK_EQ(command.set_phase.ts, 123u);
+    CHECK(!reader.next(command));
+    REQUIRE(writer.append(limit_order(1, 9, 1, Side::BUY, 1'000'000, 10)));
+    REQUIRE(writer.flush());
+    CHECK_EQ(file_size(file.path), before + 56 + 128);
+    testsupport::JournalReader updated(file.path);
+    REQUIRE(updated.next(command));
+    REQUIRE(updated.next(command));
+    CHECK(command.type == CommandType::NewOrder);
+    CHECK(!updated.next(command));
+}
+
+TEST_CASE(server_core_journal, variable_records_roundtrip_all_command_types_and_detect_corruption) {
+    const TempFile file{temp_journal_path("records")};
+    const auto config = parse_test_config();
+    journal::JournalWriter writer(file.path, {config.engine.engine, config.instruments});
+    const auto header = file_size(file.path);
+    const Command commands[] = {Command{NewOrder{}}, Command{CancelOrder{}}, Command{ReplaceOrder{}},
+                                Command{MassCancel{}}, Command{SetPhase{}}};
+    const std::size_t sizes[] = {128, 72, 88, 72, 56};
+    auto expected = header + 24;
+    for (std::size_t index = 0; index < std::size(commands); ++index) {
+        REQUIRE(writer.append(commands[index]));
+        REQUIRE(writer.flush());
+        expected += sizes[index];
+        CHECK_EQ(file_size(file.path), expected);
+    }
+    testsupport::JournalReader reader(file.path);
+    Command actual;
+    for (const auto& command : commands) {
+        REQUIRE(reader.next(actual));
+        CHECK(journal::encode(actual) == journal::encode(command));
+    }
+    CHECK(!reader.next(actual));
+    // A length beyond the remaining file must fail before any command escapes.
+    {
+        std::fstream corrupt(file.path, std::ios::in | std::ios::out | std::ios::binary);
+        corrupt.seekp(static_cast<std::streamoff>(header + 8));
+        const char invalid_length[8] = {127, 0, 0, 0, 0, 0, 0, 0};
+        corrupt.write(invalid_length, 8);
+    }
+    CHECK(!journal_is_readable(file.path));
 }

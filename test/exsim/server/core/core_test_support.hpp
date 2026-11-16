@@ -8,7 +8,7 @@
 #include "server/config.hpp"
 #include "server/admin/core_admin.hpp"
 #include "server/exchange_core.hpp"
-#include "server/journal/canonical.hpp"
+#include "test/exsim/support/journal_canonical.hpp"
 #include "test/framework/test.hpp"
 
 #include <array>

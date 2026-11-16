@@ -85,3 +85,19 @@ TEST_CASE(journal_worker, stalled_writer_is_abandoned_after_the_shutdown_wait) {
     stall_flush = false;  // the detached writer finishes on the state it owns
     while (flush_requests.load() < 2) std::this_thread::yield();
 }
+
+TEST_CASE(journal_worker, wakes_for_each_request_after_becoming_idle) {
+    appended_commands = 0;
+    flush_requests = 0;
+    stall_flush = false;
+    TestJournalWorker worker("unused", server::journal::JournalSetup{});
+    for (int index = 0; index < 20; ++index) {
+        REQUIRE(worker.append(Command{}));
+        REQUIRE(worker.flush());
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+        while (!worker.drained() && std::chrono::steady_clock::now() < deadline) std::this_thread::yield();
+        REQUIRE(worker.drained());
+        CHECK_EQ(appended_commands.load(), static_cast<std::uint64_t>(index + 1));
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+}
