@@ -1,3 +1,4 @@
+#include "test/exsim/engine/live_orders.hpp"
 #ifndef EXSIM_TESTS_MD_TEST_SUPPORT_HPP
 #define EXSIM_TESTS_MD_TEST_SUPPORT_HPP
 
@@ -167,9 +168,9 @@ std::string book_difference(const EngineBook& engine, const md::ItchBookBuilder&
                            std::to_string(b.qty) + "/" + std::to_string(b.order_count) + " engine " +
                            std::to_string(e.price) + "x" + std::to_string(e.qty) + "/" +
                            std::to_string(e.order_count);
-                const std::size_t engine_fifo = engine.level_orders(id, side, e.price, engine_ids.data(), engine_ids.size());
+                const std::size_t engine_fifo = exsim::testsupport::level_orders(engine, id, side, e.price, engine_ids.data(), engine_ids.size());
                 const std::size_t builder_fifo =
-                    builder.level_orders(id, side, e.price, builder_ids.data(), builder_ids.size());
+                    exsim::testsupport::level_orders(builder, id, side, e.price, builder_ids.data(), builder_ids.size());
                 if (engine_fifo != builder_fifo ||
                     !std::equal(engine_ids.begin(), engine_ids.begin() + static_cast<std::ptrdiff_t>(engine_fifo),
                                 builder_ids.begin()))
@@ -202,7 +203,7 @@ std::uint64_t book_digest(const Book& book, std::size_t instrument_count, std::v
                 mix(static_cast<std::uint64_t>(levels[level].price));
                 mix(levels[level].qty);
                 mix(levels[level].order_count);
-                const std::size_t fifo = book.level_orders(id, side, levels[level].price, ids.data(), ids.size());
+                const std::size_t fifo = exsim::testsupport::level_orders(book, id, side, levels[level].price, ids.data(), ids.size());
                 for (std::size_t order = 0; order < fifo; ++order) mix(ids[order]);
             }
         }

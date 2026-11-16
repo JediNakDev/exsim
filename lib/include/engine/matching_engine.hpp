@@ -127,13 +127,6 @@ public:
     // first) into `out`; returns the number written.
     std::size_t depth(InstrumentId id, Side side, LevelInfo* out, std::size_t max_levels) const noexcept;
 
-    // Writes the OrderIds resting at (side, price) in FIFO order; returns
-    // the number written (at most `max_orders`). Writes none for an unknown
-    // instrument, an invalid side, a price off the instrument's grid or band,
-    // or an empty level.
-    std::size_t level_orders(InstrumentId id, Side side, Price price,
-                             OrderId* out, std::size_t max_orders) const noexcept;
-
     [[nodiscard]] std::optional<OrderInfo> find_order(SessionId session, ClOrdId cl_ord_id) const noexcept;
     [[nodiscard]] std::optional<OrderInfo> find_order(OrderId order_id) const noexcept;
     [[nodiscard]] std::size_t live_order_count() const noexcept;

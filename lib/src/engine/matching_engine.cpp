@@ -1202,22 +1202,6 @@ std::size_t MatchingEngine::depth(InstrumentId id, Side side, LevelInfo* out, st
     return written;
 }
 
-std::size_t MatchingEngine::level_orders(InstrumentId id, Side side, Price price, OrderId* out,
-                                         std::size_t max_orders) const noexcept {
-    const InstrumentBook* book = impl_->find_book(id);
-    std::int32_t tick = 0;
-    if (book == nullptr || out == nullptr || raw_value(side) > raw_value(Side::SELL) || !book->tick_of(price, tick)) {
-        return 0;
-    }
-    const Level* level = book->order_book->price_level(side, tick);
-    std::size_t written = 0;
-    for (const Order* resting = level == nullptr ? nullptr : level->head_order;
-         resting != nullptr && written < max_orders; resting = resting->next_order) {
-        out[written++] = resting->id;
-    }
-    return written;
-}
-
 std::optional<OrderInfo> MatchingEngine::find_order(SessionId session, ClOrdId cl_ord_id) const noexcept {
     const OrderIndex index = impl_->find_live_order(session, cl_ord_id);
     if (index == kNilOrder) {

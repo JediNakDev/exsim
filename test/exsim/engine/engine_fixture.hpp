@@ -1,3 +1,4 @@
+#include "test/exsim/engine/live_orders.hpp"
 #ifndef TESTS_EXSIM_ENGINE_ENGINE_FIXTURE_HPP
 #define TESTS_EXSIM_ENGINE_ENGINE_FIXTURE_HPP
 
@@ -103,7 +104,7 @@ inline NewOrder market_order(SessionId session, ClOrdId token, Side side, Quanti
 inline std::vector<OrderId> level_fifo(const MatchingEngine& engine, InstrumentId instrument, Side side,
                                        Price price) {
     std::vector<OrderId> ids(engine.live_order_count() + 1);
-    ids.resize(engine.level_orders(instrument, side, price, ids.data(), ids.size()));
+    ids.resize(exsim::testsupport::level_orders(engine, instrument, side, price, ids.data(), ids.size()));
     return ids;
 }
 

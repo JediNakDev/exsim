@@ -1,3 +1,4 @@
+#include "test/exsim/engine/live_orders.hpp"
 // Query API contracts, output preflight (InsufficientOutput leaves
 // engine and output unchanged) and order slot reuse at full capacity.
 
@@ -36,20 +37,20 @@ TEST_CASE(engine_queries, depth_and_level_orders_in_priority_order_with_truncati
     CHECK_EQ(fixture.engine.depth(0, Side::BUY, levels, 3), std::size_t{0});
 
     OrderId ids[2] = {0, 0};
-    CHECK_EQ(fixture.engine.level_orders(1, Side::BUY, 100, ids, 2), std::size_t{2});
+    CHECK_EQ(exsim::testsupport::level_orders(fixture.engine, 1, Side::BUY, 100, ids, 2), std::size_t{2});
     CHECK_EQ(ids[0], OrderId{2});
     CHECK_EQ(ids[1], OrderId{4});
-    CHECK_EQ(fixture.engine.level_orders(1, Side::BUY, 100, ids, 1), std::size_t{1});
-    CHECK_EQ(fixture.engine.level_orders(1, Side::SELL, 100, ids, 2), std::size_t{0});
-    CHECK_EQ(fixture.engine.level_orders(1, Side::BUY, 110, ids, 2), std::size_t{0});   // empty level
-    CHECK_EQ(fixture.engine.level_orders(1, Side::BUY, 95, ids, 2), std::size_t{0});    // off grid
-    CHECK_EQ(fixture.engine.level_orders(1, Side::BUY, 5000, ids, 2), std::size_t{0});  // out of band
-    CHECK_EQ(fixture.engine.level_orders(1, Side::BUY, -10, ids, 2), std::size_t{0});
-    CHECK_EQ(fixture.engine.level_orders(3, Side::BUY, 100, ids, 2), std::size_t{0});
-    CHECK_EQ(fixture.engine.level_orders(0, Side::BUY, 100, ids, 2), std::size_t{0});
-    CHECK_EQ(fixture.engine.level_orders(1, static_cast<Side>(2), 100, ids, 2), std::size_t{0});
-    CHECK_EQ(fixture.engine.level_orders(1, Side::BUY, std::numeric_limits<Price>::max(), ids, 2), std::size_t{0});
-    CHECK_EQ(fixture.engine.level_orders(1, Side::BUY, std::numeric_limits<Price>::min(), ids, 2), std::size_t{0});
+    CHECK_EQ(exsim::testsupport::level_orders(fixture.engine, 1, Side::BUY, 100, ids, 1), std::size_t{1});
+    CHECK_EQ(exsim::testsupport::level_orders(fixture.engine, 1, Side::SELL, 100, ids, 2), std::size_t{0});
+    CHECK_EQ(exsim::testsupport::level_orders(fixture.engine, 1, Side::BUY, 110, ids, 2), std::size_t{0});   // empty level
+    CHECK_EQ(exsim::testsupport::level_orders(fixture.engine, 1, Side::BUY, 95, ids, 2), std::size_t{0});    // off grid
+    CHECK_EQ(exsim::testsupport::level_orders(fixture.engine, 1, Side::BUY, 5000, ids, 2), std::size_t{0});  // out of band
+    CHECK_EQ(exsim::testsupport::level_orders(fixture.engine, 1, Side::BUY, -10, ids, 2), std::size_t{0});
+    CHECK_EQ(exsim::testsupport::level_orders(fixture.engine, 3, Side::BUY, 100, ids, 2), std::size_t{0});
+    CHECK_EQ(exsim::testsupport::level_orders(fixture.engine, 0, Side::BUY, 100, ids, 2), std::size_t{0});
+    CHECK_EQ(exsim::testsupport::level_orders(fixture.engine, 1, static_cast<Side>(2), 100, ids, 2), std::size_t{0});
+    CHECK_EQ(exsim::testsupport::level_orders(fixture.engine, 1, Side::BUY, std::numeric_limits<Price>::max(), ids, 2), std::size_t{0});
+    CHECK_EQ(exsim::testsupport::level_orders(fixture.engine, 1, Side::BUY, std::numeric_limits<Price>::min(), ids, 2), std::size_t{0});
 
     CHECK_EQ(*fixture.engine.best_bid(1), Price{100});
     CHECK_EQ(*fixture.engine.best_ask(1), Price{120});
@@ -129,8 +130,8 @@ TEST_CASE(engine_queries, depth_and_level_orders_allocate_nothing) {
     {
         testfw::AllocationScope scope;
         level_count = fixture.engine.depth(1, Side::SELL, levels, 4);
-        order_count = fixture.engine.level_orders(1, Side::SELL, 150, order_ids, 32);
-        order_count += fixture.engine.level_orders(1, Side::SELL, 140, order_ids, 32);
+        order_count = exsim::testsupport::level_orders(fixture.engine, 1, Side::SELL, 150, order_ids, 32);
+        order_count += exsim::testsupport::level_orders(fixture.engine, 1, Side::SELL, 140, order_ids, 32);
         allocations = scope.count();
     }
     CHECK_EQ(level_count, std::size_t{1});
