@@ -25,7 +25,8 @@ A small exchange simulator. A management API starts empty exchange processes; ex
 | `lib/include/server`, `lib/src/server` | Exchange core, runtime loop, config, journal |
 | `lib/include/api`, `lib/src/api` | Management service and HTTP server |
 | `lib/include/util` | Hash map, object pool, SPSC queue |
-| `src/` | The two binaries and tools |
+| `src/` | The two binaries |
+| `tools/` | ITCH replay and the CME schema generator |
 | `test/` | Unit and integration tests |
 | `benchmark/` | Benchmark harness and profiling scripts |
 
