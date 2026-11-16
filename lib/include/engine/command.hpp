@@ -58,6 +58,8 @@ struct SetPhase {
     Phase phase = Phase::Continuous;
 };
 
+// Explicit tags and unions keep queue records trivially copyable and avoid
+// a second variant discriminator. Wire and journal formats encode fields.
 struct Command {
     CommandType type = CommandType::NewOrder;
     union {
