@@ -1,6 +1,6 @@
 #include "api/api_json.hpp"
 #include "api/exchange_service.hpp"
-#include "server/server_runtime.hpp"
+#include "server/runtime/server_runtime.hpp"
 #include "test/exsim/gateway/fix/fix_test_support.hpp"
 #include "test/exsim/gateway/ilink/ilink_test_support.hpp"
 #include "test/framework/test.hpp"

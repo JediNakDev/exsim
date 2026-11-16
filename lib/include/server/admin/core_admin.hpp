@@ -16,7 +16,7 @@
 #include "server/admin/admin_text.hpp"
 #include "server/core/policies.hpp"
 #include "server/core/user_faults.hpp"
-#include "server/exchange_core.hpp"
+#include "server/core/exchange_core.hpp"
 #include "md/packet_faults.hpp"
 #include "common/price_text.hpp"
 

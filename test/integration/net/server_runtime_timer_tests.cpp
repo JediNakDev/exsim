@@ -2,7 +2,7 @@
 // idle_poll_timeout_ms, not on every iteration of a busy-polling loop.
 
 #include "common/clocks.hpp"
-#include "server/server_runtime.hpp"
+#include "server/runtime/server_runtime.hpp"
 #include "test/framework/test.hpp"
 
 #include <arpa/inet.h>

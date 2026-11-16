@@ -3,7 +3,7 @@
 #include "ipc/runtime_snapshot.hpp"
 #include "server/admin/core_admin.hpp"
 #include "server/config.hpp"
-#include "server/server_runtime.hpp"
+#include "server/runtime/server_runtime.hpp"
 #include <cerrno>
 #include <csignal>
 #include <cstring>

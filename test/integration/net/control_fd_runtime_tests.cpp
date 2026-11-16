@@ -1,7 +1,7 @@
 #include "api/json.hpp"
 #include "ipc/exchange_control.hpp"
 #include "ipc/runtime_snapshot.hpp"
-#include "server/server_runtime.hpp"
+#include "server/runtime/server_runtime.hpp"
 #include "test/framework/test.hpp"
 
 #include <cstdlib>

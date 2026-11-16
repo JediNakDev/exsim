@@ -1,5 +1,5 @@
-#ifndef EXSIM_SERVER_EXCHANGE_CORE_HPP
-#define EXSIM_SERVER_EXCHANGE_CORE_HPP
+#ifndef EXSIM_SERVER_CORE_EXCHANGE_CORE_HPP
+#define EXSIM_SERVER_CORE_EXCHANGE_CORE_HPP
 
 // Protocol-independent exchange core of the exsim server. It owns the
 // matching engine, the startup-sized EventBuffer, the configured users and

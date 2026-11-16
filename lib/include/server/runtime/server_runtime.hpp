@@ -1,5 +1,5 @@
-#ifndef EXSIM_SERVER_SERVER_RUNTIME_HPP
-#define EXSIM_SERVER_SERVER_RUNTIME_HPP
+#ifndef EXSIM_SERVER_RUNTIME_SERVER_RUNTIME_HPP
+#define EXSIM_SERVER_RUNTIME_SERVER_RUNTIME_HPP
 
 // The exsim server: one thread, one reactor loop.
 // BasicServerRuntime<Gateways...> owns the poller, the exchange core, the
@@ -34,7 +34,7 @@
 #include "net/poller.hpp"
 #include "net/tcp_server.hpp"
 #include "server/config.hpp"
-#include "server/exchange_core.hpp"
+#include "server/core/exchange_core.hpp"
 #include "server/runtime/gateway_sessions.hpp"
 #include "server/runtime/journal_worker.hpp"
 #include "server/runtime/market_data_runtime.hpp"
