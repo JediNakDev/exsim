@@ -218,6 +218,23 @@ HttpResponse ExchangeService::handle_exchange_request(Exchange& exchange, const 
         if (exchange.process.pid() > 0) return exchange_error(409, "exchange_running", "stop the exchange before updating or deleting it");
         return request.method == "DELETE" ? delete_exchange(exchange) : replace_exchange(exchange, request);
     }
+    if (action == "admin" && request.method == "POST") {
+        const auto json = parse_json(request.body);
+        const auto* command = json.find("command");
+        if (json.kind != JsonValue::Kind::Object || json.members.size() != 1 ||
+            !command || command->kind != JsonValue::Kind::String || command->text.empty() ||
+            command->text.size() > 4096 || command->text.find_first_of("\r\n") != std::string::npos ||
+            command->text.find('\0') != std::string::npos)
+            throw std::invalid_argument("expected only a command string: one line, 1 to 4096 bytes");
+        if (exchange.process.pid() <= 0) return exchange_error(409, "exchange_stopped", "start the exchange first");
+        std::string reply;
+        if (!exchange.process.admin(command->text, reply))
+            return exchange_error(503, "exchange_unavailable", exchange.process.error());
+        const bool ok = reply.ends_with("OK\n");
+        ApiJsonWriter result;
+        result.begin_object().key("reply").string(reply).end_object();
+        return response(ok ? 200 : 400, result.take());
+    }
     if (action == "stop" && request.method == "POST") {
         exchange.process.stop();
         return response(200, view(exchange));

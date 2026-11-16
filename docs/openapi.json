@@ -407,6 +407,84 @@
           }
         }
       }
+    },
+    "/v1/exchanges/{id}/admin": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "operationId": "adminExchange",
+        "description": "Execute one existing admin text command on the exchange reactor thread. Supports help, status, book, phase, fault md, fault user and shutdown. Requires a running exchange. An admin error returns 400 with a reply string ending in ERR <message>; input errors use Error. Commands are not persisted across restarts.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "command"
+                ],
+                "properties": {
+                  "command": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096,
+                    "description": "One command line, at most 4096 UTF-8 bytes, without CR, LF or NUL. Example: phase AAPL continuous",
+                    "pattern": "^[^\\r\\n\\u0000]+$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Command applied. Reply ends with OK followed by a newline.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminReply"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or admin command failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/AdminReply"
+                    },
+                    {
+                      "$ref": "#/components/schemas/Error"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 invalid input; 404 unknown route/ID; 405 unsupported collection/item method; 409 state/port/feed conflict; 500 internal error; 503 process unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -610,6 +688,18 @@
                 "type": "string"
               }
             }
+          }
+        }
+      },
+      "AdminReply": {
+        "type": "object",
+        "required": [
+          "reply"
+        ],
+        "properties": {
+          "reply": {
+            "type": "string",
+            "description": "Existing newline-terminated admin text reply, ending with OK or ERR <message>."
           }
         }
       }
