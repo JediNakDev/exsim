@@ -33,7 +33,6 @@ server::ServerConfig validate(std::string_view text) {
         throw std::invalid_argument("market data requires an IPv4 destination and nonzero port");
     if (!config.market_data.interface_address.empty() && !net::parse_ipv4_address(config.market_data.interface_address, address))
         throw std::invalid_argument("invalid market data interface IPv4 address");
-    if (!config.journal_path.empty()) throw std::invalid_argument("managed exchange journaling is not enabled yet");
     if (text.find("[REDACTED]") != std::string_view::npos) throw std::invalid_argument("supply full credentials when replacing configuration");
     return config;
 }

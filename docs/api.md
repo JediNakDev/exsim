@@ -108,7 +108,7 @@ Stop the API with Ctrl+C. It stops and reaps its managed exchanges. Children als
 
 The data directory is locked to one API process. Config files retain full credentials with owner-only permissions. Books and sessions are not saved.
 
-Standalone exchanges can use optional journal settings. Managed exchanges currently reject journaling, the legacy Exsim `fixp_sbe` protocol, and public admin listeners. CME iLink 3 has its own FIXP/SBE gateway.
+Exchanges can use optional `[journal]` settings: `path`, `on_failure`, and `flush_interval_ms`. Managed exchanges also accept them. The legacy Exsim `fixp_sbe` protocol and public admin listeners are rejected. CME iLink 3 has its own FIXP/SBE gateway.
 
 To run an exchange directly:
 
@@ -119,3 +119,5 @@ To run an exchange directly:
 Stop it with SIGINT or SIGTERM. It also starts with empty books.
 
 See [OpenAPI](openapi.json) for the HTTP contract and [architecture](architecture.md) for process boundaries.
+
+Journal flush writes to the OS page cache only, without `fsync` or `fdatasync`. The worker acknowledges completion through `drained()`; accepting a flush request is asynchronous. Journals are optional diagnostic logs, not automatic recovery. Use a distinct writable path per exchange; each start truncates that file.
