@@ -118,7 +118,17 @@ To run an exchange directly:
 
 Stop it with SIGINT or SIGTERM. It also starts with empty books.
 
-`[engine] max_orders` bounds the live orders across all instruments and defaults to 65536. Raise it for larger books; memory is allocated at startup.
+Defaults are sized for a small test day; memory is allocated at startup, so raise a limit only when a run needs it:
+
+| Setting | Default | Bounds |
+|---|---|---|
+| `[engine] max_orders` | 65536 | live orders across all instruments |
+| `[engine] max_tokens_per_session` | 65536 | client order IDs per user per day |
+| `[engine] store_messages_per_session` | 65536 | outbound messages kept per user for replay |
+| `[engine] store_bytes_per_session` | 8 MiB | their bytes, prefaulted at startup |
+| `[market_data] retransmit_buffer` | 65536 | ITCH messages kept for MoldUDP64 retransmission (64 B each) |
+
+A session that reaches a token or store limit gets rejects or is disconnected, depending on the protocol; ITCH messages older than the buffer cannot be retransmitted. With the defaults, `exsim_exchanged` with one instrument, one OUCH and one FIX user has about 60 MiB resident after startup. Each further user adds about 13 MiB, an iLink user about 31 MiB (it keeps two stores).
 
 See [OpenAPI](openapi.json) for the HTTP contract and [architecture](architecture.md) for process boundaries.
 

@@ -163,6 +163,19 @@ TEST_CASE(server_config, minimal_uses_defaults) {
     CHECK(cfg.users[0].username == "ALICE");
 }
 
+// Large capacity is an explicit config choice: the defaults stay small
+// (documented in docs/api.md).
+TEST_CASE(server_config, defaults_are_small) {
+    ServerConfig cfg;
+    std::string err;
+    REQUIRE(parse_config(kMinimal, cfg, err));
+    CHECK_EQ(cfg.engine.engine.max_orders, std::size_t{1} << 16);
+    CHECK_EQ(cfg.engine.max_tokens_per_session, 1u << 16);
+    CHECK_EQ(cfg.engine.store_messages_per_session, std::size_t{1} << 16);
+    CHECK_EQ(cfg.engine.store_bytes_per_session, std::size_t{8} << 20);
+    CHECK_EQ(cfg.market_data.retransmit_buffer, 1u << 16);
+}
+
 TEST_CASE(server_config, example_file_parses) {
     ServerConfig cfg;
     std::string error;

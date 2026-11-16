@@ -96,9 +96,9 @@ struct OuchSessionSettings {
 };
 
 struct OuchUserStateLimits {
-    std::uint32_t max_tokens = 1u << 20;              // day-used tokens (O + replacement tokens)
-    std::size_t store_messages = 1u << 20;            // sequenced messages kept for the day
-    std::size_t store_bytes = std::size_t{64} << 20;  // their framed bytes
+    std::uint32_t max_tokens = server::EngineSection{}.max_tokens_per_session;  // day-used tokens (O + replacements)
+    std::size_t store_messages = server::EngineSection{}.store_messages_per_session;  // sequenced messages kept
+    std::size_t store_bytes = server::EngineSection{}.store_bytes_per_session;        // their framed bytes
     // Once the store has this many or fewer free messages (or bytes for that
     // many maximal messages), a new O/U/M request stores nothing (not even a
     // J): the connection is closed instead (StoreReserveReached), keeping

@@ -107,7 +107,7 @@ struct MarketDataSection {
     std::uint16_t retransmit_port = 0;  // MoldUDP64 request server
     std::uint32_t max_payload = 1400;   // bytes per MoldUDP64 packet incl. header; 72..65507 (md::kMinimumMaxPayload)
     std::string session = "EXSIM";      // MoldUDP64 session (<= 10 chars)
-    std::uint32_t retransmit_buffer = 1u << 20;  // messages kept for retransmission
+    std::uint32_t retransmit_buffer = 1u << 16;  // messages kept for retransmission (64 B each)
     std::uint32_t noii_interval_ms = 1000;
     std::uint16_t channel_id = 1;
     std::uint8_t market_segment_id = 1;
@@ -122,11 +122,14 @@ struct MarketDataSection {
     std::string replay_password;
 };
 
+// Per-session limits, allocated (and the stores prefaulted) for every
+// configured user at startup: about 13 MiB per user at these defaults, 31 MiB
+// for an iLink user (two stores). Raise them for long or busy trading days.
 struct EngineSection {
     EngineConfig engine{};
-    std::uint32_t max_tokens_per_session = 1u << 20;
-    std::size_t store_messages_per_session = 1u << 20;
-    std::size_t store_bytes_per_session = std::size_t{64} << 20;
+    std::uint32_t max_tokens_per_session = 1u << 16;          // client order IDs per day
+    std::size_t store_messages_per_session = 1u << 16;        // outbound messages kept for replay
+    std::size_t store_bytes_per_session = std::size_t{8} << 20;  // their bytes
 };
 
 // What the exchange core does when a journal write fails (exchange core).

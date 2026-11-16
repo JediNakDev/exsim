@@ -66,8 +66,6 @@ struct ServerRuntimeOptions {
     std::optional<Timestamp> day_time_at_start;
     std::uint64_t end_of_day_drain_timeout_ns = 3'000'000'000;  // wait for logouts and flushes
     runtime::MarketDataRuntimeSettings market_data{};
-    std::size_t connection_receive_buffer_bytes = 64 * 1024;
-    std::size_t connection_send_buffer_bytes = 4 * 1024 * 1024;
     std::FILE* log = stderr;  // startup listener reporting only; nullptr = silent
 };
 
@@ -214,8 +212,9 @@ private:
         tcp.listen_endpoint = net::Ipv4Endpoint{parse_address(config_.exchange.bind_address, "exchange.bind_address"),
                                                 Gateway::configured_port(config_)};
         tcp.max_connections = config_.exchange.max_connections;
-        tcp.receive_buffer_capacity = options_.connection_receive_buffer_bytes;
-        tcp.send_buffer_capacity = options_.connection_send_buffer_bytes;
+        // Holds the largest single write: an iLink retransmission of 2500
+        // reports of up to about 500 bytes. Untouched pages are not resident.
+        tcp.send_buffer_capacity = 4 * 1024 * 1024;
         if constexpr (requires { Gateway::enabled(config_); }) {
             if (!Gateway::enabled(config_)) tcp.max_connections = 0;
         }
