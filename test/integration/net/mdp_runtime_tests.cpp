@@ -3,6 +3,7 @@
 #include "server/runtime/server_runtime.hpp"
 #include "test/exsim/gateway/fix/fix_test_support.hpp"
 #include "test/exsim/gateway/ilink/ilink_test_support.hpp"
+#include "test/exsim/protocol/mdp3_decode.hpp"
 #include "test/framework/test.hpp"
 
 #include <arpa/inet.h>
