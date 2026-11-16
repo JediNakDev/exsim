@@ -12,11 +12,19 @@
 //                   dispatch to sessions and market data),
 //                   market data recovery (MoldUDP64 requests or MDP replay),
 //                   the owner's watched readable fd (a control socket)
-//     core.timer(now): end of day, market data timers, journal flush
-//     endpoints: delayed inbound bytes, gateway timers, requested closes
+//     timer pass, at most once per idle_poll_timeout_ms:
+//       core.timer(now): end of day, market data timers, journal flush
+//       endpoints: delayed inbound bytes, gateway timers, requested closes
 //     core disconnect requests (`fault user X disconnect`)
 //     shutdown progress (end-of-day messages, drain, finish)
-//     flush every connection with pending output
+//     flush every connection with pending output (a queue: O(1) when none)
+//
+// Between timer passes an iteration does no timer work, which matters with
+// busy_poll: the loop spins millions of times a second, while gateway
+// deadlines (heartbeats, idle and logout timeouts) are seconds apart. A pass
+// still walks every open connection; a per-connection deadline would need
+// each gateway to report its next deadline, which is not worth it at
+// max_connections slots per gateway and one pass per millisecond.
 //
 // Everything is allocated by the constructor and start(); poll_once does not
 // allocate except on operator paths (admin commands, logging a connection
@@ -51,7 +59,9 @@ namespace exsim::server {
 
 struct ServerRuntimeOptions {
     bool busy_poll = false;          // poller.wait(0): lowest latency, one core at 100%
-    int idle_poll_timeout_ms = 1;    // otherwise: timer resolution (delays and heartbeats)
+    // Timer resolution (delays and heartbeats): the longest idle wait, and
+    // the interval between timer passes in both modes. 0 = every iteration.
+    int idle_poll_timeout_ms = 1;
     // ns since local midnight at startup; nullopt reads the wall clock.
     std::optional<Timestamp> day_time_at_start;
     std::uint64_t end_of_day_drain_timeout_ns = 3'000'000'000;  // wait for logouts and flushes
@@ -114,8 +124,11 @@ public:
         if (poller_.wait(timeout_ms) > 0) {
             for (const net::PollEvent& event : poller_.events()) route_event(event);
         }
-        core_.timer(clock_.day_ns());
-        (endpoint<Gateways>().run_timers(), ...);
+        if (const std::uint64_t now = net::monotonic_ns(); now >= next_timer_pass_ns_) {
+            next_timer_pass_ns_ = now + std::uint64_t(options_.idle_poll_timeout_ms) * 1'000'000;
+            core_.timer(clock_.day_ns());
+            (endpoint<Gateways>().run_timers(), ...);
+        }
         if (core_.has_disconnect_requests()) close_requested_sessions();
         if (!core_.shutdown_requested() &&
             (external_shutdown_requested_.load(std::memory_order_relaxed) || market_data_.stopped())) {
@@ -323,6 +336,7 @@ private:
     bool journal_drain_started_ = false;
     bool finished_ = false;
     std::uint64_t drain_deadline_ns_ = 0;
+    std::uint64_t next_timer_pass_ns_ = 0;
 };
 
 // The active exchange server: OUCH 4.2 over SoupBinTCP, FIX 4.4 and iLink 3.
