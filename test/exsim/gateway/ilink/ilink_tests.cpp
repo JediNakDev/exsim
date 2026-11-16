@@ -270,3 +270,45 @@ TEST_CASE(ilink_orders, steady_state_order_path_does_not_allocate) {
       consumed = alice.connection.on_data(bytes, exchange.core); allocations = scope.count(); }
     CHECK_EQ(consumed, bytes.size()); CHECK_EQ(allocations, 0u);
 }
+
+TEST_CASE(ilink_session, transport_overflow_recovers_by_reconnect_and_replay) {
+    Exchange exchange; Client alice(exchange, 1); alice.login();
+    alice.memory.bytes.resize(1);
+    alice.send(order(alice.user_config(), 1, 1, "BUY"));
+    REQUIRE(alice.connection.wants_close());
+    CHECK_EQ(exchange.user(1).store.last_seq(), 1u);
+    alice.connection.on_closed(exchange.core);
+    Client resumed(exchange, 1, 101); resumed.login(false, 2);
+    using R = schema::RetransmitRequest508;
+    wire::Root<R> request; request.set(R::UUID, resumed.uuid); request.set(R::FromSeqNo, 1); request.set(R::MsgCount, 1);
+    request.set(R::RequestTimestamp, exchange.clock.realtime_ns()); resumed.send(request);
+    const auto replayed = frames(resumed.memory); REQUIRE_EQ(replayed.size(), 2u);
+    CHECK_EQ(replayed[0].id(), 509); CHECK_EQ(replayed[1].id(), 522);
+    resumed.memory.clear();
+    resumed.send(order(resumed.user_config(), 2, 2, "NEXT"));
+    REQUIRE_EQ(frames(resumed.memory).size(), 1u);
+    CHECK_EQ(frames(resumed.memory)[0].id(), 522);
+}
+
+TEST_CASE(ilink_orders, replace_at_or_below_cum_identifies_replacement) {
+    for (const auto quantity : {3u, 4u}) {
+        Exchange exchange; Client alice(exchange, 1), bob(exchange, 2); alice.login(); bob.login();
+        alice.send(order(alice.user_config(), 1, 1, "BUY"));
+        const auto accepted = frames(alice.memory);
+        const auto id = wire::get(accepted[0].view(), schema::ExecutionReportNew522::OrderID);
+        bob.send(order(bob.user_config(), 1, 1, "SELL", 2, 4));
+        alice.memory.clear();
+        using R = schema::OrderCancelReplaceRequest515;
+        wire::Root<R> replace; request_fields(replace, alice.user_config(), 2, 42);
+        replace.set(R::OrderID, id); replace.set(R::ClOrdID, "REPLACED"); replace.set(R::SecurityID, 800001);
+        replace.set(R::Side, 1); replace.set(R::Price, 150000000000ll); replace.set(R::OrderQty, quantity);
+        replace.set(R::OrdType, '2'); replace.set(R::TimeInForce, 0); replace.set(R::OFMOverride, 0);
+        alice.send(replace);
+        const auto reports = frames(alice.memory); REQUIRE_EQ(reports.size(), 1u); REQUIRE_EQ(reports[0].id(), 534);
+        using C = schema::ExecutionReportCancel534;
+        CHECK_EQ(wire::get(reports[0].view(), C::ClOrdID), std::string_view("REPLACED"));
+        CHECK_EQ(wire::get(reports[0].view(), C::OrderRequestID), 42u);
+        CHECK_EQ(wire::get(reports[0].view(), C::CumQty), 4u);
+        CHECK_EQ(exchange.core.engine().live_order_count(), 0u);
+    }
+}

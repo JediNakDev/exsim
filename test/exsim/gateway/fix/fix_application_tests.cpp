@@ -463,3 +463,23 @@ TEST_CASE(gateway_fix_application, drop_out_stores_without_transmitting) {
     CHECK_EQ(messages[0].get(11), std::string("B1"));
     CHECK_EQ(messages[0].get(43), std::string("Y"));
 }
+
+TEST_CASE(gateway_fix_application, cancel_replace_reject_symbol_and_side_mismatch) {
+    for (const auto type : {"F", "G"}) {
+        for (const auto identity : {"55=MSFT|54=1|", "55=AAPL|54=2|"}) {
+            TwoClients clients;
+            clients.buyer.send("D", new_order_fields("B1", "1", 50, "149"));
+            clients.buyer.drain();
+            clients.buyer.send(type, "41=B1|11=REQUEST|" + std::string(identity) +
+                                      "38=40|40=2|44=149|60=20261103-09:30:00.000|");
+            const auto messages = clients.buyer.drain();
+            REQUIRE_EQ(messages.size(), 1u);
+            CHECK_EQ(messages[0].type(), std::string("9"));
+            CHECK_EQ(messages[0].get(102), std::string("1"));
+            CHECK_EQ(messages[0].get(434), std::string(type == std::string_view("F") ? "1" : "2"));
+            CHECK_EQ(engine_command_tokens(clients.exchange, 1), (Tokens{"D:B1"}));
+            clients.buyer.send("F", cancel_fields("B1", "VALID"));
+            CHECK_EQ(clients.buyer.drain()[0].get(150), std::string("4"));
+        }
+    }
+}

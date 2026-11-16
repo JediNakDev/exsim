@@ -829,6 +829,7 @@ public:
         // During a drop_out cut the client is missing messages: no End of
         // Session (it would say "do not reconnect"), just the cut.
         if (state_ == OuchConnectionState::LoggedIn && outbound_cut_by_drop_out_) close(OuchCloseReason::FaultDropOut);
+        if (state_ == OuchConnectionState::LoggedIn && replaying_) close(OuchCloseReason::SendBufferFull);
         if (state_ == OuchConnectionState::LoggedIn) {
             write_unsequenced(protocol::soupbintcp::EndOfSession{}, context.now());
         }
