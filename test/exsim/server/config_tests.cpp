@@ -96,6 +96,21 @@ TEST_CASE(server_config_ilink, current_schema_fixture_and_missing_credentials) {
     CHECK(error.find("iLink user requires") != std::string::npos);
 }
 
+// Finding 106: no gateway or report reads an iLink account, so the key is gone.
+TEST_CASE(server_config_ilink, account_is_not_a_config_key) {
+    ServerConfig config;
+    std::string error;
+    std::string text(kMinimal);
+    const auto instrument = text.find("[instrument AAPL]\n") + std::string_view("[instrument AAPL]\n").size();
+    text.insert(instrument, "cme_security_id=800001\n");
+    text += "\n[user ILINK]\nprotocol=ilink3\nsession_id=2\nilink_access_key=ACCESS-1\nilink_secret_key=" +
+            std::string(43, 'A') + "=\nilink_session=AAA\nilink_firm=EXSIM\nilink_party_id=1001\n";
+    REQUIRE(parse_config(text, config, error));
+    text += "ilink_account=SIM-ACCOUNT\n";
+    CHECK(!parse_config(text, config, error));
+    CHECK(error.find("ilink_account") != std::string::npos);
+}
+
 TEST_CASE(server_config, prices) {
     Price p = 0;
     CHECK(parse_price("150.25", p));

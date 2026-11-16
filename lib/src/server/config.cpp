@@ -276,7 +276,6 @@ struct Parser {
         if (k == "ilink_secret_key") { u.ilink_secret_key = std::string(v); return true; }
         if (k == "ilink_session") { u.ilink_session = std::string(v); return true; }
         if (k == "ilink_firm") { u.ilink_firm = std::string(v); return true; }
-        if (k == "ilink_account") { u.ilink_account = std::string(v); return true; }
         if (k == "ilink_party_id") return (parse_uint(v, u.ilink_party_id) && u.ilink_party_id > 0 && u.ilink_party_id < UINT64_MAX) || bad_value(k, v);
         return unknown_key(k);
     }
@@ -396,9 +395,8 @@ struct Parser {
                 if (u.ilink_access_key.empty() || u.ilink_access_key.size() > 20 || !printable_ascii(u.ilink_access_key) ||
                     !protocol::ilink3::decode_secret(u.ilink_secret_key, key) || u.ilink_session.size() != 3 ||
                     !printable_ascii(u.ilink_session) || u.ilink_firm.empty() || u.ilink_firm.size() > 5 || !printable_ascii(u.ilink_firm) ||
-                    !u.ilink_party_id || u.ilink_party_id == UINT64_MAX || u.ilink_account.empty() ||
-                    u.ilink_account.size() > 20 || !printable_ascii(u.ilink_account))
-                    return fail("iLink user requires access key, base64url secret, three-character session, firm, party ID and account");
+                    !u.ilink_party_id || u.ilink_party_id == UINT64_MAX)
+                    return fail("iLink user requires access key, base64url secret, three-character session, firm and party ID");
                 if (!ilink_sessions.insert(u.ilink_session + "/" + u.ilink_firm).second)
                     return fail("duplicate iLink session/firm identity");
             }

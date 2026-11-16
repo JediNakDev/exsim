@@ -33,7 +33,7 @@
 //   [user <USERNAME>]          password, protocol, session_id, owner, stp,
 //                              cancel_on_disconnect, ilink_access_key,
 //                              ilink_secret_key, ilink_session, ilink_firm,
-//                              ilink_party_id, ilink_account
+//                              ilink_party_id
 // Keys of the other market data protocol are rejected because they would be
 // ignored. Prices are decimal dollars ("150.25"), stored with 4 implied
 // decimals. Trading-day times are "HH:MM[:SS[.fraction]]" local time; the end
@@ -77,7 +77,6 @@ struct UserConfig {
     std::string ilink_session;
     std::string ilink_firm;
     std::uint64_t ilink_party_id = 0;
-    std::string ilink_account;
 };
 
 struct ExchangeSection {
