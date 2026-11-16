@@ -627,22 +627,23 @@ void MatchingEngine::Impl::on_new_order(const NewOrder& cmd, EventBuffer& out) {
         return reject_new_order(cmd, RejectReason::CapacityExceeded, out);
     }
 
-    IncomingOrder order;
-    order.order_id = next_order_id++;
-    order.cl_ord_id = cmd.cl_ord_id;
-    order.price = cmd.price;
-    order.limit_tick = limit_tick;
-    order.qty = cmd.qty;
-    order.leaves_qty = cmd.qty;
-    order.cum_qty = 0;
-    order.owner = cmd.owner;
-    order.session = cmd.session;
-    order.instrument = cmd.instrument;
-    order.side = cmd.side;
-    order.type = cmd.type;
-    order.tif = cmd.tif;
-    order.stp = cmd.stp;
-    order.post_only = cmd.post_only;
+    IncomingOrder order{
+        .order_id = next_order_id++,
+        .cl_ord_id = cmd.cl_ord_id,
+        .price = cmd.price,
+        .limit_tick = limit_tick,
+        .qty = cmd.qty,
+        .leaves_qty = cmd.qty,
+        .cum_qty = 0,
+        .owner = cmd.owner,
+        .session = cmd.session,
+        .instrument = cmd.instrument,
+        .side = cmd.side,
+        .type = cmd.type,
+        .tif = cmd.tif,
+        .stp = cmd.stp,
+        .post_only = cmd.post_only,
+    };
     emit_accepted(order, cmd.ts, out);
 
     if (book.phase != Phase::Continuous) {
@@ -792,22 +793,23 @@ void MatchingEngine::Impl::on_replace(const ReplaceOrder& cmd, EventBuffer& out)
     }
 
     // Priority lost: leave the book, take a new OrderId, re-enter as an aggressor.
-    IncomingOrder order;
-    order.order_id = next_order_id++;
-    order.cl_ord_id = new_cl_ord_id;
-    order.price = cmd.price;
-    order.limit_tick = new_tick;
-    order.qty = cmd.qty;
-    order.leaves_qty = new_leaves_qty;
-    order.cum_qty = cum_qty;
-    order.owner = order_hot.owner;
-    order.session = session;
-    order.instrument = instrument;
-    order.side = side;
-    order.type = OrdType::Limit;
-    order.tif = order_cold.tif;
-    order.stp = order_cold.stp;
-    order.post_only = order_cold.post_only;
+    IncomingOrder order{
+        .order_id = next_order_id++,
+        .cl_ord_id = new_cl_ord_id,
+        .price = cmd.price,
+        .limit_tick = new_tick,
+        .qty = cmd.qty,
+        .leaves_qty = new_leaves_qty,
+        .cum_qty = cum_qty,
+        .owner = order_hot.owner,
+        .session = session,
+        .instrument = instrument,
+        .side = side,
+        .type = OrdType::Limit,
+        .tif = order_cold.tif,
+        .stp = order_cold.stp,
+        .post_only = order_cold.post_only,
+    };
     remove_resting(book, index);
 
     replaced.new_order_id = order.order_id;
@@ -864,28 +866,12 @@ UncrossPlan MatchingEngine::Impl::plan_uncross(const InstrumentBook& book) const
         const Level* level = order_book.price_level(side, static_cast<exsim::book::Price>(tick));
         return level == nullptr ? 0 : level->total_volume;  // empty levels hold 0
     };
-    const std::size_t first_word = low_tick >> 6;
-    const std::size_t last_word = high_tick >> 6;
-    auto range_mask = [&](std::size_t word_index) {
-        std::uint64_t mask = ~std::uint64_t{0};
-        if (word_index == first_word) {
-            mask &= ~std::uint64_t{0} << (low_tick & 63);
-        }
-        if (word_index == last_word) {
-            mask &= ~std::uint64_t{0} >> (63 - (high_tick & 63));
-        }
-        return mask;
-    };
-
-    // B(low_tick): every bid at or above the best ask (none rest above the best bid).
+    // Walk occupied prices through the book's bitmap hierarchy.
     std::uint64_t buy_qty_at_or_above = 0;
-    for (std::size_t word_index = first_word; word_index <= last_word; ++word_index) {
-        std::uint64_t bits = order_book.active_word(Side::BUY, word_index) & range_mask(word_index);
-        while (bits != 0) {
-            const std::size_t tick = (word_index << 6) | static_cast<std::size_t>(__builtin_ctzll(bits));
-            buy_qty_at_or_above += volume_at(Side::BUY, tick);
-            bits &= bits - 1;
-        }
+    for (auto tick = order_book.next_price(Side::BUY, low_tick, true);
+         tick && *tick <= high_tick;
+         tick = order_book.next_price(Side::BUY, *tick + 1, true)) {
+        buy_qty_at_or_above += volume_at(Side::BUY, *tick);
     }
 
     const Price reference = book.has_last_trade_price ? book.last_trade_price : book.config.reference_price;
@@ -894,38 +880,37 @@ UncrossPlan MatchingEngine::Impl::plan_uncross(const InstrumentBook& book) const
     std::uint64_t best_imbalance = 0;
     std::uint64_t best_distance = 0;
     bool have_candidate = false;
-    for (std::size_t word_index = first_word; word_index <= last_word; ++word_index) {
-        std::uint64_t bits =
-            (order_book.active_word(Side::BUY, word_index) | order_book.active_word(Side::SELL, word_index)) &
-            range_mask(word_index);
-        while (bits != 0) {
-            const std::size_t tick = (word_index << 6) | static_cast<std::size_t>(__builtin_ctzll(bits));
-            bits &= bits - 1;
-            sell_qty_at_or_below += volume_at(Side::SELL, tick);
-            const std::uint64_t volume = std::min(buy_qty_at_or_above, sell_qty_at_or_below);
-            const std::uint64_t imbalance = buy_qty_at_or_above >= sell_qty_at_or_below
-                                                ? buy_qty_at_or_above - sell_qty_at_or_below
-                                                : sell_qty_at_or_below - buy_qty_at_or_above;
-            const Price price = book.price_of(static_cast<std::int32_t>(tick));
-            const std::uint64_t distance = price >= reference
-                                               ? static_cast<std::uint64_t>(price) - static_cast<std::uint64_t>(reference)
-                                               : static_cast<std::uint64_t>(reference) - static_cast<std::uint64_t>(price);
-            // Ascending scan: strict comparisons keep the lower price on a full tie.
-            bool better = !have_candidate || volume > best_volume;
-            if (!better && volume == best_volume) {
-                better = imbalance < best_imbalance || (imbalance == best_imbalance && distance < best_distance);
-            }
-            if (better) {
-                have_candidate = true;
-                best_volume = volume;
-                best_imbalance = imbalance;
-                best_distance = distance;
-                plan.tick = static_cast<std::int32_t>(tick);
-                plan.buy_qty = buy_qty_at_or_above;
-                plan.sell_qty = sell_qty_at_or_below;
-            }
-            buy_qty_at_or_above -= volume_at(Side::BUY, tick);
+    auto bid = order_book.next_price(Side::BUY, low_tick, true);
+    auto ask = order_book.next_price(Side::SELL, low_tick, true);
+    while (bid || ask) {
+        const auto tick = bid && ask ? std::min(*bid, *ask) : (bid ? *bid : *ask);
+        if (tick > high_tick) break;
+        sell_qty_at_or_below += volume_at(Side::SELL, tick);
+        const std::uint64_t volume = std::min(buy_qty_at_or_above, sell_qty_at_or_below);
+        const std::uint64_t imbalance = buy_qty_at_or_above >= sell_qty_at_or_below
+                                            ? buy_qty_at_or_above - sell_qty_at_or_below
+                                            : sell_qty_at_or_below - buy_qty_at_or_above;
+        const Price price = book.price_of(static_cast<std::int32_t>(tick));
+        const std::uint64_t distance = price >= reference
+                                           ? static_cast<std::uint64_t>(price) - static_cast<std::uint64_t>(reference)
+                                           : static_cast<std::uint64_t>(reference) - static_cast<std::uint64_t>(price);
+        // Ascending scan: strict comparisons keep the lower price on a full tie.
+        bool better = !have_candidate || volume > best_volume;
+        if (!better && volume == best_volume) {
+            better = imbalance < best_imbalance || (imbalance == best_imbalance && distance < best_distance);
         }
+        if (better) {
+            have_candidate = true;
+            best_volume = volume;
+            best_imbalance = imbalance;
+            best_distance = distance;
+            plan.tick = static_cast<std::int32_t>(tick);
+            plan.buy_qty = buy_qty_at_or_above;
+            plan.sell_qty = sell_qty_at_or_below;
+        }
+        buy_qty_at_or_above -= volume_at(Side::BUY, tick);
+        if (bid && *bid == tick) bid = order_book.next_price(Side::BUY, tick + 1, true);
+        if (ask && *ask == tick) ask = order_book.next_price(Side::SELL, tick + 1, true);
     }
     plan.crossed = have_candidate;
     plan.matched_qty = best_volume;
