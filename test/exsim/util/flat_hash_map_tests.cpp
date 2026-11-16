@@ -34,7 +34,7 @@ TEST_CASE(flat_hash_map, full_map_rejects_and_keeps_its_capacity) {
 TEST_CASE(flat_hash_map, reserve_preserves_entries) {
     FlatHashMap<std::uint64_t> map(4);
     for (std::uint64_t i = 1; i <= 10'000; ++i) {
-        if (map.size() == map.max_entries()) map.reserve(map.max_entries() + 1);
+        if (map.size() == map.capacity() / 2) map.reserve(map.size() + 1);
         REQUIRE(map.insert(i * 7919, i));
     }
     for (std::uint64_t i = 1; i <= 10'000; ++i) {
