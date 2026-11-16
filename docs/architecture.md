@@ -65,6 +65,26 @@ Standalone and managed exchanges can write optional journals. Journals do not pr
 
 Books, session state, and feed history disappear when an exchange exits. Recovery covers retained in-memory history. MDP subscribers can join using periodic snapshots and instrument definitions; ITCH subscribers still need earlier feed history.
 
+## Design trade-offs
+
+Simplicity outranks completeness here. The exchange is empty and trading engines connect directly, so each choice below covers what this project needs, not every deployment.
+
+### Why not a library
+
+Each of these is control-plane or test code with a small, fixed need. A dependency would cost more to build and review than the code it replaces. Switch if the need grows past that.
+
+- JSON ([json.hpp](../lib/include/api/json.hpp)): the API reads and writes a few fixed shapes. The parser is strict and bounded, and the same code carries the private manager socket. Switch to a library if the API takes arbitrary client documents or needs schema validation.
+- HTTP ([http_message.hpp](../lib/include/api/http_message.hpp)): HTTP/1.1 for a few local clients. The parser rejects what it does not understand and enforces size limits. Switch if the API needs TLS, HTTP/2 or remote access.
+- INI config ([config.hpp](../lib/include/server/config.hpp)): flat sections of `key = value`, parsed once at startup. Switch if configs need nesting or includes.
+- Test framework ([test.hpp](../test/framework/test.hpp)): self-registering cases with substring filters, no download step, so `make test` works on a bare macOS or Ubuntu toolchain. Switch if tests need fixtures, parameterization or mocks.
+
+### Networking
+
+- Level-triggered poller ([poller.hpp](../lib/include/net/poller.hpp)): epoll on Linux and kqueue on macOS sit behind one interface. Level-triggered readiness repeats until the socket is drained, so the loop can do one `recv` per event and still lose nothing. This avoids the drain-until-`EAGAIN` bookkeeping that edge-triggered needs, where a missed drain stalls a connection. The cost is an extra wakeup when a read leaves data behind. Edge-triggered would help only with many busy connections, which is not the load here.
+- No scatter I/O or UDP batching: replies are encoded into one contiguous per-connection buffer and sent with one `send`, so `writev` and `sendmsg` have nothing to gather. Each feed packet is one datagram sent with `sendto`, so `sendmmsg` and `recvmmsg` would only help at packet rates a simulator with a few traders does not reach. Revisit if profiling shows syscalls dominating the feed path.
+- IPv4 only, no `SO_REUSEPORT`: the sockets use `AF_INET` and [Ipv4Endpoint](../lib/include/net/socket.hpp), and multicast feeds are IPv4. Each exchange is one process on its own ports, so there is nothing to load-balance across sockets and a clashing bind should fail loudly, which `SO_REUSEPORT` would hide. Add IPv6 if a client needs it; add `SO_REUSEPORT` only if an exchange ever runs several acceptor threads.
+- Management API threading: one thread per connection, deliberately. The reasoning is in [http_server.hpp](../lib/include/api/http_server.hpp).
+
 ## Limitations
 
 The HTTP API has no authentication and defaults to loopback. Remote traders need a reachable exchange address. Multicast delivery needs a suitable network.
