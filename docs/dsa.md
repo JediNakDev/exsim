@@ -40,6 +40,19 @@ Auction planning scans occupied prices and bitmap words in the crossed range. It
 
 See [matching engine](../lib/src/engine/matching_engine.cpp).
 
+Measured cost of `MatchingEngine::handle` per command on an Apple M6 (macOS 27.0.1, one continuous-phase instrument, 131,072-order capacity). Event production is included; gateways, sockets and market-data encoding are not.
+
+| Case | Mean ns |
+| --- | --- |
+| CancelOrder | 21.46 |
+| CancelHeavyWorkload | 21.93 |
+| NewOrder | 22.21 |
+| MixedWorkload | 26.83 |
+| SweepWithFills | 35.07 |
+| ReplaceOrder | 51.91 |
+
+The CSV percentiles are percentiles of 32-command batch means, not single-command tail latency. See [results](../results/README.md) for the machine, Linux profile and the exact rows. The numbers are regenerated after any engine change.
+
 ## Exchange metadata
 
 One preallocated 64-byte record per order holds what the book does not store: session and self-trade attributes, cumulative fills, and list links. A hash map finds an order by session and client order ID.
