@@ -57,7 +57,7 @@ struct ServerRuntimeOptions {
     std::uint64_t end_of_day_drain_timeout_ns = 3'000'000'000;  // wait for logouts and flushes
     runtime::MarketDataRuntimeSettings market_data{};
     std::size_t connection_receive_buffer_bytes = 64 * 1024;
-    std::size_t connection_send_buffer_bytes = 64 * 1024;
+    std::size_t connection_send_buffer_bytes = 4 * 1024 * 1024;
     std::FILE* log = stderr;  // startup listener reporting only; nullptr = silent
 };
 

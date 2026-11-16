@@ -4,9 +4,7 @@
 // Fixed-capacity byte buffers for the two directions of a TCP connection.
 // Storage is allocated once in the constructor and never grows; when a buffer
 // runs out of room the caller is told and decides (the TCP server disconnects
-// the connection). Bytes are `char`, matching the protocol codecs. The
-// constructor touches each storage page, so pages are faulted in at startup
-// instead of on the first message.
+// the connection). Bytes are `char`, matching the protocol codecs.
 //
 //   inbound:  receive_from(fd) appends at the tail -> framer reads readable()
 //             and consume()s whole messages -> unread partial bytes are moved
@@ -14,8 +12,6 @@
 //   outbound: codec encodes via reserve()/commit() or append() -> flush_to(fd)
 //             sends what the socket accepts; the rest stays queued until the
 //             socket is writable again.
-
-#include <unistd.h>
 
 #include <cassert>
 #include <cstddef>
@@ -26,18 +22,6 @@
 #include <span>
 
 namespace exsim::net {
-
-inline std::unique_ptr<char[]> allocate_stream_storage(std::size_t capacity) {
-    auto storage = std::make_unique_for_overwrite<char[]>(capacity);
-    // Volatile writes prevent calloc's lazy zero pages or dead-store removal
-    // from deferring physical page allocation until the first message.
-    const long page_size = ::sysconf(_SC_PAGESIZE);
-    const auto stride = page_size > 0 ? static_cast<std::size_t>(page_size) : std::size_t{1};
-    volatile char* pages = storage.get();
-    for (std::size_t offset = 0; offset < capacity; offset += stride) pages[offset] = 0;
-    if (capacity) pages[capacity - 1] = 0;
-    return storage;
-}
 
 enum class ReceiveStatus : std::uint8_t {
     Received,    // `bytes` > 0 were appended
@@ -55,7 +39,7 @@ struct ReceiveResult {
 
 class ReceiveBuffer {
    public:
-    explicit ReceiveBuffer(std::size_t capacity) : storage_(allocate_stream_storage(capacity)), capacity_(capacity) {}
+    explicit ReceiveBuffer(std::size_t capacity) : storage_(new char[capacity]), capacity_(capacity) {}
 
     // Bytes received and not yet consumed.
     std::span<const char> readable() const noexcept {
@@ -122,7 +106,7 @@ struct FlushResult {
 
 class SendBuffer {
    public:
-    explicit SendBuffer(std::size_t capacity) : storage_(allocate_stream_storage(capacity)), capacity_(capacity) {}
+    explicit SendBuffer(std::size_t capacity) : storage_(new char[capacity]), capacity_(capacity) {}
 
     // Zero-copy append: returns exactly `max_bytes` of contiguous space at the
     // end of the queue; encode into it, then commit() the bytes actually used.

@@ -9,7 +9,7 @@ Memory figures are computed from the code, not measured.
 - [ ] **2.** **`OrderBook` is two classes in one.** It is a standalone matching book (`add_order`, `cancel_order`, `modify_order`, `match_order_impl`, `get_snapshot`) and also passive storage for the engine (`rest_order`, `execute_order`, `amend_order`, `remove_order`). The engine sets `max_fills_per_add_order = 1; // the engine never calls add_order`. The `std::shared_ptr<OrderBookStorage>` exists only to serve both roles: the standalone book owns its storage, the engine shares one across its books.
 - [ ] **3.** **Benchmarks measure the path production does not use.** Every case drives `OrderBook::add_order` and friends. Nothing measures `MatchingEngine`, a gateway, or the reactor. `benchmark/utils/sharded_engine` is a multi-threaded engine that exists only in the benchmark, while production is single-threaded.
 - [ ] **4.** **Per-operation percentiles are at clock resolution.** `BenchmarkRunner::run` wraps each operation in two `high_resolution_clock::now()` calls ([runner.hpp:29](./benchmark/utils/runner.hpp#L29)). The last committed CSV (`results/benchmark_result_0.1.3.csv`) shows AddOrder P50 41, P95 42, P99 42 and CancelOrder P50 0.00, which is the roughly 42 ns timer tick. Only `sharded_throughput.cpp` times a batch. `benchmark/utils/cycle_timer.hpp` (rdtsc) exists and is unused. Needs a fresh run to confirm on current code.
-- [ ] **5.** **Two networking stacks.** [http_server.cpp](./lib/src/api/http_server.cpp) uses raw `int` descriptors, manual cleanup and a thread per connection. It bypasses the project's own RAII `net::Socket` and `Poller` and duplicates socket options (`TCP_NODELAY` at [http_server.cpp:38](./lib/src/api/http_server.cpp#L38) and [socket.cpp:92](./lib/src/net/socket.cpp#L92)). This is defensible for a management plane, but the trade-off is not documented.
+- [x] **5.** **Two networking stacks.** [http_server.cpp](./lib/src/api/http_server.cpp) uses raw `int` descriptors, manual cleanup and a thread per connection. It bypasses the project's own RAII `net::Socket` and `Poller` and duplicates socket options (`TCP_NODELAY` at [http_server.cpp:38](./lib/src/api/http_server.cpp#L38) and [socket.cpp:92](./lib/src/net/socket.cpp#L92)). This is defensible for a management plane, but the trade-off is not documented. Fixed in #12: the HTTP server uses `net::Socket` and the shared helpers; the thread-per-connection trade-off is written in `http_server.hpp`.
 - [x] **6.** **README links were broken.** Fixed: the TEST and BENCHMARK links now point to `./test/README.md` and `./benchmark/README.md`. The typo "protocal" on line 3 is left as is.
 
 ## Architecture
@@ -56,7 +56,7 @@ Memory figures are computed from the code, not measured.
     - ~~journal `decode_command` and `hash_event`~~ (moved to `test/` in #13)
     - `ServerConfig::find_user`, `utc_midnight_ns`
     - `FlatHashMap::for_each` and `max_entries`
-    - socket helpers `start_connect`, `connect_result`, `peer_endpoint`, `get_send_buffer_size`, `get_receive_buffer_size`
+    - ~~socket helpers `start_connect`, `connect_result`, `peer_endpoint`, `get_send_buffer_size`, `get_receive_buffer_size`~~ (removed or moved to `test/` in #12)
 - [ ] **34.** **Engine queries with no production caller:** `level_orders`, `for_each_order`, `for_each_level_order`, `best_bid`, `best_ask`. (`depth` is used by the MDP publisher, `mdp_publisher.hpp:135`.)
 - [ ] **35.** **A global order list is maintained for nobody.** `all_orders` is relinked on every rest and retire ([matching_engine.cpp:320](./lib/src/engine/matching_engine.cpp#L320)) and read only by `for_each_order` (line 1300), which has no production caller.
 - [ ] **36.** **`find_order(OrderId)` has one production caller**, [ilink_user.hpp:439](./lib/include/gateway/ilink/ilink_user.hpp#L439). OUCH and FIX flows still pay an OrderId hash insert and erase per order.
@@ -66,7 +66,7 @@ Memory figures are computed from the code, not measured.
     - ~~`fix44::parse_price` and `server::parse_price`.~~ (both call `parse_decimal_price` since #14)
     - `IncomingOrder` is filled field by field in both `on_new_order` and `on_replace`.
     - `__builtin_ctzll` (matching_engine.cpp:916, 933) alongside `std::countr_zero` in `ActiveBitmap`.
-- [ ] **39.** **Single-use one-line wrappers:** `listen_for_connections` and `accept_connection` each have one production caller.
+- [x] **39.** **Single-use one-line wrappers:** `listen_for_connections` and `accept_connection` each have one production caller. Fixed in #12: `listen_for_connections` inlined; `accept_connection` now has two callers.
 - [ ] **40.** **Dead check:** `valid_instrument_config` ends with `levels <= numeric_limits<size_t>::max()` ([instrument.hpp:63](./lib/include/engine/instrument.hpp#L63)), which is always true on the supported 64-bit targets.
 - [ ] **41.** `PriceLevel::pop_front` and `get_snapshot` exist only for the standalone path (see 2).
 
@@ -79,7 +79,7 @@ Memory figures are computed from the code, not measured.
 - [ ] **46.** `rest_order` probes the hash twice: `contains` at [order_book.cpp:309](./lib/src/book/order_book.cpp#L309), then `insert` at 319. `insert` already reports duplicates.
 - [ ] **47.** Best prices are cached twice, in the engine (`best_bid_tick`, `best_ask_tick`) and in the book.
 - [ ] **48.** `InstrumentBook` holds the cold `InstrumentConfig` (including `cme_symbol[20]`) ahead of its hot fields.
-- [ ] **49.** TCP buffers are `new char[capacity]` (`stream_buffers.hpp:42, 109`), so they are first touched on the hot path. The engine structures prefault; these do not.
+- [ ] **49.** TCP buffers are `new char[capacity]` (`stream_buffers.hpp:42, 109`), so they are first touched on the hot path. The engine structures prefault; these do not. Not fixed. #12 tried prefaulting with 64 KiB default send buffers, which breaks MDP TCP replay (one request can need about 2.8 MB). Decide the buffer sizes in #15 first, then prefault.
 - [ ] **50.** The ITCH publisher encodes to a stack buffer, copies into the packet, then copies into the ring. It also walks each batch twice (`validate_batch`, then `publish_event`).
 - [ ] **51.** `SPSCQueue` hardcodes `alignas(128)` instead of `std::hardware_destructive_interference_size`, keeps its buffer inside the object, and is copy-only.
 - [x] **52.** `moldudp64::PacketBuilder::append` and the OUCH field copies go byte by byte. `wire::load/store` rely on the optimiser to form a bswap, which is worth confirming in a profile. Bulk copies done in #14; the bswap check stays with the profiling work in #9.
@@ -104,8 +104,8 @@ Memory figures are computed from the code, not measured.
 - [ ] **66.** `Command` and `Event` are hand-rolled tagged unions, although `std::variant` is used well in `gateway_sessions.hpp` and `market_data_runtime.hpp`. If hand-rolling is deliberate for layout, say so in a comment.
 - [ ] **67.** `ts` lives in each `Command` payload, so `Command::ts()` and `ExchangeCore::set_command_timestamp` each need a five-way switch. One header field removes both.
 - [ ] **68.** `EXSIM_LIKELY`/`EXSIM_UNLIKELY` macros have 59 uses; `[[likely]]`/`[[unlikely]]` have none.
-- [ ] **69.** `std::thread` is used everywhere. `std::jthread` fits the threads that are always joined (HTTP server, process watcher). The journal worker should stay as is: `jthread` cannot interrupt blocked file I/O and its joining destructor would lose the bounded shutdown.
-- [ ] **70.** `const_cast` sites: [flat_hash_map.hpp:82](./lib/include/util/flat_hash_map.hpp#L82), `tcp_server.hpp:234`, `exchange_control.cpp:31`, `exchange_process.cpp:42`.
+- [x] **69.** `std::thread` is used everywhere. `std::jthread` fits the threads that are always joined (HTTP server, process watcher). The journal worker should stay as is: `jthread` cannot interrupt blocked file I/O and its joining destructor would lose the bounded shutdown. Fixed in #12.
+- [ ] **70.** `const_cast` sites: [flat_hash_map.hpp:82](./lib/include/util/flat_hash_map.hpp#L82), `tcp_server.hpp:234`, `exchange_control.cpp:31`, `exchange_process.cpp:42`. `tcp_server.hpp`, `exchange_control.cpp` and `exchange_process.cpp` fixed in #12; `flat_hash_map.hpp` is still open.
 - [ ] **71.** `ObjectPool::destroy` uses `reinterpret_cast<Node*>` without `std::launder` ([object_pool.hpp:77](./lib/include/util/object_pool.hpp#L77)). Growth defaults to on in the pool and off in `FlatHashMap`.
 - [ ] **72.** `for_each_order` uses a function pointer plus `void*` trampoline. `order_info` uses `memset`. The engine constructor uses a comma-expression trick to validate config.
 - [ ] **74.** `std::expected` is unused. `protocol::Status` ([wire.hpp:11](./lib/include/protocol/wire.hpp#L11)) has no fixed underlying type. `Status` is `std::uint8_t` since #14; `std::expected` is still open.
@@ -118,10 +118,10 @@ Memory figures are computed from the code, not measured.
 ## Linux and networking
 
 - [ ] **80.** The poller is level-triggered with one `recv` per readiness event. That is a fine choice, but the reason over edge-triggered is not written down.
-- [ ] **81.** `socket()` and `accept()` are followed by `fcntl`. On Linux, `SOCK_NONBLOCK | SOCK_CLOEXEC` and `accept4` save the extra syscalls.
-- [ ] **82.** kqueue `change()` issues two `kevent` calls where one changelist would do.
+- [x] **81.** `socket()` and `accept()` are followed by `fcntl`. On Linux, `SOCK_NONBLOCK | SOCK_CLOEXEC` and `accept4` save the extra syscalls. Fixed in #12.
+- [x] **82.** kqueue `change()` issues two `kevent` calls where one changelist would do. Fixed in #12.
 - [ ] **83.** There is no scatter I/O (`writev`, `sendmsg`) and no UDP batching (`sendmmsg`, `recvmmsg`).
-- [ ] **84.** UDP send results are discarded in `itch_runtime.hpp`.
+- [x] **84.** UDP send results are discarded in `itch_runtime.hpp`. Fixed in #12: failures are counted and reported at shutdown.
 - [ ] **85.** The stack is IPv4 only, with no `SO_REUSEPORT`.
 - [x] **86.** Signal handling differs between the two binaries: `std::signal` with `volatile sig_atomic_t` in the exchange daemon, `sigwait` in the API. The daemon also closes its raw control fd by hand. Fixed in #8.
 
