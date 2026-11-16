@@ -88,8 +88,8 @@ TEST_CASE(gateway_ouch_inbound, enter_order_golden_bytes_map_to_new_order) {
     REQUIRE_EQ(exchange.submitted_command_count(), 1u);
     const Command& command = exchange.last_command();
     REQUIRE(command.type == CommandType::NewOrder);
-    const NewOrder& order = command.new_order;
-    CHECK_EQ(order.ts, kNineThirty + 5);
+    const auto& order = command.new_order;
+    CHECK_EQ(command.ts(), kNineThirty + 5);
     CHECK_EQ(order.instrument, InstrumentId{1});
     CHECK_EQ(order.session, SessionId{1});
     CHECK_EQ(order.owner, OwnerId{1});

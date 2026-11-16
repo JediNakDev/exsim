@@ -320,3 +320,16 @@ TEST_CASE(engine_capacity, default_engine_is_small) {
     MatchingEngine engine;
     CHECK_EQ(engine.live_order_count(), std::size_t{0});
 }
+
+TEST_CASE(engine_commands, timestamp_header_applies_to_every_payload) {
+    for (Command command : {Command{NewOrder{11}}, Command{CancelOrder{11}},
+                            Command{ReplaceOrder{11}}, Command{MassCancel{11}}, Command{SetPhase{11}}}) {
+        CHECK_EQ(command.ts(), Timestamp{11});
+        command.timestamp = 29;
+        CHECK_EQ(command.ts(), Timestamp{29});
+        MatchingEngine engine(EngineConfig{1, 1});
+        EventBuffer events(required_event_capacity(EngineConfig{1, 1}));
+        REQUIRE_EQ(engine.handle(command, events), HandleResult::Applied);
+        for (const auto& event : events) CHECK_EQ(event.ts, Timestamp{29});
+    }
+}
