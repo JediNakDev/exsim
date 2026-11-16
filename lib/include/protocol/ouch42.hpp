@@ -7,6 +7,8 @@
 // them. Unknown extensible alpha codes are preserved; business validation
 // belongs to the gateway. Prices use exsim::Price, checked against the 32-bit
 // wire range.
+#include "engine/instrument.hpp"
+#include "engine/types.hpp"
 #include "wire.hpp"
 #include <algorithm>
 namespace exsim::protocol::ouch42 {

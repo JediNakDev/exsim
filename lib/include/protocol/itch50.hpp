@@ -4,6 +4,8 @@
 // https://www.nasdaqtrader.com/content/technicalsupport/specifications/dataproducts/NQTVITCHSpecification_5.0.pdf
 // The caller selects the message struct using the wire type byte. Decoders
 // require exactly one message; unknown extensible alpha values are preserved.
+#include "engine/instrument.hpp"
+#include "engine/types.hpp"
 #include "wire.hpp"
 namespace exsim::protocol::itch50 {
 using protocol::Status;
