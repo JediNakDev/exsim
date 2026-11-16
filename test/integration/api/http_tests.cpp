@@ -45,6 +45,8 @@ public:
         ::setsockopt(socket_descriptor_, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
         const int enabled = 1;  // each send_text() leaves as its own segment, so fragments reach the server apart
         ::setsockopt(socket_descriptor_, IPPROTO_TCP, TCP_NODELAY, &enabled, sizeof(enabled));
+        // A send after the server closed must fail the check, not kill the test binary with SIGPIPE.
+        (void)exsim::net::set_no_sigpipe(socket_descriptor_);
     }
     ~TestClientConnection() { ::close(socket_descriptor_); }
     TestClientConnection(const TestClientConnection&) = delete;
@@ -54,7 +56,7 @@ public:
     void send_text(std::string_view text) const {
         std::size_t sent = 0;
         while (sent < text.size()) {
-            const ssize_t written = ::send(socket_descriptor_, text.data() + sent, text.size() - sent, 0);
+            const ssize_t written = exsim::net::send_some(socket_descriptor_, text.data() + sent, text.size() - sent);
             if (written <= 0) return;
             sent += static_cast<std::size_t>(written);
         }
@@ -344,16 +346,21 @@ TEST_CASE(api_http_server, trickled_request_is_cut_off_at_the_request_deadline) 
     CHECK(answered);
     CHECK(std::chrono::steady_clock::now() - started < std::chrono::milliseconds(1500));
     CHECK_EQ(client.receive_until_closed().rfind("HTTP/1.1 408", 0), 0u);
-    // A request served in time gives the next one on the same connection a fresh deadline.
-    TestClientConnection keep_alive(server.port());
+    server.stop();
+    // A request served in time gives the next one on the same connection a fresh deadline. Each request
+    // takes 300 ms of a 1 s deadline and the three take 2.1 s, wide margins for a loaded debug runner.
+    options.idle_timeout = std::chrono::milliseconds(1000);
+    HttpServer keep_alive_server(options, echo_path_handler, plain_rejection);
+    keep_alive_server.start();
+    TestClientConnection keep_alive(keep_alive_server.port());
     for (int request = 0; request < 3; ++request) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        std::this_thread::sleep_for(std::chrono::milliseconds(400));
         keep_alive.send_text("GET /kept HTTP/1.1\r\n");
-        std::this_thread::sleep_for(std::chrono::milliseconds(150));
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
         keep_alive.send_text("\r\n");
         CHECK(keep_alive.receive_until("GET /kept body=0", 1).find("GET /kept body=0") != std::string::npos);
     }
-    server.stop();
+    keep_alive_server.stop();
 }
 
 TEST_CASE(api_http_server, stop_closes_open_keep_alive_connections) {
