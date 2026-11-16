@@ -69,7 +69,7 @@ private:
     // closes its socket, so stop() cannot shut down a reused descriptor.
     struct ConnectionSlot {
         net::Socket socket;
-        std::thread thread;  // joinable while the slot is in use
+        std::jthread thread;  // joinable while the slot is in use
         std::atomic<bool> is_finished{false};
     };
 
@@ -84,7 +84,7 @@ private:
     std::uint16_t bound_port_ = 0;
     std::atomic<bool> stopping_{false};
     std::atomic<std::size_t> active_connections_{0};
-    std::thread accept_thread_;
+    std::jthread accept_thread_;
     std::vector<ConnectionSlot> connection_slots_;
 };
 

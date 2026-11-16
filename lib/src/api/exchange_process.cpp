@@ -53,7 +53,7 @@ bool ExchangeProcess::spawn(const std::filesystem::path& executable, const std::
     }
     control_ = std::move(parent);
     try {
-        exit_watcher_ = std::thread([this, child_pid = pid_] {
+        exit_watcher_ = std::jthread([this, child_pid = pid_] {
             siginfo_t information{};
             while (::waitid(P_PID, static_cast<id_t>(child_pid), &information, WEXITED | WNOWAIT) != 0 && errno == EINTR) {}
             {
