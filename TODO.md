@@ -26,14 +26,14 @@ Memory figures are computed from the code, not measured.
     - Each OUCH user: 140 MiB, zero-initialised at startup.
     - Retransmission ring: 64 MiB.
     - TCP buffers: 4 MiB send plus 64 KiB receive per slot, times 64 slots, 260 MiB per enabled gateway.
-- [ ] **14.** **`MatchingEngine(const EngineConfig& = {})`** silently allocates for 1M orders through a default argument.
+- [x] **14.** **`MatchingEngine(const EngineConfig& = {})`** silently allocates for 1M orders through a default argument. Fixed in #10: the default is 65536 live orders (a few MB); larger books set `[engine] max_orders`.
 - [ ] **15.** **Two quantity types.** `book::Quantity` is `uint64_t` and `exsim::Quantity` is `uint32_t`, with casts throughout the engine.
 - [ ] **17.** **Same policy name, different meaning.** `MdpRuntime::flush()` flushes only the TCP replay server; `ItchRuntime::flush()` flushes the publisher.
 
 ## Folder and file placement
 
 - [ ] **18.** `engine/types.hpp` calls itself the core vocabulary for every subsystem. Move it to a `common/` or `core/` folder.
-- [ ] **19.** `engine/price_ladder.hpp` now defines only `InstrumentBook`. Rename it.
+- [x] **19.** `engine/price_ladder.hpp` now defines only `InstrumentBook`. Rename it. Fixed in #10: now `instrument_book.hpp`.
 - [ ] **20.** `net/clocks.hpp` holds time utilities, not networking. Same for `engine/price_text.hpp` (formatting).
 - [ ] **21.** `md/random.hpp` and `md/packet_faults.hpp` are generic simulation utilities living in `md/`.
 - [ ] **22.** `md/publisher.hpp` is ITCH-specific; its sibling is `mdp_publisher.hpp`. Name it `itch_publisher.hpp`.
@@ -57,17 +57,17 @@ Memory figures are computed from the code, not measured.
     - `ServerConfig::find_user`, `utc_midnight_ns`
     - `FlatHashMap::for_each` and `max_entries`
     - ~~socket helpers `start_connect`, `connect_result`, `peer_endpoint`, `get_send_buffer_size`, `get_receive_buffer_size`~~ (removed or moved to `test/` in #12)
-- [ ] **34.** **Engine queries with no production caller:** `level_orders`, `for_each_order`, `for_each_level_order`, `best_bid`, `best_ask`. (`depth` is used by the MDP publisher, `mdp_publisher.hpp:135`.)
-- [ ] **35.** **A global order list is maintained for nobody.** `all_orders` is relinked on every rest and retire ([matching_engine.cpp:320](./lib/src/engine/matching_engine.cpp#L320)) and read only by `for_each_order` (line 1300), which has no production caller.
+- [x] **34.** **Engine queries with no production caller:** `level_orders`, `for_each_order`, `for_each_level_order`, `best_bid`, `best_ask`. (`depth` is used by the MDP publisher, `mdp_publisher.hpp:135`.) Fixed in #10: `for_each_order`, `for_each_level_order` and `level_orders` removed. `best_bid` and `best_ask` stay; the admin commands shipped in #8 call them.
+- [x] **35.** **A global order list is maintained for nobody.** `all_orders` is relinked on every rest and retire ([matching_engine.cpp:320](./lib/src/engine/matching_engine.cpp#L320)) and read only by `for_each_order` (line 1300), which has no production caller. Fixed in #10.
 - [ ] **36.** **`find_order(OrderId)` has one production caller**, [ilink_user.hpp:439](./lib/include/gateway/ilink/ilink_user.hpp#L439). OUCH and FIX flows still pay an OrderId hash insert and erase per order.
 - [x] **37.** **Two FIX inbound decoders.** Production uses `Parser` plus `FixFieldReader`; `fix44::decode` is exercised only by tests. Fixed in #14: typed decoders moved to `test/exsim/protocol/fix44_decode.hpp`.
 - [ ] **38.** **Duplicates:**
     - Nanoseconds-per-day is defined three times (`server/config.hpp:82`, `net/clocks.hpp`, `md/feed_common.hpp`).
     - ~~`fix44::parse_price` and `server::parse_price`.~~ (both call `parse_decimal_price` since #14)
-    - `IncomingOrder` is filled field by field in both `on_new_order` and `on_replace`.
-    - `__builtin_ctzll` (matching_engine.cpp:916, 933) alongside `std::countr_zero` in `ActiveBitmap`.
+    - ~~`IncomingOrder` is filled field by field in both `on_new_order` and `on_replace`.~~ (fixed in #10)
+    - ~~`__builtin_ctzll` alongside `std::countr_zero` in `ActiveBitmap`.~~ (removed in #10)
 - [x] **39.** **Single-use one-line wrappers:** `listen_for_connections` and `accept_connection` each have one production caller. Fixed in #12: `listen_for_connections` inlined; `accept_connection` now has two callers.
-- [ ] **40.** **Dead check:** `valid_instrument_config` ends with `levels <= numeric_limits<size_t>::max()` ([instrument.hpp:63](./lib/include/engine/instrument.hpp#L63)), which is always true on the supported 64-bit targets.
+- [x] **40.** **Dead check:** `valid_instrument_config` ends with `levels <= numeric_limits<size_t>::max()` ([instrument.hpp:63](./lib/include/engine/instrument.hpp#L63)), which is always true on the supported 64-bit targets. Fixed in #10.
 - [ ] **41.** `PriceLevel::pop_front` and `get_snapshot` exist only for the standalone path (see 2).
 
 ## Cache friendliness
@@ -86,8 +86,8 @@ Memory figures are computed from the code, not measured.
 
 ## Data structures and complexity
 
-- [ ] **53.** `std::unordered_map` is used for symbol lookup ([matching_engine.cpp:143](./lib/src/engine/matching_engine.cpp#L143)) and for iLink security ids ([ilink_user.hpp:39](./lib/include/gateway/ilink/ilink_user.hpp#L39), looked up per order at 362). `FlatHashMap` already exists.
-- [ ] **54.** `plan_uncross` scans occupancy words linearly across the crossed range instead of using the bitmap hierarchy.
+- [x] **53.** `std::unordered_map` is used for symbol lookup ([matching_engine.cpp:143](./lib/src/engine/matching_engine.cpp#L143)) and for iLink security ids ([ilink_user.hpp:39](./lib/include/gateway/ilink/ilink_user.hpp#L39), looked up per order at 362). `FlatHashMap` already exists. Fixed in #10.
+- [x] **54.** `plan_uncross` scans occupancy words linearly across the crossed range instead of using the bitmap hierarchy. Fixed in #10.
 - [ ] **55.** `run_timers` walks every open connection on every loop iteration, and with `busy_poll` that is every spin. A next-deadline value or timer wheel makes it O(1) when nothing is due.
 - [ ] **56.** `poll_once` runs every endpoint's timers and flush each iteration, whether or not anything changed.
 - [ ] **57.** The FIX `Parser` detects duplicates with a linear scan per field (O(n²), n at most 64) and `get(tag)` scans per lookup. `find_duplicate_tag` scans a 256-entry array.
@@ -101,13 +101,13 @@ Memory figures are computed from the code, not measured.
 ## Modern C++
 
 - [ ] **65.** `std::byte` has zero uses. All wire buffers are `char` or `unsigned char`.
-- [ ] **66.** `Command` and `Event` are hand-rolled tagged unions, although `std::variant` is used well in `gateway_sessions.hpp` and `market_data_runtime.hpp`. If hand-rolling is deliberate for layout, say so in a comment.
-- [ ] **67.** `ts` lives in each `Command` payload, so `Command::ts()` and `ExchangeCore::set_command_timestamp` each need a five-way switch. One header field removes both.
+- [x] **66.** `Command` and `Event` are hand-rolled tagged unions, although `std::variant` is used well in `gateway_sessions.hpp` and `market_data_runtime.hpp`. If hand-rolling is deliberate for layout, say so in a comment. Fixed in #10: the reason is written at both unions.
+- [x] **67.** `ts` lives in each `Command` payload, so `Command::ts()` and `ExchangeCore::set_command_timestamp` each need a five-way switch. One header field removes both. Fixed in #10.
 - [ ] **68.** `EXSIM_LIKELY`/`EXSIM_UNLIKELY` macros have 59 uses; `[[likely]]`/`[[unlikely]]` have none.
 - [x] **69.** `std::thread` is used everywhere. `std::jthread` fits the threads that are always joined (HTTP server, process watcher). The journal worker should stay as is: `jthread` cannot interrupt blocked file I/O and its joining destructor would lose the bounded shutdown. Fixed in #12.
 - [ ] **70.** `const_cast` sites: [flat_hash_map.hpp:82](./lib/include/util/flat_hash_map.hpp#L82), `tcp_server.hpp:234`, `exchange_control.cpp:31`, `exchange_process.cpp:42`. `tcp_server.hpp`, `exchange_control.cpp` and `exchange_process.cpp` fixed in #12; `flat_hash_map.hpp` is still open.
 - [ ] **71.** `ObjectPool::destroy` uses `reinterpret_cast<Node*>` without `std::launder` ([object_pool.hpp:77](./lib/include/util/object_pool.hpp#L77)). Growth defaults to on in the pool and off in `FlatHashMap`.
-- [ ] **72.** `for_each_order` uses a function pointer plus `void*` trampoline. `order_info` uses `memset`. The engine constructor uses a comma-expression trick to validate config.
+- [x] **72.** `for_each_order` uses a function pointer plus `void*` trampoline. `order_info` uses `memset`. The engine constructor uses a comma-expression trick to validate config. Fixed in #10.
 - [ ] **74.** `std::expected` is unused. `protocol::Status` ([wire.hpp:11](./lib/include/protocol/wire.hpp#L11)) has no fixed underlying type. `Status` is `std::uint8_t` since #14; `std::expected` is still open.
 - [ ] **75.** `book/types.hpp` uses unqualified `uint8_t`. `mdp_runtime.hpp` and `journal.hpp` rely on transitive includes.
 - [ ] **76.** `.clang-format` says `Standard: c++20` for a C++23 project, and several files do not follow it (`book/*`, `server/journal/*`, `mdp_runtime.hpp`, `gateway/ilink/*`, the iLink block in `order_entry_gateways.hpp`, `src/api/main.cpp`).

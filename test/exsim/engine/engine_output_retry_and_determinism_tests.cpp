@@ -1,4 +1,6 @@
+#include "test/exsim/engine/live_orders.hpp"
 #include "engine_harness.hpp"
+#include <test/exsim/engine/live_orders.hpp>
 #include <random>
 using namespace engine_harness;
 
@@ -26,11 +28,11 @@ static std::vector<std::uint64_t> fields(const EventBuffer& out) {
 
 static void invariants(const MatchingEngine& e) {
     std::size_t count=0; OrderId previous=0;
-    e.for_each_order([&](const OrderInfo& o) {
+    for (const OrderInfo& o : testsupport::live_orders(e)) {
         CHECK(o.order_id>previous); previous=o.order_id; ++count;
         CHECK(o.leaves_qty>0); CHECK_EQ(std::uint64_t{o.leaves_qty}+o.cum_qty,o.qty);
         CHECK_EQ(e.find_order(o.session,o.cl_ord_id)->order_id,o.order_id);
-    });
+    }
     CHECK_EQ(count,e.live_order_count());
     std::size_t depth_count=0;
     for(InstrumentId id=1;id<=e.instrument_count();++id) {
@@ -39,7 +41,7 @@ static void invariants(const MatchingEngine& e) {
         for(Side side:{Side::BUY,Side::SELL}) {
             LevelInfo levels[64]; auto n=e.depth(id,side,levels,64);
             for(std::size_t i=0;i<n;++i) {
-                OrderId ids[64]; auto m=e.level_orders(id,side,levels[i].price,ids,64);
+                OrderId ids[64]; auto m=exsim::testsupport::level_orders(e, id,side,levels[i].price,ids,64);
                 CHECK(m>0); CHECK_EQ(m,levels[i].order_count); depth_count+=m;
                 std::uint64_t qty=0; OrderId last=0;
                 for(std::size_t j=0;j<m;++j) { auto o=e.find_order(ids[j]); REQUIRE(o); CHECK(ids[j]>last); last=ids[j]; qty+=o->leaves_qty; CHECK_EQ(o->price,levels[i].price); CHECK_EQ(o->side,side); }
@@ -113,7 +115,7 @@ TEST_CASE(engine_invariants, randomized_commands_and_deterministic_active_fields
             if(e.type==EventType::Canceled) canceled+=e.canceled.canceled_qty;
         }
         // Cancel reductions change current qty but are already counted by the cancellation.
-        std::int64_t leaves=0; a.for_each_order([&](const OrderInfo& o) { leaves+=o.leaves_qty; });
+        std::int64_t leaves=0; for (const OrderInfo& o : testsupport::live_orders(a)) leaves+=o.leaves_qty;
         CHECK_EQ(expected,executed+canceled+leaves);
         invariants(a);
     }

@@ -34,7 +34,9 @@ namespace exsim {
 
 struct EngineConfig {
     std::size_t max_instruments = 64;
-    std::size_t max_orders = 1u << 20;  // live (resting) orders across all instruments
+    // Live (resting) orders across all instruments. A few megabytes at the
+    // default; set `[engine] max_orders` for larger books.
+    std::size_t max_orders = 1u << 16;
 };
 
 // Conservative bound for ANY command, including all-instrument phase changes.
@@ -97,8 +99,9 @@ public:
 
     // Setup-time only (allocates the instrument's price ladders).
     // Returns the new InstrumentId (1, 2, ...) or 0 if the config is invalid,
-    // the band exceeds the engine's tick limit, the symbol is taken or
-    // max_instruments is reached. Throws if the ladders cannot be allocated.
+    // the band exceeds the engine's tick limit, the symbol is taken or is
+    // eight NUL bytes, or max_instruments is reached. Throws if the ladders
+    // cannot be allocated.
     [[nodiscard]] InstrumentId add_instrument(const InstrumentConfig& config);
 
     // Before ANY mutation (including counters), require remaining output >=
@@ -126,56 +129,16 @@ public:
     // first) into `out`; returns the number written.
     std::size_t depth(InstrumentId id, Side side, LevelInfo* out, std::size_t max_levels) const noexcept;
 
-    // Writes the OrderIds resting at (side, price) in FIFO order; returns
-    // the number written (at most `max_orders`).
-    std::size_t level_orders(InstrumentId id, Side side, Price price,
-                             OrderId* out, std::size_t max_orders) const noexcept;
-
     [[nodiscard]] std::optional<OrderInfo> find_order(SessionId session, ClOrdId cl_ord_id) const noexcept;
     [[nodiscard]] std::optional<OrderInfo> find_order(OrderId order_id) const noexcept;
     [[nodiscard]] std::size_t live_order_count() const noexcept;
 
     [[nodiscard]] AuctionIndicative auction_indicative(InstrumentId id) const noexcept;
 
-    // Visits every live order of every instrument in ascending OrderId order.
-    // Allocation-free; intended for snapshots, journaling and tests.
-    template <typename F>
-    void for_each_order(F&& f) const;
-
-    // Visits the orders resting at (side, price) of instrument `id` in FIFO
-    // order. Visits none for an unknown instrument, an invalid side, a price
-    // off the instrument's grid or band, or an empty level. Allocation-free;
-    // `f` must not modify the engine.
-    template <typename F>
-    void for_each_level_order(InstrumentId id, Side side, Price price, F&& f) const;
-
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
-
-    // Implementation hook for for_each_order (ascending OrderId).
-    void visit_orders(void (*fn)(const OrderInfo&, void*), void* ctx) const;
-    // Implementation hook for for_each_level_order (FIFO).
-    void visit_level_orders(InstrumentId id, Side side, Price price,
-                            void (*fn)(const OrderInfo&, void*), void* ctx) const;
 };
-
-template <typename F>
-void MatchingEngine::for_each_order(F&& f) const {
-    auto callback = [&](const OrderInfo& o) { f(o); };
-    visit_orders(
-        [](const OrderInfo& o, void* ctx) { (*static_cast<decltype(callback)*>(ctx))(o); },
-        &callback);
-}
-
-template <typename F>
-void MatchingEngine::for_each_level_order(InstrumentId id, Side side, Price price, F&& f) const {
-    auto callback = [&](const OrderInfo& o) { f(o); };
-    visit_level_orders(
-        id, side, price,
-        [](const OrderInfo& o, void* ctx) { (*static_cast<decltype(callback)*>(ctx))(o); },
-        &callback);
-}
 
 }  // namespace exsim
 

@@ -414,3 +414,28 @@ TEST_CASE(engine_mass_cancel, instrument_filter_disconnect_reason_and_every_phas
         CHECK_EQ(fixture.only_event().mass_cancel_done.session, kCarolSession);
     }
 }
+
+TEST_CASE(engine_auction, sparse_prices_cross_bitmap_summary_boundaries) {
+    const EngineConfig config{1, 8};
+    MatchingEngine engine(config);
+    auto instrument = small_instrument_config("SPARSE", Phase::PreOpen);
+    instrument.tick_size = 1;
+    instrument.min_price = 1;
+    instrument.max_price = 20000;
+    instrument.reference_price = 4097;
+    REQUIRE_EQ(engine.add_instrument(instrument), InstrumentId{1});
+    EventBuffer events(required_event_capacity(config));
+    for (const auto& order : {limit_order(kAliceSession, 1, Side::BUY, 16385, 7),
+                              limit_order(kBobSession, 1, Side::SELL, 64, 3),
+                              limit_order(kBobSession, 2, Side::SELL, 4097, 4)}) {
+        events.clear();
+        REQUIRE_EQ(engine.handle(order, events), HandleResult::Applied);
+    }
+    const auto indicative = engine.auction_indicative(1);
+    CHECK(indicative.crossed);
+    CHECK_EQ(indicative.price, Price{4097});
+    CHECK_EQ(indicative.paired_qty, std::uint64_t{7});
+    events.clear();
+    REQUIRE_EQ(engine.handle(SetPhase{5, 1, Phase::Continuous}, events), HandleResult::Applied);
+    CHECK_EQ(engine.live_order_count(), std::size_t{0});
+}

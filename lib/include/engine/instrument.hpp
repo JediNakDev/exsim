@@ -4,7 +4,6 @@
 #include "engine/types.hpp"
 #include <array>
 #include <cstring>
-#include <limits>
 #include <string_view>
 
 namespace exsim {
@@ -60,8 +59,7 @@ struct InstrumentConfig {
         c.reference_price < c.min_price || c.reference_price > c.max_price ||
         c.reference_price % c.tick_size != 0 ||
         static_cast<unsigned>(c.initial_phase) > static_cast<unsigned>(Phase::PreClose)) return false;
-    const auto levels = static_cast<std::uint64_t>((c.max_price - c.min_price) / c.tick_size) + 1;
-    return levels <= std::numeric_limits<std::size_t>::max();
+    return true;
 }
 
 }  // namespace exsim

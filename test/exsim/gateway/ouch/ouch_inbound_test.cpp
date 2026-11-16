@@ -88,8 +88,8 @@ TEST_CASE(gateway_ouch_inbound, enter_order_golden_bytes_map_to_new_order) {
     REQUIRE_EQ(exchange.submitted_command_count(), 1u);
     const Command& command = exchange.last_command();
     REQUIRE(command.type == CommandType::NewOrder);
-    const NewOrder& order = command.new_order;
-    CHECK_EQ(order.ts, kNineThirty + 5);
+    const auto& order = command.new_order;
+    CHECK_EQ(command.ts(), kNineThirty + 5);
     CHECK_EQ(order.instrument, InstrumentId{1});
     CHECK_EQ(order.session, SessionId{1});
     CHECK_EQ(order.owner, OwnerId{1});
@@ -306,7 +306,7 @@ TEST_CASE(gateway_ouch_inbound, replace_golden_bytes_map_to_replace_order) {
     REQUIRE_EQ(exchange.submitted_command_count(), 2u);
     const Command& command = exchange.last_command();
     REQUIRE(command.type == CommandType::Replace);
-    CHECK_EQ(command.replace.ts, kNineThirty + 7);
+    CHECK_EQ(command.timestamp, kNineThirty + 7);
     CHECK_EQ(command.replace.session, SessionId{1});
     CHECK_EQ(command.replace.orig_cl_ord_id, ClOrdId{1});
     CHECK_EQ(command.replace.cl_ord_id, ClOrdId{2});
@@ -372,7 +372,7 @@ TEST_CASE(gateway_ouch_inbound, cancel_golden_bytes_map_to_cancel_order) {
     session.send(cancel_order_frame("T1", 40));
     const Command& command = exchange.last_command();
     REQUIRE(command.type == CommandType::Cancel);
-    CHECK_EQ(command.cancel.ts, kNineThirty + 3);
+    CHECK_EQ(command.timestamp, kNineThirty + 3);
     CHECK_EQ(command.cancel.session, SessionId{1});
     CHECK_EQ(command.cancel.orig_cl_ord_id, ClOrdId{1});
     CHECK_EQ(command.cancel.cl_ord_id, ClOrdId{0});

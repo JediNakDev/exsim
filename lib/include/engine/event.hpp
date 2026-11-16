@@ -124,6 +124,8 @@ struct AuctionSummaryEvent {
     MatchId match_id = 0;  // allocated after constituent fills, same global counter
 };
 
+// Explicit tags and unions keep queue records trivially copyable and avoid
+// a second variant discriminator. Wire and journal formats encode fields.
 struct Event {
     EventType type;
     InstrumentId instrument;  // 0 if not applicable / unknown

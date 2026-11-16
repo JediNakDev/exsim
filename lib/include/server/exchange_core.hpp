@@ -458,16 +458,6 @@ private:
         return any_command_stamped_ && clock_now <= last_command_ts_ ? last_command_ts_ + 1 : clock_now;
     }
 
-    static void set_command_timestamp(Command& command, Timestamp stamp) noexcept {
-        switch (command.type) {
-            case CommandType::NewOrder: command.new_order.ts = stamp; return;
-            case CommandType::Cancel: command.cancel.ts = stamp; return;
-            case CommandType::Replace: command.replace.ts = stamp; return;
-            case CommandType::MassCancel: command.mass_cancel.ts = stamp; return;
-            case CommandType::SetPhase: command.set_phase.ts = stamp; return;
-        }
-    }
-
     // Outside dispatch: applies now. During dispatch: queues the command if
     // the queue holds fewer than `deferred_limit` commands. Ordinary submits
     // pass capacity - users; unbind passes the whole capacity, so its
@@ -519,7 +509,7 @@ private:
             ++counters_.commands_outside_trading_day;
             return SubmitResult::OutsideTradingDay;
         }
-        set_command_timestamp(command, stamp);
+        command.timestamp = stamp;
         // The previous batch has been dispatched, so drain = clear; the full
         // capacity is now available to this command.
         events_.clear();
