@@ -11,7 +11,7 @@
 #include <optional>
 #include <span>
 #include <string_view>
-#include <unordered_map>
+#include <util/flat_hash_map.hpp>
 #include <vector>
 
 namespace exsim::gateway::ilink {
@@ -36,7 +36,12 @@ struct OrderMetadata {
 };
 
 // CME SecurityID(48) -> engine InstrumentId, built once at startup.
-using InstrumentBySecurityId = std::unordered_map<std::int32_t, InstrumentId>;
+using InstrumentBySecurityId = util::FlatHashMap<InstrumentId>;
+
+// Offset the complete signed 32-bit domain to leave the map's zero key empty.
+inline std::uint64_t security_id_key(std::int32_t id) noexcept {
+    return std::uint64_t{static_cast<std::uint32_t>(id)} + 1;
+}
 
 template <class Sink>
 class IlinkUser {
@@ -359,8 +364,8 @@ private:
     }
     // 0: no instrument has this SecurityID.
     [[nodiscard]] InstrumentId instrument_id(std::int32_t security) const noexcept {
-        const auto found = instrument_by_security_id_.find(security);
-        return found == instrument_by_security_id_.end() ? InstrumentId{0} : found->second;
+        const auto found = instrument_by_security_id_.find(security_id_key(security));
+        return found == nullptr ? InstrumentId{0} : *found;
     }
     template <class M, class Core>
     bool order_fields(const protocol::cme::MessageView& message, OrderMetadata& out, Core& core) noexcept {
@@ -550,10 +555,11 @@ private:
 template <class Sink>
 class IlinkUsers {
 public:
-    explicit IlinkUsers(const server::ServerConfig& config) {
+    explicit IlinkUsers(const server::ServerConfig& config)
+        : instrument_by_security_id_(config.instruments.size()) {
         for (std::size_t index = 0; index < config.instruments.size(); ++index) {
             const auto instrument = static_cast<InstrumentId>(index + 1);
-            instrument_by_security_id_.try_emplace(config.instruments[index].cme_security_id, instrument);
+            (void)instrument_by_security_id_.insert(security_id_key(config.instruments[index].cme_security_id), instrument);
         }
         for (const auto& user : config.users) {
             if (user.protocol != server::Protocol::Ilink3) continue;
