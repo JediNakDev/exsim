@@ -1,6 +1,6 @@
 #include "api/json.hpp"
-#include "api/runtime_snapshot.hpp"
 #include "ipc/exchange_control.hpp"
+#include "ipc/runtime_snapshot.hpp"
 #include "server/server_runtime.hpp"
 #include "test/framework/test.hpp"
 
@@ -57,7 +57,7 @@ struct TestControlHandler {
             const auto command = ipc::receive_control(handler.fd);
             if (command == "stop") handler.runtime->request_shutdown();
             else if (command != "status") throw std::runtime_error("invalid control command");
-            ipc::send_control(handler.fd, api::runtime_snapshot_json(*handler.runtime));
+            ipc::send_control(handler.fd, ipc::runtime_snapshot_json(*handler.runtime));
             ++handler.commands_handled;
         } catch (...) {
             handler.runtime->request_shutdown();
