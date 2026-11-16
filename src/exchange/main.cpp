@@ -1,6 +1,6 @@
 #include "api/api_json.hpp"
-#include "api/runtime_snapshot.hpp"
 #include "ipc/exchange_control.hpp"
+#include "ipc/runtime_snapshot.hpp"
 #include "server/admin/core_admin.hpp"
 #include "server/config.hpp"
 #include "server/server_runtime.hpp"
@@ -42,7 +42,7 @@ void handle_control_commands(void* context) noexcept {
             }
             if (command == "stop") control.runtime.request_shutdown();
             else if (command != "status") throw std::runtime_error("invalid control command");
-            exsim::ipc::send_control(control.socket.fd(), exsim::api::runtime_snapshot_json(control.runtime));
+            exsim::ipc::send_control(control.socket.fd(), exsim::ipc::runtime_snapshot_json(control.runtime));
         } catch (...) {
             control.runtime.request_shutdown();
             control.runtime.unwatch_readable_fd();
@@ -88,7 +88,7 @@ int main(int argc, char** argv) {
         exsim::server::ServerRuntime runtime(config, options);
         error = runtime.start();
         if (!error.empty()) throw std::runtime_error(error);
-        const auto ready = exsim::api::runtime_snapshot_json(runtime);
+        const auto ready = exsim::ipc::runtime_snapshot_json(runtime);
         if (control.is_open()) exsim::ipc::send_control(control.fd(), ready, 10000);
         std::cout << ready << std::endl;
         ControlSocket control_socket{control, runtime};

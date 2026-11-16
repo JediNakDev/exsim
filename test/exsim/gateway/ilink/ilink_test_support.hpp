@@ -44,7 +44,7 @@ inline server::ServerConfig config() {
         user.ilink_access_key = id == 1 ? "ACCESS-1" : "ACCESS-2";
         user.ilink_session = id == 1 ? "AAA" : "BBB"; user.ilink_firm = "EXSIM";
         user.ilink_secret_key = std::string(43, 'A') + "=";
-        user.ilink_party_id = 1000 + id; user.ilink_account = "SIM-ACCOUNT";
+        user.ilink_party_id = 1000 + id;
         result.users.push_back(user);
     }
     return result;

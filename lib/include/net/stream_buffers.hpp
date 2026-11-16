@@ -6,6 +6,13 @@
 // runs out of room the caller is told and decides (the TCP server disconnects
 // the connection). Bytes are `char`, matching the protocol codecs.
 //
+// Storage is deliberately not prefaulted. Capacity is sized for the largest
+// single write (an MDP replay of about 2.8 MB, an iLink retransmission of
+// about 1.25 MB), so prefaulting every slot would make hundreds of MiB
+// resident at startup. A page faults once, the first time a burst reaches
+// it; the slot keeps the buffer across connections and compaction keeps
+// steady traffic in the first pages.
+//
 //   inbound:  receive_from(fd) appends at the tail -> framer reads readable()
 //             and consume()s whole messages -> unread partial bytes are moved
 //             to the front only when the tail runs short (no allocation).

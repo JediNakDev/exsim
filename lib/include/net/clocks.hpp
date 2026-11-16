@@ -4,6 +4,7 @@
 #include <ctime>
 namespace exsim::net {
 inline constexpr std::uint64_t kNanosecondsPerSecond = 1000000000;
+// The one ns-per-day constant: trading-day bounds, ITCH timestamps, CME trade dates.
 inline constexpr std::uint64_t kNanosecondsPerDay = 86400 * kNanosecondsPerSecond;
 inline std::uint64_t monotonic_ns() noexcept {
     timespec time{};
@@ -14,12 +15,6 @@ inline std::uint64_t realtime_ns() noexcept {
     timespec time{};
     clock_gettime(CLOCK_REALTIME, &time);
     return static_cast<std::uint64_t>(time.tv_sec) * kNanosecondsPerSecond + time.tv_nsec;
-}
-inline std::uint64_t utc_midnight_ns(std::uint64_t unix_ns) noexcept {
-    return unix_ns % kNanosecondsPerDay;
-}
-inline std::uint64_t utc_midnight_ns() noexcept {
-    return utc_midnight_ns(realtime_ns());
 }
 // Cache the UTC offset during setup (and refresh at session/day or timezone
 // changes). No libc timezone conversion, locks or lazy allocation per message.

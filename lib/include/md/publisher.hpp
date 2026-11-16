@@ -92,7 +92,7 @@ struct PublisherStats {
         return PublishStatus::InvalidConfig;
     if (config.heartbeat_interval_ns == 0) return PublishStatus::InvalidConfig;
     // The whole trading day must be representable on the command clock.
-    if (config.day_origin > std::numeric_limits<Timestamp>::max() - kNanosecondsPerTradingDay)
+    if (config.day_origin > std::numeric_limits<Timestamp>::max() - net::kNanosecondsPerDay)
         return PublishStatus::InvalidConfig;
     return PublishStatus::Ok;
 }
@@ -258,17 +258,15 @@ public:
         if (config_.noii_interval_ns == 0 || !interval_elapsed(last_imbalance_time_, now, config_.noii_interval_ns))
             return PublishStatus::Ok;
         last_imbalance_time_ = now;
-        bool any_call_phase = false;
-        for (std::size_t locate = 1; locate <= config_.max_instruments; ++locate)
-            any_call_phase = any_call_phase || (instruments_[locate].registered && is_call_phase(instruments_[locate].phase));
-        if (!any_call_phase) return PublishStatus::Ok;
+        // One pass over the instruments. An out-of-day `now` stops the
+        // session only when there is a call-phase instrument to publish.
         std::uint64_t itch_time = 0;
-        if (!itch_timestamp_from_event_time(now, config_.day_origin, itch_time))
-            return stop(PublishStatus::TimestampOutsideDay);
-        current_time_ = now;
+        const bool now_in_day = itch_timestamp_from_event_time(now, config_.day_origin, itch_time);
         for (std::size_t locate = 1; locate <= config_.max_instruments; ++locate) {
             const PublishedInstrument& instrument = instruments_[locate];
             if (!instrument.registered || !is_call_phase(instrument.phase)) continue;
+            if (!now_in_day) return stop(PublishStatus::TimestampOutsideDay);
+            current_time_ = now;
             const auto id = static_cast<InstrumentId>(locate);
             const AuctionIndicative indicative = source.auction_indicative(id);
             const std::optional<Price> last_trade = source.last_trade_price(id);
