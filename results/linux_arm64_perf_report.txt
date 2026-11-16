@@ -1,0 +1,13 @@
+    17.47%           297  exsim_benchmark  exsim_benchmark      [.] exsim::MatchingEngine::handle(exsim::Command const&, exsim::EventBuffer&)
+    17.41%           296  exsim_benchmark  exsim_benchmark      [.] exsim::MatchingEngine::Impl::rest(exsim::engine::InstrumentBook&, exsim::(anonymous namespace)::IncomingOrder const&, unsigned long,
+    16.88%           287  exsim_benchmark  exsim_benchmark      [.] exsim::MatchingEngine::Impl::remove_resting(exsim::engine::InstrumentBook&, unsigned int)
+    13.00%           221  exsim_benchmark  exsim_benchmark      [.] void bench::run_commands<BM_MixedWorkload(benchmark::State&)::{lambda(bench::Scenario&)#1}>(benchmark::State&, std::__cxx11::basic_s
+     8.12%           138  exsim_benchmark  exsim_benchmark      [.] std::vector<exsim::Event, std::allocator<exsim::Event> >::push_back(exsim::Event const&)
+     7.71%           131  exsim_benchmark  exsim_benchmark      [.] exsim::MatchingEngine::Impl::match_and_dispose(exsim::engine::InstrumentBook&, exsim::(anonymous namespace)::IncomingOrder&, unsigne
+     6.12%           104  exsim_benchmark  exsim_benchmark      [.] std::mersenne_twister_engine<unsigned long, 64ul, 312ul, 156ul, 31ul, 13043109905998158313ul, 29ul, 6148914691236517205ul, 17ul, 820
+     2.71%            46  exsim_benchmark  exsim_benchmark      [.] exsim::util::ObjectPool<exsim::book::Order, 4096ul>::allocate_block(unsigned long)
+     2.35%            40  exsim_benchmark  exsim_benchmark      [.] std::__detail::_MakeUniq<bench::Scenario>::__single_object std::make_unique<bench::Scenario>()
+     2.00%            34  exsim_benchmark  exsim_benchmark      [.] exsim::util::ObjectPool<exsim::book::PriceLevel, 4096ul>::allocate_block(unsigned long)
+     1.76%            30  exsim_benchmark  exsim_benchmark      [.] exsim::MatchingEngine::Impl::emit_resting_canceled(exsim::engine::InstrumentBook const&, unsigned int, exsim::CancelReason, unsigned
+     1.41%            24  exsim_benchmark  [vdso]               [.] __kernel_clock_gettime
+     1.18%            20  exsim_benchmark  exsim_benchmark      [.] exsim::util::FlatHashMap<exsim::book::Order*>::reserve(unsigned long)
