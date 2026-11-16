@@ -8,7 +8,7 @@
 // belongs to the gateway. Prices use exsim::Price, checked against the 32-bit
 // wire range.
 #include "engine/instrument.hpp"
-#include "engine/types.hpp"
+#include "common/types.hpp"
 #include "wire.hpp"
 #include <algorithm>
 namespace exsim::protocol::ouch42 {

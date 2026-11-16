@@ -8,7 +8,7 @@
 //   format_price(70'000, 2) == "7.00"     test diagnostics
 //   format_price(1'002'500, 0) == "100.25"
 
-#include <engine/types.hpp>
+#include <common/types.hpp>
 
 #include <algorithm>
 #include <charconv>

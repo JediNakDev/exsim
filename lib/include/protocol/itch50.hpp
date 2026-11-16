@@ -5,7 +5,7 @@
 // The caller selects the message struct using the wire type byte. Decoders
 // require exactly one message; unknown extensible alpha values are preserved.
 #include "engine/instrument.hpp"
-#include "engine/types.hpp"
+#include "common/types.hpp"
 #include "wire.hpp"
 namespace exsim::protocol::itch50 {
 using protocol::Status;

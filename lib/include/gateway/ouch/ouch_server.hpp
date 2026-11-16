@@ -50,7 +50,7 @@
 #include "protocol/soupbintcp.hpp"
 #include "server/config.hpp"
 #include "server/core/policies.hpp"
-#include "engine/types.hpp"
+#include "common/types.hpp"
 
 #include <algorithm>
 #include <array>

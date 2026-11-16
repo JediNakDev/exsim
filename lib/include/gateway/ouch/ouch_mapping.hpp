@@ -7,7 +7,7 @@
 // Engine-to-wire reason mappings live here; codecs handle wire layouts only.
 
 #include "protocol/ouch42.hpp"
-#include "engine/types.hpp"
+#include "common/types.hpp"
 
 #include <array>
 #include <cstdint>
