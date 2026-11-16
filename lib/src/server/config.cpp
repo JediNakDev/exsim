@@ -416,15 +416,6 @@ struct Parser {
 
 }  // namespace
 
-const UserConfig* ServerConfig::find_user(std::string_view username) const noexcept {
-    for (const UserConfig& u : users) {
-        if (u.username == username) {
-            return &u;
-        }
-    }
-    return nullptr;
-}
-
 bool parse_price(std::string_view text, Price& out) noexcept {
     return exsim::parse_decimal_price(text, out);
 }

@@ -24,14 +24,12 @@
 #include "engine/event.hpp"
 #include "engine/instrument.hpp"
 #include "engine/matching_engine.hpp"
-#include "md/publisher.hpp"
 #include "server/config.hpp"
 #include "server/core/deferred_command_queue.hpp"
 #include "server/core/policies.hpp"
 #include "server/core/session_dispatch_set.hpp"
 #include "server/core/user_faults.hpp"
 #include "server/journal/journal.hpp"
-#include "md/packet_faults.hpp"
 
 #include <algorithm>
 #include <concepts>
@@ -68,12 +66,6 @@ struct CoreCounters {
     std::uint64_t journal_failures = 0;              // failed append or flush
     std::uint64_t batches_dispatched = 0;            // non-empty batches
     std::uint64_t session_dispatches = 0;            // Sessions::on_events calls
-    // Batches the MarketData policy reported as not published (on_events
-    // returned a md::PublishStatus other than Ok); 0 for a policy whose
-    // on_events returns void.
-    std::uint64_t market_data_failed_batches = 0;
-    // Last non-Ok md::PublishStatus from on_events, on_timer or on_shutdown.
-    md::PublishStatus market_data_last_failure = md::PublishStatus::Ok;
 };
 
 enum class JournalState : std::uint8_t { Disabled = 0, Healthy = 1, Failed = 2 };
@@ -118,7 +110,7 @@ public:
           journal_flush_interval_ns_(Timestamp{config.journal_flush_interval_ms} * 1'000'000) {
         static_assert(CoreSessions<Sessions, ExchangeCore>,
                       "Sessions needs on_events(SessionId, const SessionEvents&, Core&)");
-        if (day_start_ >= day_end_ || day_end_ > kNanosecondsPerDay) {
+        if (day_start_ >= day_end_ || day_end_ > net::kNanosecondsPerDay) {
             throw std::invalid_argument("trading day range");
         }
         for (std::size_t i = 0; i < config_.instruments.size(); ++i) {
@@ -265,9 +257,9 @@ public:
         }
         finish_outer_operation();
         if constexpr (MarketDataTimerWithCore<MarketData, ExchangeCore>) {
-            (void)call_market_data_hook([&] { return market_data_.on_timer(now_for_timers, std::as_const(*this)); });
+            (void)market_data_.on_timer(now_for_timers, std::as_const(*this));
         } else if constexpr (MarketDataTimer<MarketData>) {
-            (void)call_market_data_hook([&] { return market_data_.on_timer(now_for_timers); });
+            (void)market_data_.on_timer(now_for_timers);
         }
         if (journal_ && !journal_failed_ && journal_flush_interval_ns_ != 0 &&
             now_for_timers - last_journal_flush_ >= journal_flush_interval_ns_) {
@@ -477,26 +469,6 @@ private:
         return result;
     }
 
-    // Calls a MarketData hook and records the md::PublishStatus it returned
-    // (policies whose hooks return void or another type report nothing).
-    // Returns true on a failure.
-    template <typename Call>
-    bool call_market_data_hook(Call&& call) noexcept {
-        if constexpr (std::is_void_v<decltype(call())>) {
-            call();
-            return false;
-        } else {
-            const auto status = call();
-            if constexpr (std::same_as<std::remove_cvref_t<decltype(status)>, md::PublishStatus>) {
-                if (status != md::PublishStatus::Ok) {
-                    counters_.market_data_last_failure = status;
-                    return true;
-                }
-            }
-            return false;
-        }
-    }
-
     // Applies, journals and dispatches one command at `stamp`.
     SubmitResult apply(Command command, Timestamp stamp) noexcept {
         if (shutdown_) {
@@ -568,9 +540,7 @@ private:
             ++counters_.session_dispatches;
         }
         dispatch_set_.clear();
-        if (call_market_data_hook([&] { return market_data_.on_events(batch); })) {
-            ++counters_.market_data_failed_batches;
-        }
+        (void)market_data_.on_events(batch);
         market_data_.flush();
         ++counters_.batches_dispatched;
         dispatching_ = false;
@@ -613,7 +583,7 @@ private:
             sessions_.on_shutdown(stamp, *this);
         }
         if constexpr (MarketDataShutdown<MarketData>) {
-            (void)call_market_data_hook([&] { return market_data_.on_shutdown(stamp); });
+            (void)market_data_.on_shutdown(stamp);
         }
         if (journal_ && !journal_failed_ && !journal_->flush()) {
             on_journal_failure();

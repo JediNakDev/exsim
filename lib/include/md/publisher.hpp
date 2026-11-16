@@ -92,7 +92,7 @@ struct PublisherStats {
         return PublishStatus::InvalidConfig;
     if (config.heartbeat_interval_ns == 0) return PublishStatus::InvalidConfig;
     // The whole trading day must be representable on the command clock.
-    if (config.day_origin > std::numeric_limits<Timestamp>::max() - kNanosecondsPerTradingDay)
+    if (config.day_origin > std::numeric_limits<Timestamp>::max() - net::kNanosecondsPerDay)
         return PublishStatus::InvalidConfig;
     return PublishStatus::Ok;
 }

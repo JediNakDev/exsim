@@ -160,8 +160,7 @@ TEST_CASE(server_config, minimal_uses_defaults) {
     CHECK(cfg.users[0].protocol == Protocol::Ouch42);
     CHECK(cfg.users[0].cancel_on_disconnect);
     CHECK(cfg.exchange.name == "EXSIM");
-    CHECK(cfg.find_user("ALICE") != nullptr);
-    CHECK(cfg.find_user("BOB") == nullptr);
+    CHECK(cfg.users[0].username == "ALICE");
 }
 
 TEST_CASE(server_config, example_file_parses) {
@@ -278,9 +277,9 @@ TEST_CASE(server_config, day_times_parse_and_format) {
     CHECK(parse_day_time("09:30:15", ns));
     CHECK_EQ(ns, (9 * 3600 + 30 * 60 + 15) * 1'000'000'000ull);
     CHECK(parse_day_time("23:59:59.999999999", ns));
-    CHECK_EQ(ns, kNanosecondsPerDay - 1);
+    CHECK_EQ(ns, net::kNanosecondsPerDay - 1);
     CHECK(parse_day_time("24:00", ns));
-    CHECK_EQ(ns, kNanosecondsPerDay);
+    CHECK_EQ(ns, net::kNanosecondsPerDay);
     CHECK(!parse_day_time("24:00:01", ns));
     CHECK(!parse_day_time("12:60", ns));
     CHECK(!parse_day_time("12:00:60", ns));
@@ -288,9 +287,9 @@ TEST_CASE(server_config, day_times_parse_and_format) {
     CHECK(!parse_day_time("9:30", ns));
     CHECK(!parse_day_time("", ns));
     CHECK(format_day_time(0) == "00:00:00");
-    CHECK(format_day_time(kNanosecondsPerDay) == "24:00:00");
+    CHECK(format_day_time(net::kNanosecondsPerDay) == "24:00:00");
     CHECK(format_day_time((9 * 3600 + 30 * 60) * 1'000'000'000ull + 250'000'000ull) == "09:30:00.25");
-    CHECK(format_day_time(kNanosecondsPerDay - 1) == "23:59:59.999999999");
+    CHECK(format_day_time(net::kNanosecondsPerDay - 1) == "23:59:59.999999999");
 }
 
 TEST_CASE(server_config, rejects_legacy_listeners_and_protocols) {

@@ -42,6 +42,7 @@
 #include "engine/instrument.hpp"
 #include "engine/matching_engine.hpp"
 #include "engine/types.hpp"
+#include "net/clocks.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -79,8 +80,6 @@ struct UserConfig {
     std::string ilink_account;
 };
 
-inline constexpr Timestamp kNanosecondsPerDay = Timestamp{86'400} * 1'000'000'000;
-
 struct ExchangeSection {
     std::string name = "EXSIM";  // FIX TargetCompID clients must use
     std::string bind_address = "127.0.0.1";
@@ -93,7 +92,7 @@ struct ExchangeSection {
     // Commands are accepted only while their stamped timestamp (ns since
     // local midnight) is in [trading_day_start_ns, trading_day_end_ns).
     Timestamp trading_day_start_ns = 0;
-    Timestamp trading_day_end_ns = kNanosecondsPerDay;
+    Timestamp trading_day_end_ns = net::kNanosecondsPerDay;
 };
 
 enum class MarketDataProtocol : std::uint8_t { Itch50, Mdp3 };
@@ -149,8 +148,6 @@ struct ServerConfig {
     std::uint32_t journal_flush_interval_ms = 1000;  // periodic flush from the core timer; 0 = never
     std::vector<InstrumentConfig> instruments;
     std::vector<UserConfig> users;
-
-    [[nodiscard]] const UserConfig* find_user(std::string_view username) const noexcept;
 };
 
 // Parses `text`; on failure returns false and sets `error` to
