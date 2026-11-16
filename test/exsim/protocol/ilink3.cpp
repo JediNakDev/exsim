@@ -1,6 +1,8 @@
 #include "protocol/ilink3.hpp"
 #include "test/framework/test.hpp"
 
+#include <algorithm>
+
 namespace wire = exsim::protocol::ilink3;
 namespace schema = wire::schema;
 namespace cme = exsim::protocol::cme;
@@ -56,4 +58,19 @@ TEST_CASE(proto_ilink3, fixed_text_validation_and_credentials_tail) {
     bytes[12 + M::AccessKeyID.offset + 5] = 'X';
     CHECK(!wire::valid_text(view, M::AccessKeyID));
     view.header.version = 8; CHECK(!wire::valid<M>(view));
+}
+
+TEST_CASE(proto_ilink3, root_encode_writes_root_and_tail_in_place) {
+    using M = schema::Negotiate500;
+    wire::Root<M> root;
+    REQUIRE(root.set(M::AccessKeyID, "KEY"));
+    const std::array<char, 4> tail{2, 0, 'A', 'B'};
+    std::array<char, 12 + M::block_length + 3> too_small{};
+    CHECK_EQ(root.encode(too_small, tail), 0u);
+    std::array<char, 12 + M::block_length + 4> bytes{};
+    REQUIRE_EQ(root.encode(bytes, tail), bytes.size());
+    cme::MessageView view;
+    REQUIRE_EQ(cme::decode_ilink(bytes, view), Status::ok);
+    CHECK(std::ranges::equal(view.root(), root.bytes));
+    CHECK(std::ranges::equal(view.trailing(), tail));
 }
