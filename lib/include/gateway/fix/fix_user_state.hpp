@@ -89,11 +89,15 @@ struct FixNewOrderRequest {
 struct FixCancelRequest {
     std::string_view original_client_order_id{};
     std::string_view client_order_id{};
+    std::string_view symbol{};
+    Side side = Side::BUY;
 };
 
 struct FixReplaceRequest {
     std::string_view original_client_order_id{};
     std::string_view client_order_id{};
+    std::string_view symbol{};
+    Side side = Side::BUY;
     char order_type_code = '2';
     bool has_price = false;
     Price price = 0;
@@ -216,7 +220,10 @@ public:
             return;
         }
         const ClOrdId original_token_id = tokens_.find(request.original_client_order_id);
-        if (original_token_id == 0 || original_token_id == request_token_id) {
+        if (original_token_id == 0 || original_token_id == request_token_id ||
+            (records_[original_token_id].order_id != 0 &&
+             (request.symbol != symbol_of(ctx, records_[original_token_id].instrument) ||
+              request.side != records_[original_token_id].side))) {
             return send_cancel_reject(request.client_order_id, request.original_client_order_id, '1',
                                       CancelRejectReason::UnknownOrder, "unknown order", now, ctx);
         }
@@ -236,7 +243,10 @@ public:
             return;
         }
         const ClOrdId original_token_id = tokens_.find(request.original_client_order_id);
-        if (original_token_id == 0 || original_token_id == new_token_id) {
+        if (original_token_id == 0 || original_token_id == new_token_id ||
+            (records_[original_token_id].order_id != 0 &&
+             (request.symbol != symbol_of(ctx, records_[original_token_id].instrument) ||
+              request.side != records_[original_token_id].side))) {
             return send_cancel_reject(request.client_order_id, request.original_client_order_id, '2',
                                       CancelRejectReason::UnknownOrder, "unknown order", now, ctx);
         }

@@ -549,3 +549,25 @@ TEST_CASE(gateway_ouch_session, trading_day_lifecycle) {
     CHECK(frames[0] == login_accepted_golden(1));
     CHECK_EQ(sequenced_types(frames), "SA");
 }
+
+TEST_CASE(gateway_ouch_session, shutdown_paused_replay_does_not_claim_end_of_session) {
+    TestExchange exchange;
+    {
+        RawSession bob(exchange);
+        REQUIRE(bob.login("bob", "bobpw"));
+        for (int i = 0; i < 10; ++i)
+            bob.send_message(enter_order("ASK" + std::to_string(i), 'S', 10, "AAPL", kHundredDollars));
+    }
+    RawSession bob(exchange, 400);
+    REQUIRE(bob.login("bob", "bobpw", 1));
+    REQUIRE(bob.connection().is_replaying());
+    // Leave exactly enough space for Z, but not the next stored report.
+    auto& sink = bob.connection().sink();
+    const auto padding = sink.capacity() - sink.view().size() - 3;
+    REQUIRE(sink.prepare(padding) != nullptr);
+    sink.commit(padding);
+    const auto before = sink.view().size();
+    bob.connection().end_session(exchange);
+    CHECK(bob.connection().close_requested());
+    CHECK_EQ(sink.view().size(), before);
+}
