@@ -1,23 +1,27 @@
 #!/usr/bin/env bash
-# Linux perf-based profiling for the Exsim benchmark binary.
+# Linux profile of one benchmark: perf counters, a call-graph report and a flame graph.
 #
-# Captures:
-#   - perf stat counters (cycles, instructions, cache-misses, branch-misses,
-#     L1-dcache-load-misses) over the full benchmark run
-#   - perf record sampled call stacks → flamegraph-ready perf.data
-#   - perf annotate top hotspots
+# Usage: benchmark/profiling/run_perf.sh [output_dir]
+# Build first: make -j4 bench-build
 #
-# Usage:
-#   benchmark/profiling/run_perf.sh [output_dir]
+# PERF             perf binary (default: perf)
+# PERF_FILTER      Google Benchmark regex (default: MixedWorkload)
+# PERF_CORE        CPU to pin to (default: 0)
+# PERF_EVENT       sampling event (default: cpu-clock:u)
+# FLAMEGRAPH_DIR   checkout of github.com/brendangregg/FlameGraph; without it no flame graph is drawn
 #
-# Defaults: writes artifacts under benchmark/profiling/perf_$(date +%s)/
-# Requires: linux-tools-common (perf), repo built via `make -j4 bench-build`.
+# The samples include the untimed setup between iterations (engine construction,
+# prefill, command generation). Read the stacks under MatchingEngine::handle.
 set -euo pipefail
 
-BENCH=build/bench/exsim_benchmark
+BENCH=${BENCH:-build/bench/exsim_benchmark}
+PERF=${PERF:-perf}
 OUT=${1:-benchmark/profiling/perf_$(date +%Y%m%d_%H%M%S)}
 CORE=${PERF_CORE:-0}
-FILTER=${PERF_FILTER:-Mixed}
+FILTER=${PERF_FILTER:-MixedWorkload}
+EVENT=${PERF_EVENT:-cpu-clock:u}
+RUN=(taskset -c "$CORE" "$BENCH" --core="$CORE" --csv=/dev/null
+     --benchmark_filter="$FILTER" --benchmark_repetitions=40)
 
 if [[ ! -x "$BENCH" ]]; then
     echo "error: $BENCH not found; run 'make -j4 bench-build' first" >&2
@@ -25,24 +29,16 @@ if [[ ! -x "$BENCH" ]]; then
 fi
 mkdir -p "$OUT"
 
-echo "=== perf stat (cache + branch counters) ==="
-perf stat -e cycles,instructions,cache-references,cache-misses,branch-instructions,branch-misses,L1-dcache-loads,L1-dcache-load-misses \
-    -o "$OUT/perf_stat.txt" \
-    taskset -c "$CORE" \
-    "$BENCH" --core="$CORE" --benchmark_filter="$FILTER" --benchmark_min_time=3s
-echo "  → $OUT/perf_stat.txt"
+# Virtual machines often have no PMU; the counters then print <not supported>.
+"$PERF" stat -e cycles,instructions,cache-misses,branch-misses -o "$OUT/perf_stat.txt" -- "${RUN[@]}" > /dev/null
+# The bench build keeps frame pointers, so -g unwinds without DWARF. User-only stacks avoid
+# the kernel profiling restriction of perf_event_paranoid=2.
+"$PERF" record -e "$EVENT" -F 999 -g --user-callchains -o "$OUT/perf.data" -- "${RUN[@]}" > /dev/null
+"$PERF" evlist -i "$OUT/perf.data" > "$OUT/events.txt"
+"$PERF" report -i "$OUT/perf.data" --stdio --no-children -g none -n --percent-limit=1 > "$OUT/perf_report.txt"
 
-echo "=== perf record (sampled call stacks) ==="
-perf record -F 999 --call-graph dwarf -o "$OUT/perf.data" -- \
-    taskset -c "$CORE" \
-    "$BENCH" --core="$CORE" --benchmark_filter="$FILTER" --benchmark_min_time=2s
-echo "  → $OUT/perf.data"
-
-echo "=== perf report (top symbols) ==="
-perf report -i "$OUT/perf.data" --stdio --no-children -n --percent-limit=0.5 \
-    > "$OUT/perf_report.txt"
-echo "  → $OUT/perf_report.txt"
-
-echo
-echo "Artifacts in $OUT/. For a flamegraph:"
-echo "  perf script -i $OUT/perf.data | stackcollapse-perf.pl | flamegraph.pl > $OUT/flame.svg"
+if [[ -n "${FLAMEGRAPH_DIR:-}" ]]; then
+    "$PERF" script -i "$OUT/perf.data" | "$FLAMEGRAPH_DIR/stackcollapse-perf.pl" \
+        | "$FLAMEGRAPH_DIR/flamegraph.pl" --title "exsim $FILTER" > "$OUT/flame.svg"
+fi
+echo "wrote $OUT"
