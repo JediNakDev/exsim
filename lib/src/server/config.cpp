@@ -1,6 +1,7 @@
 #include "server/config.hpp"
 
 #include "engine/price_text.hpp"
+#include "gateway/fix/fix_common.hpp"
 #include "md/feed_common.hpp"
 #include "protocol/cme_sbe.hpp"
 #include "protocol/ilink3.hpp"
@@ -384,6 +385,11 @@ struct Parser {
             }
             if (u.protocol == Protocol::Ouch42 && (u.username.size() > 6 || u.password.size() > 10)) {
                 return fail("user " + u.username + ": SoupBinTCP limits username to 6 and password to 10 characters");
+            }
+            if (u.protocol == Protocol::Fix44 &&
+                (u.username.size() > gateway::fix::kMaxCompIdLength ||
+                 u.password.size() > gateway::fix::kMaxInboundTextFieldLength)) {
+                return fail("user " + u.username + ": FIX username or password exceeds gateway field length limit");
             }
             if (u.protocol == Protocol::Ilink3) {
                 std::array<char, 32> key{};
