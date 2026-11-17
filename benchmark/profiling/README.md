@@ -1,34 +1,28 @@
 # Profiling
 
-Build the optimized benchmark binary first:
+Build with `make -j4 bench-build`, then run:
 
 ```sh
-make -j4 bench-build
+benchmark/profiling/run_macos.sh output/macos-profile
+FLAMEGRAPH_DIR=/path/to/FlameGraph benchmark/profiling/run_perf.sh output/perf-profile
 ```
 
-Run the script for your platform:
+Linux needs `perf`, `taskset` and permission to sample. Hardware counters are
+needed for the counter report; software sampling can still work without a PMU.
+`FLAMEGRAPH_DIR` points to Brendan Gregg's FlameGraph tools. The script writes
+counter output, a sampled call graph, a text report and, when the tools are
+provided, `flame.svg`. A failed counter or sampling command stops the script.
+It does not substitute fabricated counters or stacks.
 
-```sh
-benchmark/profiling/run_macos.sh
-benchmark/profiling/run_perf.sh
-```
+`BENCH` selects the binary, `PERF` selects perf, `PERF_FILTER` selects cases,
+`PERF_CORE` selects the Linux CPU, and `PERF_EVENT` selects the sampling event
+(default `cpu-clock:u`). `events.txt` records the actual sampling event;
+perf can substitute events on unsupported hardware. Scripts repeat the fixed-iteration cases to collect more
+samples. Whole-process stacks include setup; inspect stacks under
+`MatchingEngine::handle` to distinguish matching from allocation and generation.
 
-Both scripts default to the mixed workload and write to a timestamped directory under `benchmark/profiling/`. Set `PERF_FILTER` to select another benchmark.
+macOS uses `xcrun xctrace` and `/usr/bin/sample`; CPU counters need Apple
+developer tools and permissions. Pinning on macOS is only a hint.
 
-The macOS script uses `xcrun xctrace` and `/usr/bin/sample`. CPU counter capture needs the appropriate Apple developer tools and permissions. Linux uses `perf stat`, `perf record`, and `perf report`; it also needs `taskset`. Set `PERF_CORE` to choose an available Linux CPU.
-
-## Replay
-
-```sh
-make -j4 itch-replay
-./build/perf/itch_replay --synth 1000000
-./build/perf/itch_replay --synth 100000 --validate
-```
-
-Synthetic stream generation happens before timed replay. Validation adds reference-book and snapshot work, so compare validated runs separately.
-
-## Historical captures
-
-Files under `macos_capture/` were retained from 0.1.4. They are not measurements of the current code. Recorded symbols can refer to older data structures.
-
-Keep the binary revision, build flags, workload, hardware, and profiler settings with new captures. A sampled stack alone does not establish why throughput changed.
+Keep the revision, flags, workload, hardware and profiler settings with captures.
+No old captures are retained as evidence of current performance.

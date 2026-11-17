@@ -11,9 +11,9 @@
 #   benchmark/profiling/run_macos.sh [output_dir]
 set -euo pipefail
 
-BENCH=build/bench/exsim_benchmark
+BENCH=${BENCH:-build/bench/exsim_benchmark}
 OUT=${1:-benchmark/profiling/macos_$(date +%Y%m%d_%H%M%S)}
-FILTER=${PERF_FILTER:-Mixed}
+FILTER=${PERF_FILTER:-MixedWorkload}
 
 if [[ ! -x "$BENCH" ]]; then
     echo "error: $BENCH not found; run 'make -j4 bench-build' first" >&2
@@ -24,12 +24,12 @@ mkdir -p "$OUT"
 echo "=== xctrace: CPU counters ==="
 xcrun xctrace record \
     --template 'CPU Counters' \
-    --launch -- "$BENCH" --benchmark_filter="$FILTER" --benchmark_min_time=2s \
-    --output "$OUT/cpu_counters.trace" || \
+    --output "$OUT/cpu_counters.trace" \
+    --launch -- "$BENCH" --csv=/dev/null --benchmark_filter="$FILTER" --benchmark_repetitions=40 || \
     echo "(xctrace requires developer tools; skipping if unavailable)"
 
 echo "=== sample: call-stack profile ==="
-"$BENCH" --benchmark_filter="$FILTER" --benchmark_min_time=5s &
+"$BENCH" --csv=/dev/null --benchmark_filter="$FILTER" --benchmark_repetitions=100 &
 PID=$!
 sleep 0.3
 /usr/bin/sample "$PID" 3 -file "$OUT/sample.txt" -mayDie || true

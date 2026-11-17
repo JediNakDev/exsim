@@ -7,8 +7,8 @@ Memory figures are computed from the code, not measured.
 
 - [x] **1.** **Phase and fault control is unreachable in the shipped product.** `CoreAdmin` and [admin_command.cpp](./lib/src/server/admin/admin_command.cpp) link only into test binaries (`TEST_LIB_SRCS` in the Makefile). The control socket in [src/exchange/main.cpp](./src/exchange/main.cpp) accepts only `status` and `stop`, and the HTTP API has only lifecycle endpoints. No operator can send `SetPhase` or set a user or packet fault at runtime (the only production `SetPhase` is the close-all at shutdown, `exchange_core.hpp:614`), so auctions, uncross, halts and fault injection are production code that only tests can trigger. An instrument with `initial_phase = pre_open` stays there until end-of-day close. Fixed in #8: `POST /v1/exchanges/{id}/admin`.
 - [ ] **2.** **`OrderBook` is two classes in one.** It is a standalone matching book (`add_order`, `cancel_order`, `modify_order`, `match_order_impl`, `get_snapshot`) and also passive storage for the engine (`rest_order`, `execute_order`, `amend_order`, `remove_order`). The engine sets `max_fills_per_add_order = 1; // the engine never calls add_order`. The `std::shared_ptr<OrderBookStorage>` exists only to serve both roles: the standalone book owns its storage, the engine shares one across its books.
-- [ ] **3.** **Benchmarks measure the path production does not use.** Every case drives `OrderBook::add_order` and friends. Nothing measures `MatchingEngine`, a gateway, or the reactor. `benchmark/utils/sharded_engine` is a multi-threaded engine that exists only in the benchmark, while production is single-threaded.
-- [ ] **4.** **Per-operation percentiles are at clock resolution.** `BenchmarkRunner::run` wraps each operation in two `high_resolution_clock::now()` calls ([runner.hpp:29](./benchmark/utils/runner.hpp#L29)). The last committed CSV (`results/benchmark_result_0.1.3.csv`) shows AddOrder P50 41, P95 42, P99 42 and CancelOrder P50 0.00, which is the roughly 42 ns timer tick. Only `sharded_throughput.cpp` times a batch. `benchmark/utils/cycle_timer.hpp` (rdtsc) exists and is unused. Needs a fresh run to confirm on current code.
+- [x] **3.** **Benchmarks measure the path production does not use.** Every case drives `OrderBook::add_order` and friends. Nothing measures `MatchingEngine`, a gateway, or the reactor. `benchmark/utils/sharded_engine` is a multi-threaded engine that exists only in the benchmark, while production is single-threaded. Fixed in #9: all six cases drive `MatchingEngine::handle`; `sharded_engine` is removed. Gateways and the reactor are still not benchmarked.
+- [x] **4.** **Per-operation percentiles are at clock resolution.** `BenchmarkRunner::run` wraps each operation in two `high_resolution_clock::now()` calls ([runner.hpp:29](./benchmark/utils/runner.hpp#L29)). The last committed CSV (`results/benchmark_result_0.1.3.csv`) shows AddOrder P50 41, P95 42, P99 42 and CancelOrder P50 0.00, which is the roughly 42 ns timer tick. Only `sharded_throughput.cpp` times a batch. `benchmark/utils/cycle_timer.hpp` (rdtsc) exists and is unused. Needs a fresh run to confirm on current code. Fixed in #9: 32-command batches and a fixed-bucket histogram. Percentiles are of batch means, stated in the README.
 - [x] **5.** **Two networking stacks.** [http_server.cpp](./lib/src/api/http_server.cpp) uses raw `int` descriptors, manual cleanup and a thread per connection. It bypasses the project's own RAII `net::Socket` and `Poller` and duplicates socket options (`TCP_NODELAY` at [http_server.cpp:38](./lib/src/api/http_server.cpp#L38) and [socket.cpp:92](./lib/src/net/socket.cpp#L92)). This is defensible for a management plane, but the trade-off is not documented. Fixed in #12: the HTTP server uses `net::Socket` and the shared helpers; the thread-per-connection trade-off is written in `http_server.hpp`.
 - [x] **6.** **README links were broken.** Fixed: the TEST and BENCHMARK links now point to `./test/README.md` and `./benchmark/README.md`. The typo "protocal" on line 3 is left as is.
 
@@ -43,13 +43,13 @@ Memory figures are computed from the code, not measured.
 - [ ] **26.** Gateway file granularity is inconsistent: OUCH is one 1036-line `ouch_server.hpp`, FIX is five files plus a 15-line umbrella `fix_gateway.hpp`, iLink is two files.
 - [ ] **27.** The unit versus integration split exists only as path lists in the Makefile. `test/integration/` holds just the Python API test, while C++ integration tests sit in `test/exsim/net/` and a few listed files.
 - [ ] **28.** Test file naming has four conventions: `*_tests.cpp`, `*_test.cpp` (all OUCH), no suffix (`test/exsim/protocol/`), and process names (`fix_review_tests.cpp`, `core_review_tests.cpp`).
-- [ ] **29.** `results/` and `benchmark/profiling/macos_capture/` hold stale data that their own READMEs disclaim.
+- [x] **29.** `results/` and `benchmark/profiling/macos_capture/` hold stale data that their own READMEs disclaim. Fixed in #9: one fresh result set in `results/`.
 - [ ] **30.** `test/README.md` still refers to an ignored `legacy/` folder.
-- [ ] **31.** Include guard style is mixed: seven `benchmark/utils` headers, `ilink_test_support.hpp` and the generated schema use `#pragma once`; everything else uses include guards.
+- [ ] **31.** Include guard style is mixed: seven `benchmark/utils` headers, `ilink_test_support.hpp` and the generated schema use `#pragma once`; everything else uses include guards. The `benchmark/utils` headers use include guards since #9; `ilink_test_support.hpp` is still open.
 
 ## Unused, test-only, single-use, duplicated
 
-- [ ] **32.** **No users at all:** ~~`kAllEventTypes`~~ (removed in #13), `book::Timestamp`, `cycle_timer.hpp`, and `BenchmarkRunner::set_samples`, `add_counter`, `latencies`, `state`.
+- [ ] **32.** **No users at all:** ~~`kAllEventTypes`~~ (removed in #13), `book::Timestamp` (still open, see #11), ~~`cycle_timer.hpp`, and `BenchmarkRunner::set_samples`, `add_counter`, `latencies`, `state`~~ (removed in #9).
 - [ ] **33.** **Test-only code in `lib/`:**
     - ~~`fix44::FrameReader` and the typed `fix44::decode` functions~~ (moved to `test/` in #14)
     - ~~`moldudp64::PacketReader`~~ (moved to `test/` in #14)
@@ -96,7 +96,7 @@ Memory figures are computed from the code, not measured.
 - [x] **60.** `JournalWorker` polls and sleeps 1 ms when empty, so there is up to 1 ms of added latency and no wake mechanism (eventfd, futex or condition variable). Its destructor waits 100 ms and then detaches a stuck writer. Fixed in #13: atomic wait and notify. The 100 ms bounded shutdown stays.
 - [ ] **61.** `publish_imbalances` loops all `max_instruments` once per interval, and a second time when any instrument is in a call phase. `rested_replacement` forward-scans per priority-losing replace.
 - [ ] **62.** `FlatHashMap::clear` and `TokenTable::clear` cost O(capacity), not O(size).
-- [ ] **64.** Latency stats keep a `vector<double>` and sort it. A histogram gives fixed memory and O(1) recording.
+- [x] **64.** Latency stats keep a `vector<double>` and sort it. A histogram gives fixed memory and O(1) recording. Fixed in #9.
 
 ## Modern C++
 
@@ -127,10 +127,10 @@ Memory figures are computed from the code, not measured.
 
 ## Benchmarking and profiling
 
-- [ ] **87.** `Stats::throughput = 1e9 / mean` includes the clock overhead.
-- [ ] **88.** Bench mode adds `-DEXSIM_BOOK_DETERMINISTIC_POOL`, so the benchmarked book differs from the release build.
-- [ ] **89.** `mixed_workload.cpp` calls `stats.report(state)` inside the iteration loop.
-- [ ] **90.** No current numbers and no flame graph are committed. `run_perf.sh` exists, but the only captures are from 0.1.4 and are marked as not current.
+- [x] **87.** `Stats::throughput = 1e9 / mean` includes the clock overhead. Fixed in #9: throughput is commands over summed batch time; the remaining overhead is stated.
+- [x] **88.** Bench mode adds `-DEXSIM_BOOK_DETERMINISTIC_POOL`, so the benchmarked book differs from the release build. Fixed in #9: bench uses the perf flags with no benchmark-only define. The unused `EXSIM_BOOK_DETERMINISTIC_POOL` branch in `order_book.hpp` goes with #11.
+- [x] **89.** `mixed_workload.cpp` calls `stats.report(state)` inside the iteration loop. Fixed in #9.
+- [x] **90.** No current numbers and no flame graph are committed. `run_perf.sh` exists, but the only captures are from 0.1.4 and are marked as not current. Fixed in #9: `results/` has current numbers and a Linux flame graph (software sampling; the VM has no PMU).
 
 ## Testing, CI, build
 
