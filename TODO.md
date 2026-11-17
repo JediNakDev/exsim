@@ -112,17 +112,17 @@ Memory figures are computed from the code, not measured.
 - [ ] **75.** `book/types.hpp` uses unqualified `uint8_t`. `mdp_runtime.hpp` and `journal.hpp` rely on transitive includes.
 - [ ] **76.** `.clang-format` says `Standard: c++20` for a C++23 project, and several files do not follow it (`book/*`, `server/journal/*`, `mdp_runtime.hpp`, `gateway/ilink/*`, the iLink block in `order_entry_gateways.hpp`, `src/api/main.cpp`).
 - [ ] **77.** Naming is mixed: `get_best_bid` in the book, `best_bid` in the engine.
-- [ ] **78.** `std::hive` is C++26, so it is not available here. `ObjectPool` plus intrusive lists is the equivalent choice; one sentence in `docs/dsa.md` would answer the "why not hive" question.
-- [ ] **79.** The hand-written JSON, HTTP parser, INI parser and test framework each need a short "why not a library" note.
+- [x] **78.** `std::hive` is C++26, so it is not available here. `ObjectPool` plus intrusive lists is the equivalent choice; one sentence in `docs/dsa.md` would answer the "why not hive" question. Fixed in #19: `docs/dsa.md`, "Order lookup and storage".
+- [x] **79.** The hand-written JSON, HTTP parser, INI parser and test framework each need a short "why not a library" note. Fixed in #19: `docs/architecture.md`, "Why not a library".
 
 ## Linux and networking
 
-- [ ] **80.** The poller is level-triggered with one `recv` per readiness event. That is a fine choice, but the reason over edge-triggered is not written down.
+- [x] **80.** The poller is level-triggered with one `recv` per readiness event. That is a fine choice, but the reason over edge-triggered is not written down. Fixed in #19: `docs/architecture.md`, "Networking".
 - [x] **81.** `socket()` and `accept()` are followed by `fcntl`. On Linux, `SOCK_NONBLOCK | SOCK_CLOEXEC` and `accept4` save the extra syscalls. Fixed in #12.
 - [x] **82.** kqueue `change()` issues two `kevent` calls where one changelist would do. Fixed in #12.
-- [ ] **83.** There is no scatter I/O (`writev`, `sendmsg`) and no UDP batching (`sendmmsg`, `recvmmsg`).
+- [x] **83.** There is no scatter I/O (`writev`, `sendmsg`) and no UDP batching (`sendmmsg`, `recvmmsg`). Fixed in #19: the reason is in `docs/architecture.md`, "Networking".
 - [x] **84.** UDP send results are discarded in `itch_runtime.hpp`. Fixed in #12: failures are counted and reported at shutdown.
-- [ ] **85.** The stack is IPv4 only, with no `SO_REUSEPORT`.
+- [x] **85.** The stack is IPv4 only, with no `SO_REUSEPORT`. Fixed in #19: the reason is in `docs/architecture.md`, "Networking".
 - [x] **86.** Signal handling differs between the two binaries: `std::signal` with `volatile sig_atomic_t` in the exchange daemon, `sigwait` in the API. The daemon also closes its raw control fd by hand. Fixed in #8.
 
 ## Benchmarking and profiling
