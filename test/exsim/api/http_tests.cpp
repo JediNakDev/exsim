@@ -588,3 +588,27 @@ TEST_CASE(api_http_server, throwing_handler_or_responder_drops_one_connection_on
     CHECK(wait_for_active_connections(fragile_server, 0));
     fragile_server.stop();
 }
+
+TEST_CASE(api_http_server, listener_and_connection_sockets_are_close_on_exec) {
+    HttpServerOptions options;
+    options.port = 0;
+    HttpServer server(options, echo_path_handler, plain_rejection);
+    server.start();
+    TestClientConnection client(server.port());
+    client.send_text("GET /kept HTTP/1.1\r\n\r\n");
+    CHECK(client.receive_until("GET /kept body=0", 1).find("GET /kept body=0") != std::string::npos);
+    // The server's sockets are the ones whose local port is the server port:
+    // the listener and the accepted connection. exsim_api spawns exchange
+    // processes, which must not inherit them.
+    std::size_t server_sockets = 0;
+    for (int descriptor = 0; descriptor < 4096; ++descriptor) {
+        sockaddr_in local{};
+        socklen_t length = sizeof(local);
+        if (::getsockname(descriptor, reinterpret_cast<sockaddr*>(&local), &length) != 0) continue;
+        if (local.sin_family != AF_INET || ntohs(local.sin_port) != server.port()) continue;
+        ++server_sockets;
+        CHECK(::fcntl(descriptor, F_GETFD) & FD_CLOEXEC);
+    }
+    CHECK_EQ(server_sockets, 2u);
+    server.stop();
+}
