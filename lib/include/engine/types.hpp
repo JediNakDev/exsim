@@ -6,13 +6,12 @@
 // (engine, market data, journal, tests) speaks only these types. The
 // comment on each type states what its values mean.
 
-#include <book/types.hpp>
 #include <cstdint>
 #include <string_view>
 
 namespace exsim {
 
-using exsim::book::Side;  // Side::BUY / Side::SELL
+enum class Side : std::uint8_t { BUY, SELL };
 
 // Fixed-point price with 4 implied decimals (ITCH / OUCH convention):
 // $150.25 == 1'502'500.
