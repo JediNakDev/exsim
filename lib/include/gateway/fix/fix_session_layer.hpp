@@ -587,6 +587,8 @@ private:
             return;
         }
         FixFieldReader reader(*frame.parser);
+        if (frame.message_type != "4") day_->set_expected_inbound_seq(frame.sequence + 1);
+        if (!validate_header_timestamps(frame, reader)) return;
         if (frame.message_type == "4") {
             const std::uint64_t new_sequence = reader.required_uint(36);
             if (!reader.ok()) {
@@ -599,15 +601,6 @@ private:
             } else {
                 day_->set_expected_inbound_seq(new_sequence);
             }
-            return;
-        }
-        day_->set_expected_inbound_seq(frame.sequence + 1);
-        const std::uint64_t sending_time = reader.required_timestamp(52);
-        if (!reader.ok()) {
-            send_session_reject(frame, reader.problem());
-            return;
-        }
-        if (frame.possible_duplicate && !validate_original_sending_time(frame, reader, sending_time)) {
             return;
         }
         if (frame.message_type.size() != 1) {
@@ -670,6 +663,15 @@ private:
         }
     }
 
+    bool validate_header_timestamps(const FixInboundFrame& frame, FixFieldReader& reader) noexcept {
+        const std::uint64_t sending_time = reader.required_timestamp(52);
+        if (!reader.ok()) {
+            send_session_reject(frame, reader.problem());
+            return false;
+        }
+        return !frame.possible_duplicate || validate_original_sending_time(frame, reader, sending_time);
+    }
+
     // PossDupFlag=Y: OrigSendingTime(122) must be present (else Reject 373=1,
     // the message is ignored) and not later than SendingTime (else Reject
     // 373=10 and Logout). Returns true when the message may be processed.
@@ -693,6 +695,7 @@ private:
     // SequenceReset-Reset (123=N): MsgSeqNum is ignored.
     void handle_sequence_reset(const FixInboundFrame& frame) noexcept {
         FixFieldReader reader(*frame.parser);
+        if (!validate_header_timestamps(frame, reader)) return;
         const std::uint64_t new_sequence = reader.required_uint(36);
         const std::uint64_t expected = day_->expected_inbound_seq();
         if (!reader.ok()) {
