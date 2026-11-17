@@ -21,3 +21,17 @@ TEST_CASE(api_json, writer_escapes_and_nests) {
     const JsonValue parsed = parse_json(text);
     CHECK_EQ(parsed.find("list")->items.size(), 3u);
 }
+
+TEST_CASE(api_json, parser_combines_surrogate_pairs_and_rejects_unpaired_surrogates) {
+    CHECK_EQ(parse_json(R"("😀")").text, std::string("\xF0\x9F\x98\x80"));  // U+1F600
+    CHECK_EQ(parse_json(R"("�éA")").text, std::string("\xEF\xBF\xBD\xC3\xA9" "A"));
+    for (const auto* text : {R"("\uD83D")", R"("\uDE00")", R"("\uD83Dx")", R"("\uD83DA")", R"("\uDE00\uD83D")"}) {
+        bool rejected = false;
+        try {
+            (void)parse_json(text);
+        } catch (const JsonError&) {
+            rejected = true;
+        }
+        CHECK(rejected);
+    }
+}

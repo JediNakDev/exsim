@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <poll.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <unistd.h>
@@ -83,6 +84,11 @@ public:
             received.append(chunk, static_cast<std::size_t>(count));
         }
         return received;
+    }
+
+    [[nodiscard]] bool wait_readable(std::chrono::milliseconds timeout) const {
+        pollfd descriptor{socket_descriptor_, POLLIN, 0};
+        return ::poll(&descriptor, 1, static_cast<int>(timeout.count())) > 0;
     }
 
 private:
@@ -307,6 +313,37 @@ TEST_CASE(api_http_server, idle_connection_times_out_and_capacity_is_bounded) {
         if (!answered) std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
     CHECK(answered);
+    server.stop();
+}
+
+// A client that keeps sending single bytes never trips the per-read wait; the
+// request as a whole still has to arrive within idle_timeout.
+TEST_CASE(api_http_server, trickled_request_is_cut_off_at_the_request_deadline) {
+    HttpServerOptions options;
+    options.port = 0;
+    options.idle_timeout = std::chrono::milliseconds(300);
+    HttpServer server(options, echo_path_handler, plain_rejection);
+    server.start();
+    TestClientConnection client(server.port());
+    const auto started = std::chrono::steady_clock::now();
+    client.send_text("POST /slow HTTP/1.1\r\nContent-Length: 1000\r\n\r\n");
+    bool answered = false;
+    for (int sent = 0; sent < 30 && !answered; ++sent) {  // up to 3 s of one byte per 100 ms
+        client.send_text("x");
+        answered = client.wait_readable(std::chrono::milliseconds(100));
+    }
+    CHECK(answered);
+    CHECK(std::chrono::steady_clock::now() - started < std::chrono::milliseconds(1500));
+    CHECK_EQ(client.receive_until_closed().rfind("HTTP/1.1 408", 0), 0u);
+    // A request served in time gives the next one on the same connection a fresh deadline.
+    TestClientConnection keep_alive(server.port());
+    for (int request = 0; request < 3; ++request) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        keep_alive.send_text("GET /kept HTTP/1.1\r\n");
+        std::this_thread::sleep_for(std::chrono::milliseconds(150));
+        keep_alive.send_text("\r\n");
+        CHECK(keep_alive.receive_until("GET /kept body=0", 1).find("GET /kept body=0") != std::string::npos);
+    }
     server.stop();
 }
 
