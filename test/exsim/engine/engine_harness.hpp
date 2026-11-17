@@ -1,3 +1,4 @@
+#include "test/exsim/engine/live_orders.hpp"
 #ifndef TESTS_EXSIM_ENGINE_ENGINE_HARNESS_HPP
 #define TESTS_EXSIM_ENGINE_ENGINE_HARNESS_HPP
 
@@ -131,19 +132,13 @@ public:
 
     std::vector<OrderId> fifo(Side side, Price price) const {
         std::vector<OrderId> ids(4096);
-        ids.resize(engine_.level_orders(instrument_, side, price, ids.data(), ids.size()));
+        ids.resize(exsim::testsupport::level_orders(engine_, instrument_, side, price, ids.data(), ids.size()));
         return ids;
     }
 
     std::vector<LevelInfo> levels(Side side) const {
         std::vector<LevelInfo> result(4096);
         result.resize(engine_.depth(instrument_, side, result.data(), result.size()));
-        return result;
-    }
-
-    std::vector<OrderInfo> all_orders() const {
-        std::vector<OrderInfo> result;
-        engine_.for_each_order([&](const OrderInfo& info) { result.push_back(info); });
         return result;
     }
 

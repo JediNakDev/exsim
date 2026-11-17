@@ -1,5 +1,5 @@
-#ifndef EXSIM_ENGINE_PRICE_LADDER_HPP
-#define EXSIM_ENGINE_PRICE_LADDER_HPP
+#ifndef EXSIM_ENGINE_INSTRUMENT_BOOK_HPP
+#define EXSIM_ENGINE_INSTRUMENT_BOOK_HPP
 
 // Per-instrument engine state around one exsim::book::OrderBook. The book
 // stores prices as ticks (0 .. tick_count - 1) and owns price levels,

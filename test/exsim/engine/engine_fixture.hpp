@@ -1,3 +1,4 @@
+#include "test/exsim/engine/live_orders.hpp"
 #ifndef TESTS_EXSIM_ENGINE_ENGINE_FIXTURE_HPP
 #define TESTS_EXSIM_ENGINE_ENGINE_FIXTURE_HPP
 
@@ -7,6 +8,7 @@
 #include <test/framework/test.hpp>
 
 #include <engine/matching_engine.hpp>
+#include <test/exsim/engine/live_orders.hpp>
 
 #include <cstdint>
 #include <vector>
@@ -102,7 +104,7 @@ inline NewOrder market_order(SessionId session, ClOrdId token, Side side, Quanti
 inline std::vector<OrderId> level_fifo(const MatchingEngine& engine, InstrumentId instrument, Side side,
                                        Price price) {
     std::vector<OrderId> ids(engine.live_order_count() + 1);
-    ids.resize(engine.level_orders(instrument, side, price, ids.data(), ids.size()));
+    ids.resize(exsim::testsupport::level_orders(engine, instrument, side, price, ids.data(), ids.size()));
     return ids;
 }
 
@@ -110,12 +112,6 @@ inline std::vector<LevelInfo> full_depth(const MatchingEngine& engine, Instrumen
     std::vector<LevelInfo> levels(engine.live_order_count() + 1);
     levels.resize(engine.depth(instrument, side, levels.data(), levels.size()));
     return levels;
-}
-
-inline std::vector<OrderInfo> all_live_orders(const MatchingEngine& engine) {
-    std::vector<OrderInfo> orders;
-    engine.for_each_order([&](const OrderInfo& order) { orders.push_back(order); });
-    return orders;
 }
 
 inline std::vector<OrderId> order_ids_of_events(const EventBuffer& events, EventType type) {
@@ -212,7 +208,7 @@ inline std::uint64_t book_state_digest(const MatchingEngine& engine) {
         }
     };
     mix(engine.live_order_count());
-    for (const OrderInfo& order : all_live_orders(engine)) {
+    for (const OrderInfo& order : testsupport::live_orders(engine)) {
         mix(order.order_id); mix(order.cl_ord_id); mix(order.instrument); mix(order.session); mix(order.owner);
         mix(order.side); mix(order.tif); mix(order.stp); mix(order.post_only); mix(order.price); mix(order.qty);
         mix(order.leaves_qty); mix(order.cum_qty);
@@ -235,7 +231,7 @@ inline std::uint64_t book_state_digest(const MatchingEngine& engine) {
 
 // Book invariants plus query consistency, through the public API only.
 inline void check_book_invariants(const MatchingEngine& engine) {
-    const std::vector<OrderInfo> orders = all_live_orders(engine);
+    const std::vector<OrderInfo> orders = testsupport::live_orders(engine);
     CHECK_EQ(orders.size(), engine.live_order_count());
     for (std::size_t i = 0; i < orders.size(); ++i) {
         const OrderInfo& order = orders[i];

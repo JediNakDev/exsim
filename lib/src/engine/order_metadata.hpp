@@ -4,8 +4,8 @@
 // Engine-only order metadata indexed by the order book order's context_index.
 // The order book owns resting orders (ID, price tick, leaves), price levels and
 // FIFO links. These preallocated arrays hold what the book does not: session
-// and STP attributes, cumulative fills, and engine/session/instrument query
-// lists. Index 0 means no metadata slot.
+// and STP attributes, cumulative fills, and the per-session and per-instrument
+// order lists. Index 0 means no metadata slot.
 
 #include <engine/types.hpp>
 #include <book/order.hpp>
@@ -47,13 +47,10 @@ struct OrderCold {
     TimeInForce tif;
     StpMode stp;
     bool post_only;
-    std::uint16_t reserved;
-    OrderIndex next_by_order_id;  // engine-wide list, ascending OrderId
-    OrderIndex prev_by_order_id;
     OrderIndex next_in_session;   // per-session list, ascending OrderId
     OrderIndex prev_in_session;
 };
-static_assert(sizeof(OrderCold) == 24);
+static_assert(sizeof(OrderCold) == 16, "four cold records per cache line");
 
 // Head and tail of an intrusive doubly linked list of orders.
 struct OrderListEnds {

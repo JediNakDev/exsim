@@ -1,5 +1,7 @@
+#include "test/exsim/engine/live_orders.hpp"
 #include <test/framework/test.hpp>
 #include <engine/matching_engine.hpp>
+#include <test/exsim/engine/live_orders.hpp>
 #include <array>
 #include <limits>
 #include <random>
@@ -44,11 +46,11 @@ std::uint64_t digest(const EventBuffer& out) {
 }
 void invariants(const MatchingEngine& e) {
     std::size_t count = 0; OrderId last = 0;
-    e.for_each_order([&](const OrderInfo& o) {
+    for (const OrderInfo& o : testsupport::live_orders(e)) {
         CHECK(o.order_id > last); last=o.order_id; ++count;
         CHECK(o.leaves_qty > 0); CHECK_EQ(o.qty, o.leaves_qty + o.cum_qty);
-        CHECK_EQ(e.find_order(o.order_id)->cl_ord_id, o.cl_ord_id);
-    });
+        CHECK_EQ(e.find_order(o.session, o.cl_ord_id)->order_id, o.order_id);
+    }
     CHECK_EQ(count,e.live_order_count());
     for (InstrumentId id=1;id<=e.instrument_count();++id) {
         if (e.phase(id)==Phase::Continuous || e.phase(id)==Phase::Closed) {
@@ -57,7 +59,7 @@ void invariants(const MatchingEngine& e) {
         for(auto side : {Side::BUY,Side::SELL}) {
             LevelInfo levels[20]; const auto n=e.depth(id,side,levels,20);
             for(std::size_t j=0;j<n;++j) {
-                OrderId ids[32];auto m=e.level_orders(id,side,levels[j].price,ids,32);
+                OrderId ids[32];auto m=exsim::testsupport::level_orders(e, id,side,levels[j].price,ids,32);
                 CHECK_EQ(m,levels[j].order_count); std::uint64_t sum=0;
                 for(std::size_t k=0;k<m;++k) { auto o=e.find_order(ids[k]); REQUIRE(o);sum+=o->leaves_qty;if(k)CHECK(ids[k]>ids[k-1]); }
                 CHECK_EQ(sum,levels[j].qty);
@@ -130,7 +132,7 @@ TEST_CASE(engine_amend, reductions_all_phases_and_force_loss) {
         Fixture f;f.run(order(1,Side::BUY,100,20));f.run(order(2));f.run(order(3,Side::SELL,100,5));
         f.run(SetPhase{0,1,phase});if(phase==Phase::Closed) continue; // DAY expiry tested below
         f.run(CancelOrder{8,1,1,88,12});REQUIRE(f.out.size()==1);CHECK_EQ(f.out[0].canceled.leaves_qty,7u);CHECK_EQ(f.out[0].canceled.canceled_qty,8u);CHECK_EQ(f.out[0].canceled.cum_qty,5u);
-        OrderId ids[3];CHECK_EQ(f.e.level_orders(1,Side::BUY,100,ids,3),2u);CHECK_EQ(ids[0],1u);
+        OrderId ids[3];CHECK_EQ(exsim::testsupport::level_orders(f.e, 1,Side::BUY,100,ids,3),2u);CHECK_EQ(ids[0],1u);
         f.run(CancelOrder{9,1,1,89,99});CHECK(f.out.empty());
         f.run(CancelOrder{10,1,1,90,4});CHECK(!f.e.find_order(1));CHECK_EQ(f.out[0].canceled.leaves_qty,0u);
     }

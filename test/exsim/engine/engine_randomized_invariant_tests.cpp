@@ -82,7 +82,7 @@ struct RandomCommandSource {
         // Cancel and replace usually target a live order so they do real work.
         ClOrdId target_token = random_token();
         SessionId target_session = session;
-        const std::vector<OrderInfo> live = all_live_orders(engine);
+        const std::vector<OrderInfo> live = testsupport::live_orders(engine);
         if (!live.empty() && below(5) != 0) {
             const OrderInfo& target = live[below(live.size())];
             target_token = target.cl_ord_id;
@@ -195,7 +195,7 @@ struct ConservationLedger {
     void check_against(const MatchingEngine& engine) const {
         std::int64_t live_leaves = 0;
         std::map<OrderId, Quantity> engine_leaves;
-        for (const OrderInfo& order : all_live_orders(engine)) {
+        for (const OrderInfo& order : testsupport::live_orders(engine)) {
             live_leaves += static_cast<std::int64_t>(order.leaves_qty);
             engine_leaves[order.order_id] = order.leaves_qty;
         }

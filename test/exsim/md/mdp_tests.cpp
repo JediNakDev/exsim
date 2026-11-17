@@ -117,13 +117,7 @@ struct Exchange {
     void submit(Command command, Book* book = nullptr) {
         events.clear(); packets.clear();
         ++now;
-        switch (command.type) {
-            case CommandType::NewOrder: command.new_order.ts = now; break;
-            case CommandType::Cancel: command.cancel.ts = now; break;
-            case CommandType::Replace: command.replace.ts = now; break;
-            case CommandType::MassCancel: command.mass_cancel.ts = now; break;
-            case CommandType::SetPhase: command.set_phase.ts = now; break;
-        }
+        command.timestamp = now;
         REQUIRE_EQ(engine.handle(command, events), HandleResult::Applied);
         REQUIRE_EQ(publisher.on_events({events.begin(), events.size()}), md::PublishStatus::Ok);
         if (book) { for (const auto& packet : packets) book->packet(packet); book->compare(engine); }
