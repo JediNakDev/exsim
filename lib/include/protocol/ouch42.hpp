@@ -8,6 +8,7 @@
 // belongs to the gateway. Prices use exsim::Price, checked against the 32-bit
 // wire range.
 #include "wire.hpp"
+#include <algorithm>
 namespace exsim::protocol::ouch42 {
 using protocol::Status;
 struct EnterOrder {
@@ -30,13 +31,13 @@ struct EnterOrder {
 inline std::size_t encode(const EnterOrder& m, char* p, std::size_t n) noexcept {
     if (n < 49 || m.price < 0 || static_cast<std::uint64_t>(m.price) > UINT32_MAX) return 0;
     p[0] = 'O';
-    for (std::size_t i = 0; i < 14; ++i) p[1 + i] = m.token[i];
+    std::copy_n(m.token.data(), 14, p + 1);
     p[15] = m.side;
     wire::store<4>(p + 16, static_cast<std::uint64_t>(m.shares));
-    for (std::size_t i = 0; i < 8; ++i) p[20 + i] = m.stock.chars[i];
+    std::copy_n(m.stock.chars.data(), 8, p + 20);
     wire::store<4>(p + 28, static_cast<std::uint64_t>(m.price));
     wire::store<4>(p + 32, static_cast<std::uint64_t>(m.time_in_force));
-    for (std::size_t i = 0; i < 4; ++i) p[36 + i] = m.firm[i];
+    std::copy_n(m.firm.data(), 4, p + 36);
     p[40] = m.display;
     p[41] = m.capacity;
     p[42] = m.ise;
@@ -49,14 +50,14 @@ inline Status decode(const char* p, std::size_t n, EnterOrder& m) noexcept {
     if (n < 49) return Status::incomplete;
     if (n != 49) return Status::invalid_length;
     if (p[0] != 'O') return Status::invalid_type;
-    for (std::size_t i = 0; i < 14; ++i) m.token[i] = p[1 + i];
+    std::copy_n(p + 1, 14, m.token.data());
     if (std::string_view("BSTE").find(p[15]) == std::string_view::npos) return Status::invalid_field;
     m.side = p[15];
     m.shares = static_cast<Quantity>(wire::load<4>(p + 16));
-    for (std::size_t i = 0; i < 8; ++i) m.stock.chars[i] = p[20 + i];
+    std::copy_n(p + 20, 8, m.stock.chars.data());
     m.price = static_cast<Price>(wire::load<4>(p + 28));
     m.time_in_force = static_cast<std::uint32_t>(wire::load<4>(p + 32));
-    for (std::size_t i = 0; i < 4; ++i) m.firm[i] = p[36 + i];
+    std::copy_n(p + 36, 4, m.firm.data());
     m.display = p[40];
     m.capacity = p[41];
     m.ise = p[42];
@@ -81,8 +82,8 @@ struct ReplaceOrder {
 inline std::size_t encode(const ReplaceOrder& m, char* p, std::size_t n) noexcept {
     if (n < 47 || m.price < 0 || static_cast<std::uint64_t>(m.price) > UINT32_MAX) return 0;
     p[0] = 'U';
-    for (std::size_t i = 0; i < 14; ++i) p[1 + i] = m.existing_token[i];
-    for (std::size_t i = 0; i < 14; ++i) p[15 + i] = m.replacement_token[i];
+    std::copy_n(m.existing_token.data(), 14, p + 1);
+    std::copy_n(m.replacement_token.data(), 14, p + 15);
     wire::store<4>(p + 29, static_cast<std::uint64_t>(m.shares));
     wire::store<4>(p + 33, static_cast<std::uint64_t>(m.price));
     wire::store<4>(p + 37, static_cast<std::uint64_t>(m.time_in_force));
@@ -95,8 +96,8 @@ inline Status decode(const char* p, std::size_t n, ReplaceOrder& m) noexcept {
     if (n < 47) return Status::incomplete;
     if (n != 47) return Status::invalid_length;
     if (p[0] != 'U') return Status::invalid_type;
-    for (std::size_t i = 0; i < 14; ++i) m.existing_token[i] = p[1 + i];
-    for (std::size_t i = 0; i < 14; ++i) m.replacement_token[i] = p[15 + i];
+    std::copy_n(p + 1, 14, m.existing_token.data());
+    std::copy_n(p + 15, 14, m.replacement_token.data());
     m.shares = static_cast<Quantity>(wire::load<4>(p + 29));
     m.price = static_cast<Price>(wire::load<4>(p + 33));
     m.time_in_force = static_cast<std::uint32_t>(wire::load<4>(p + 37));
@@ -115,7 +116,7 @@ struct CancelOrder {
 inline std::size_t encode(const CancelOrder& m, char* p, std::size_t n) noexcept {
     if (n < 19) return 0;
     p[0] = 'X';
-    for (std::size_t i = 0; i < 14; ++i) p[1 + i] = m.token[i];
+    std::copy_n(m.token.data(), 14, p + 1);
     wire::store<4>(p + 15, static_cast<std::uint64_t>(m.shares));
     return 19;
 }
@@ -123,7 +124,7 @@ inline Status decode(const char* p, std::size_t n, CancelOrder& m) noexcept {
     if (n < 19) return Status::incomplete;
     if (n != 19) return Status::invalid_length;
     if (p[0] != 'X') return Status::invalid_type;
-    for (std::size_t i = 0; i < 14; ++i) m.token[i] = p[1 + i];
+    std::copy_n(p + 1, 14, m.token.data());
     m.shares = static_cast<Quantity>(wire::load<4>(p + 15));
     return Status::ok;
 }
@@ -138,7 +139,7 @@ struct ModifyOrder {
 inline std::size_t encode(const ModifyOrder& m, char* p, std::size_t n) noexcept {
     if (n < 20) return 0;
     p[0] = 'M';
-    for (std::size_t i = 0; i < 14; ++i) p[1 + i] = m.token[i];
+    std::copy_n(m.token.data(), 14, p + 1);
     p[15] = m.side;
     wire::store<4>(p + 16, static_cast<std::uint64_t>(m.shares));
     return 20;
@@ -147,7 +148,7 @@ inline Status decode(const char* p, std::size_t n, ModifyOrder& m) noexcept {
     if (n < 20) return Status::incomplete;
     if (n != 20) return Status::invalid_length;
     if (p[0] != 'M') return Status::invalid_type;
-    for (std::size_t i = 0; i < 14; ++i) m.token[i] = p[1 + i];
+    std::copy_n(p + 1, 14, m.token.data());
     if (std::string_view("BSTE").find(p[15]) == std::string_view::npos) return Status::invalid_field;
     m.side = p[15];
     m.shares = static_cast<Quantity>(wire::load<4>(p + 16));
@@ -201,13 +202,13 @@ inline std::size_t encode(const OrderAccepted& m, char* p, std::size_t n) noexce
     if (n < 66 || m.price < 0 || static_cast<std::uint64_t>(m.price) > UINT32_MAX) return 0;
     p[0] = 'A';
     wire::store<8>(p + 1, static_cast<std::uint64_t>(m.timestamp));
-    for (std::size_t i = 0; i < 14; ++i) p[9 + i] = m.token[i];
+    std::copy_n(m.token.data(), 14, p + 9);
     p[23] = m.side;
     wire::store<4>(p + 24, static_cast<std::uint64_t>(m.shares));
-    for (std::size_t i = 0; i < 8; ++i) p[28 + i] = m.stock.chars[i];
+    std::copy_n(m.stock.chars.data(), 8, p + 28);
     wire::store<4>(p + 36, static_cast<std::uint64_t>(m.price));
     wire::store<4>(p + 40, static_cast<std::uint64_t>(m.time_in_force));
-    for (std::size_t i = 0; i < 4; ++i) p[44 + i] = m.firm[i];
+    std::copy_n(m.firm.data(), 4, p + 44);
     p[48] = m.display;
     wire::store<8>(p + 49, static_cast<std::uint64_t>(m.order_reference));
     p[57] = m.capacity;
@@ -223,14 +224,14 @@ inline Status decode(const char* p, std::size_t n, OrderAccepted& m) noexcept {
     if (n != 66) return Status::invalid_length;
     if (p[0] != 'A') return Status::invalid_type;
     m.timestamp = static_cast<std::uint64_t>(wire::load<8>(p + 1));
-    for (std::size_t i = 0; i < 14; ++i) m.token[i] = p[9 + i];
+    std::copy_n(p + 9, 14, m.token.data());
     if (std::string_view("BSTE").find(p[23]) == std::string_view::npos) return Status::invalid_field;
     m.side = p[23];
     m.shares = static_cast<Quantity>(wire::load<4>(p + 24));
-    for (std::size_t i = 0; i < 8; ++i) m.stock.chars[i] = p[28 + i];
+    std::copy_n(p + 28, 8, m.stock.chars.data());
     m.price = static_cast<Price>(wire::load<4>(p + 36));
     m.time_in_force = static_cast<std::uint32_t>(wire::load<4>(p + 40));
-    for (std::size_t i = 0; i < 4; ++i) m.firm[i] = p[44 + i];
+    std::copy_n(p + 44, 4, m.firm.data());
     m.display = p[48];
     m.order_reference = static_cast<std::uint64_t>(wire::load<8>(p + 49));
     m.capacity = p[57];
@@ -255,7 +256,7 @@ inline std::size_t encode(const OrderCanceled& m, char* p, std::size_t n) noexce
     if (n < 28) return 0;
     p[0] = 'C';
     wire::store<8>(p + 1, static_cast<std::uint64_t>(m.timestamp));
-    for (std::size_t i = 0; i < 14; ++i) p[9 + i] = m.token[i];
+    std::copy_n(m.token.data(), 14, p + 9);
     wire::store<4>(p + 23, static_cast<std::uint64_t>(m.shares));
     p[27] = m.reason;
     return 28;
@@ -265,7 +266,7 @@ inline Status decode(const char* p, std::size_t n, OrderCanceled& m) noexcept {
     if (n != 28) return Status::invalid_length;
     if (p[0] != 'C') return Status::invalid_type;
     m.timestamp = static_cast<std::uint64_t>(wire::load<8>(p + 1));
-    for (std::size_t i = 0; i < 14; ++i) m.token[i] = p[9 + i];
+    std::copy_n(p + 9, 14, m.token.data());
     m.shares = static_cast<Quantity>(wire::load<4>(p + 23));
     m.reason = p[27];
     return Status::ok;
@@ -285,7 +286,7 @@ inline std::size_t encode(const OrderExecuted& m, char* p, std::size_t n) noexce
     if (n < 40 || m.price < 0 || static_cast<std::uint64_t>(m.price) > UINT32_MAX) return 0;
     p[0] = 'E';
     wire::store<8>(p + 1, static_cast<std::uint64_t>(m.timestamp));
-    for (std::size_t i = 0; i < 14; ++i) p[9 + i] = m.token[i];
+    std::copy_n(m.token.data(), 14, p + 9);
     wire::store<4>(p + 23, static_cast<std::uint64_t>(m.shares));
     wire::store<4>(p + 27, static_cast<std::uint64_t>(m.price));
     p[31] = m.liquidity;
@@ -297,7 +298,7 @@ inline Status decode(const char* p, std::size_t n, OrderExecuted& m) noexcept {
     if (n != 40) return Status::invalid_length;
     if (p[0] != 'E') return Status::invalid_type;
     m.timestamp = static_cast<std::uint64_t>(wire::load<8>(p + 1));
-    for (std::size_t i = 0; i < 14; ++i) m.token[i] = p[9 + i];
+    std::copy_n(p + 9, 14, m.token.data());
     m.shares = static_cast<Quantity>(wire::load<4>(p + 23));
     m.price = static_cast<Price>(wire::load<4>(p + 27));
     m.liquidity = p[31];
@@ -316,7 +317,7 @@ inline std::size_t encode(const OrderRejected& m, char* p, std::size_t n) noexce
     if (n < 24) return 0;
     p[0] = 'J';
     wire::store<8>(p + 1, static_cast<std::uint64_t>(m.timestamp));
-    for (std::size_t i = 0; i < 14; ++i) p[9 + i] = m.token[i];
+    std::copy_n(m.token.data(), 14, p + 9);
     p[23] = m.reason;
     return 24;
 }
@@ -325,7 +326,7 @@ inline Status decode(const char* p, std::size_t n, OrderRejected& m) noexcept {
     if (n != 24) return Status::invalid_length;
     if (p[0] != 'J') return Status::invalid_type;
     m.timestamp = static_cast<std::uint64_t>(wire::load<8>(p + 1));
-    for (std::size_t i = 0; i < 14; ++i) m.token[i] = p[9 + i];
+    std::copy_n(p + 9, 14, m.token.data());
     m.reason = p[23];
     return Status::ok;
 }
@@ -340,7 +341,7 @@ inline std::size_t encode(const CancelPending& m, char* p, std::size_t n) noexce
     if (n < 23) return 0;
     p[0] = 'P';
     wire::store<8>(p + 1, static_cast<std::uint64_t>(m.timestamp));
-    for (std::size_t i = 0; i < 14; ++i) p[9 + i] = m.token[i];
+    std::copy_n(m.token.data(), 14, p + 9);
     return 23;
 }
 inline Status decode(const char* p, std::size_t n, CancelPending& m) noexcept {
@@ -348,7 +349,7 @@ inline Status decode(const char* p, std::size_t n, CancelPending& m) noexcept {
     if (n != 23) return Status::invalid_length;
     if (p[0] != 'P') return Status::invalid_type;
     m.timestamp = static_cast<std::uint64_t>(wire::load<8>(p + 1));
-    for (std::size_t i = 0; i < 14; ++i) m.token[i] = p[9 + i];
+    std::copy_n(p + 9, 14, m.token.data());
     return Status::ok;
 }
 inline Status decode(std::span<const char> p, CancelPending& m) noexcept { return decode(p.data(), p.size(), m); }
@@ -362,7 +363,7 @@ inline std::size_t encode(const CancelReject& m, char* p, std::size_t n) noexcep
     if (n < 23) return 0;
     p[0] = 'I';
     wire::store<8>(p + 1, static_cast<std::uint64_t>(m.timestamp));
-    for (std::size_t i = 0; i < 14; ++i) p[9 + i] = m.token[i];
+    std::copy_n(m.token.data(), 14, p + 9);
     return 23;
 }
 inline Status decode(const char* p, std::size_t n, CancelReject& m) noexcept {
@@ -370,7 +371,7 @@ inline Status decode(const char* p, std::size_t n, CancelReject& m) noexcept {
     if (n != 23) return Status::invalid_length;
     if (p[0] != 'I') return Status::invalid_type;
     m.timestamp = static_cast<std::uint64_t>(wire::load<8>(p + 1));
-    for (std::size_t i = 0; i < 14; ++i) m.token[i] = p[9 + i];
+    std::copy_n(p + 9, 14, m.token.data());
     return Status::ok;
 }
 inline Status decode(std::span<const char> p, CancelReject& m) noexcept { return decode(p.data(), p.size(), m); }
@@ -386,7 +387,7 @@ inline std::size_t encode(const OrderModified& m, char* p, std::size_t n) noexce
     if (n < 28) return 0;
     p[0] = 'M';
     wire::store<8>(p + 1, static_cast<std::uint64_t>(m.timestamp));
-    for (std::size_t i = 0; i < 14; ++i) p[9 + i] = m.token[i];
+    std::copy_n(m.token.data(), 14, p + 9);
     p[23] = m.side;
     wire::store<4>(p + 24, static_cast<std::uint64_t>(m.shares));
     return 28;
@@ -396,7 +397,7 @@ inline Status decode(const char* p, std::size_t n, OrderModified& m) noexcept {
     if (n != 28) return Status::invalid_length;
     if (p[0] != 'M') return Status::invalid_type;
     m.timestamp = static_cast<std::uint64_t>(wire::load<8>(p + 1));
-    for (std::size_t i = 0; i < 14; ++i) m.token[i] = p[9 + i];
+    std::copy_n(p + 9, 14, m.token.data());
     if (std::string_view("BSTE").find(p[23]) == std::string_view::npos) return Status::invalid_field;
     m.side = p[23];
     m.shares = static_cast<Quantity>(wire::load<4>(p + 24));
@@ -428,13 +429,13 @@ inline std::size_t encode(const OrderReplaced& m, char* p, std::size_t n) noexce
     if (n < 80 || m.price < 0 || static_cast<std::uint64_t>(m.price) > UINT32_MAX) return 0;
     p[0] = 'U';
     wire::store<8>(p + 1, static_cast<std::uint64_t>(m.timestamp));
-    for (std::size_t i = 0; i < 14; ++i) p[9 + i] = m.replacement_token[i];
+    std::copy_n(m.replacement_token.data(), 14, p + 9);
     p[23] = m.side;
     wire::store<4>(p + 24, static_cast<std::uint64_t>(m.shares));
-    for (std::size_t i = 0; i < 8; ++i) p[28 + i] = m.stock.chars[i];
+    std::copy_n(m.stock.chars.data(), 8, p + 28);
     wire::store<4>(p + 36, static_cast<std::uint64_t>(m.price));
     wire::store<4>(p + 40, static_cast<std::uint64_t>(m.time_in_force));
-    for (std::size_t i = 0; i < 4; ++i) p[44 + i] = m.firm[i];
+    std::copy_n(m.firm.data(), 4, p + 44);
     p[48] = m.display;
     wire::store<8>(p + 49, static_cast<std::uint64_t>(m.order_reference));
     p[57] = m.capacity;
@@ -442,7 +443,7 @@ inline std::size_t encode(const OrderReplaced& m, char* p, std::size_t n) noexce
     wire::store<4>(p + 59, static_cast<std::uint64_t>(m.minimum_quantity));
     p[63] = m.cross_type;
     p[64] = m.order_state;
-    for (std::size_t i = 0; i < 14; ++i) p[65 + i] = m.previous_token[i];
+    std::copy_n(m.previous_token.data(), 14, p + 65);
     p[79] = m.bbo_weight;
     return 80;
 }
@@ -451,14 +452,14 @@ inline Status decode(const char* p, std::size_t n, OrderReplaced& m) noexcept {
     if (n != 80) return Status::invalid_length;
     if (p[0] != 'U') return Status::invalid_type;
     m.timestamp = static_cast<std::uint64_t>(wire::load<8>(p + 1));
-    for (std::size_t i = 0; i < 14; ++i) m.replacement_token[i] = p[9 + i];
+    std::copy_n(p + 9, 14, m.replacement_token.data());
     if (std::string_view("BSTE").find(p[23]) == std::string_view::npos) return Status::invalid_field;
     m.side = p[23];
     m.shares = static_cast<Quantity>(wire::load<4>(p + 24));
-    for (std::size_t i = 0; i < 8; ++i) m.stock.chars[i] = p[28 + i];
+    std::copy_n(p + 28, 8, m.stock.chars.data());
     m.price = static_cast<Price>(wire::load<4>(p + 36));
     m.time_in_force = static_cast<std::uint32_t>(wire::load<4>(p + 40));
-    for (std::size_t i = 0; i < 4; ++i) m.firm[i] = p[44 + i];
+    std::copy_n(p + 44, 4, m.firm.data());
     m.display = p[48];
     m.order_reference = static_cast<std::uint64_t>(wire::load<8>(p + 49));
     m.capacity = p[57];
@@ -467,7 +468,7 @@ inline Status decode(const char* p, std::size_t n, OrderReplaced& m) noexcept {
     m.cross_type = p[63];
     if (std::string_view("LD").find(p[64]) == std::string_view::npos) return Status::invalid_field;
     m.order_state = p[64];
-    for (std::size_t i = 0; i < 14; ++i) m.previous_token[i] = p[65 + i];
+    std::copy_n(p + 65, 14, m.previous_token.data());
     m.bbo_weight = p[79];
     return Status::ok;
 }

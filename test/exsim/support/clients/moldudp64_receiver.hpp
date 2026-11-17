@@ -1,6 +1,8 @@
 #ifndef EXSIM_TEST_SUPPORT_MOLDUDP64_RECEIVER_HPP
 #define EXSIM_TEST_SUPPORT_MOLDUDP64_RECEIVER_HPP
 
+#include "test/exsim/protocol/moldudp64_reader.hpp"
+
 // MoldUdp64Receiver: client-side MoldUDP64 sequencer. Feed it every datagram
 // from the multicast feed AND from the retransmission socket; it delivers
 // each message exactly once, in sequence order, to the handler.
