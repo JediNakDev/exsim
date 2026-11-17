@@ -232,6 +232,37 @@ class ExchangeApiTests(unittest.TestCase):
                 replay, _ = recovery.recvfrom(65535)
             self.assertEqual(replay, packet)
 
+    def test_managed_journal_records_external_orders_and_shutdown(self):
+        for path in ("/tmp/managed.journal", "../managed.journal", "managed.conf"):
+            self.api("POST", "/v1/exchanges", {"config": config() + f"\n[journal]\npath = {path}\n"}, 400)
+        journal = self.data / "managed.journal"
+        exchange = self.start(self.create(config() + "\n[journal]\npath = managed.journal\n"))
+        path = f"/v1/exchanges/{exchange['id']}"
+        trader = Trader(exchange["runtime"]["connections"]["orderEntryPort"], "ALICE", "alice")
+        self.addCleanup(trader.close)
+        trader.order("JOURNALED", b"B")
+        reply = self.api("POST", path + "/admin", {"command": "status"})["reply"]
+        self.assertIn("journal state=ok", reply)
+        self.api("POST", path + "/stop")
+        data = journal.read_bytes()
+        self.assertEqual(struct.unpack("!QQ", data[:16]), (0x455853494D4A4E4C, 2))
+        count = struct.unpack("!Q", data[32:40])[0]
+        offset = 48 + 108 * count
+        tags = []
+        while offset < len(data) - 24:
+            sequence, size, tag = struct.unpack("!QQQ", data[offset:offset + 24])
+            self.assertEqual(sequence, len(tags))
+            self.assertLessEqual(size + 24, 128)
+            tags.append(tag)
+            offset += size + 24
+        self.assertEqual(offset, len(data) - 24)
+        magic, records, _ = struct.unpack("!QQQ", data[-24:])
+        self.assertEqual(magic, 0x455853494D454E44)
+        self.assertEqual(records, len(tags))
+        self.assertGreaterEqual(records, 2)
+        self.assertEqual(tags[0], 0)  # NewOrder from the external client
+        self.assertEqual(tags[-1], 4)  # SetPhase Closed at shutdown
+
     def test_restart_is_empty_with_a_fresh_session(self):
         exchange = self.start(self.create())
         path = f"/v1/exchanges/{exchange['id']}"

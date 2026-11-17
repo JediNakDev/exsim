@@ -112,6 +112,8 @@ FOK checks, self-trade prevention, auction execution, expiry, and bulk commands 
 
 Market-data recovery uses a bounded retransmission ring. Old messages are overwritten, so recovery only covers retained history. It cannot supply a full book snapshot to a late subscriber.
 
-Standalone journaling passes commands to a writer through a bounded single-producer, single-consumer queue. It keeps disk writes outside matching. Managed exchanges currently reject journal configuration.
+Optional journaling passes commands to a writer through a bounded single-producer, single-consumer queue. It keeps disk writes outside matching.
 
 See [retransmission ring](../lib/include/md/retransmission_ring.hpp) and [journal worker](../lib/include/server/runtime/journal_worker.hpp).
+
+The journal worker uses atomic wait/notify when idle. It retains `std::thread` because blocked file I/O cannot be interrupted and shutdown bounds its wait before detaching. Schema 2 stores the full instrument identity and active command fields in 56 to 128 byte records with sequence, payload length and checksum. Flush writes a 24-byte checkpoint footer, overwritten by the next append.
