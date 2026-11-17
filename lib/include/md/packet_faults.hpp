@@ -19,7 +19,6 @@
 // duplicates and out-of-order delivery with the real wire format.
 
 #include "md/random.hpp"
-#include "util/compiler.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -125,7 +124,7 @@ private:
     };
 
     static bool take(std::uint32_t& counter) noexcept {
-        if (EXSIM_LIKELY(counter == 0)) {
+        if (counter == 0) [[likely]] {
             return false;
         }
         --counter;
@@ -162,7 +161,7 @@ private:
     // One submission elapsed: release every held packet that is due, oldest first.
     template <typename Sink>
     void tick(Sink& sink) {
-        if (EXSIM_LIKELY(held_ == 0)) {
+        if (held_ == 0) [[likely]] {
             return;
         }
         for (std::size_t i = 0; i < max_held_; ++i) {

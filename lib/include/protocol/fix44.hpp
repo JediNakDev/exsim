@@ -123,11 +123,13 @@ class Parser {
     std::array<Field, N> fields_{};
     std::size_t count_ = 0;
     std::string_view bytes_{};
+    unsigned duplicate_tag_ = 0;
 
 public:
     Status parse(std::span<const char> p) noexcept {
         count_ = 0;
         bytes_ = {};
+        duplicate_tag_ = 0;
         std::size_t size;
         auto status = frame_size(p, size);
         if (status != Status::ok) return status;
@@ -150,8 +152,12 @@ public:
             while (end < size && p[end] != soh) ++end;
             if (end == size) return Status::invalid_field;
             if (tag == 10 && pos != size - 7) return Status::invalid_length;
-            for (std::size_t i = 0; i < count_; ++i)
-                if (fields_[i].tag == tag) return Status::duplicate_field;
+            for (std::size_t i = 0; i < count_; ++i) {
+                if (fields_[i].tag == tag) {
+                    duplicate_tag_ = static_cast<unsigned>(tag);
+                    return Status::duplicate_field;
+                }
+            }
             if (count_ == N) return Status::full;
             fields_[count_++] = {static_cast<unsigned>(tag), eq + 1, end - eq - 1};
             pos = end + 1;
@@ -160,6 +166,8 @@ public:
         return Status::ok;
     }
     Status parse(const char* p, std::size_t n) noexcept { return parse({p, n}); }
+    // The repeated tag after parse() returned duplicate_field, otherwise 0.
+    unsigned duplicate_tag() const noexcept { return duplicate_tag_; }
     bool has(unsigned tag) const noexcept {
         if (bytes_.empty()) return false;
         for (std::size_t i = 0; i < count_; ++i)
