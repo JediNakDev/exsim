@@ -44,12 +44,12 @@ Measured cost of `MatchingEngine::handle` per command on an Apple M6 (macOS 27.0
 
 | Case | Mean ns |
 | --- | --- |
-| CancelOrder | 21.46 |
-| CancelHeavyWorkload | 21.93 |
-| NewOrder | 22.21 |
-| MixedWorkload | 26.83 |
-| SweepWithFills | 35.07 |
-| ReplaceOrder | 51.91 |
+| CancelOrder | 20.14 |
+| CancelHeavyWorkload | 20.91 |
+| NewOrder | 22.29 |
+| MixedWorkload | 26.36 |
+| SweepWithFills | 35.35 |
+| ReplaceOrder | 47.68 |
 
 The CSV percentiles are percentiles of 32-command batch means, not single-command tail latency. See [results](../results/README.md) for the machine, Linux profile and the exact rows. The numbers are regenerated after any engine change.
 
