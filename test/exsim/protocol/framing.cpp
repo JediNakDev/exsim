@@ -1,8 +1,11 @@
+#include "moldudp64_reader.hpp"
 #include "../../framework/test.hpp"
 #include <protocol/moldudp64.hpp>
 #include <protocol/soupbintcp.hpp>
 #include <random>
+#include <type_traits>
 using exsim::protocol::Status;
+static_assert(std::is_same_v<std::underlying_type_t<Status>, std::uint8_t>);
 namespace soup = exsim::protocol::soupbintcp;
 namespace mold = exsim::protocol::moldudp64;
 namespace wire = exsim::protocol::wire;
