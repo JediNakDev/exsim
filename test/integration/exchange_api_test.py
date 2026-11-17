@@ -67,13 +67,13 @@ class Trader:
                 raise AssertionError(f"order rejected: {frame!r}")
         raise AssertionError(f"missing event {kind!r}")
 
-    def order(self, token, side, quantity=100, price=1500000):
+    def order(self, token, side, quantity=100, price=1500000, expected=b"A"):
         message = (b"O" + token.encode().ljust(14) + side + struct.pack("!I", quantity)
                    + b"AAPL    " + struct.pack("!II", price, 99999)
                    + b"TEST" + b"Y" + b"A" + b"N" + struct.pack("!I", 0) + b"N" + b" ")
         assert len(message) == 49
         self.send(b"U" + message)
-        return self.event(b"A")
+        return self.event(expected)
 
     def close(self):
         self.sock.close()
@@ -163,6 +163,50 @@ class ExchangeApiTests(unittest.TestCase):
         self.assertEqual(self.api("POST", f"/v1/exchanges/{first['id']}/start")["pid"], first["pid"])
         self.api("PUT", f"/v1/exchanges/{first['id']}", {"config": config()}, 409)
         self.api("DELETE", f"/v1/exchanges/{first['id']}", expected=409)
+
+    def test_runtime_admin_changes_phase_and_injects_user_fault(self):
+        exchange = self.create()
+        path = f"/v1/exchanges/{exchange['id']}"
+        self.api("POST", path + "/admin", {"command": "help"}, 409)
+        exchange = self.start(exchange)
+        trader = Trader(exchange["runtime"]["connections"]["orderEntryPort"], "ALICE", "alice")
+        self.addCleanup(trader.close)
+
+        def admin(command, expected=200):
+            return self.api("POST", path + "/admin", {"command": command}, expected)["reply"]
+
+        self.assertIn("phase", admin("help"))
+        for body in ({}, {"command": 1}, {"command": ""}, {"command": "help", "extra": 1},
+                     {"command": "help\nshutdown"}, {"command": "x" * 4097}):
+            self.api("POST", path + "/admin", body, 400)
+        self.assertIn("ERR", admin("unknown", 400))
+        self.assertIn("ERR", admin("phase UNKNOWN halted", 400))
+        self.assertIn("HALTED", admin("phase AAPL halted"))
+        self.assertIn("phase=HALTED", admin("book AAPL"))
+        trader.order("HALTED", b"B", expected=b"J")
+        self.assertEqual(self.api("GET", path + "/status")["runtime"]["liveOrders"], "0")
+        self.assertIn("CONTINUOUS", admin("phase AAPL continuous"))
+        self.assertIn("reject=1", admin("fault user ALICE reject 1"))
+        trader.order("FAULT", b"B", expected=b"J")
+        self.assertEqual(self.api("GET", path + "/status")["runtime"]["liveOrders"], "0")
+        trader.order("ACCEPTED", b"B")
+        self.assertEqual(self.api("GET", path + "/status")["runtime"]["liveOrders"], "1")
+        self.assertIn("OK", admin("fault md drop 1"))
+        self.assertIn("OK", admin("fault md off"))
+        self.assertIn("OK", admin("shutdown"))
+
+    def test_both_binaries_exit_cleanly_on_int_and_term(self):
+        for stop_signal in (signal.SIGINT, signal.SIGTERM):
+            config_path = Path(self.temporary.name) / "standalone.conf"
+            config_path.write_text(config())
+            with subprocess.Popen([str(BUILD / "exsim_exchanged"), "--config", str(config_path)],
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) as child:
+                self.assertTrue(select.select([child.stdout], [], [], 10)[0])
+                self.assertIn("running", child.stdout.readline())
+                child.send_signal(stop_signal)
+                self.assertEqual(child.wait(timeout=10), 0)
+        self.process.send_signal(signal.SIGINT)
+        self.assertEqual(self.process.wait(timeout=10), 0)
 
     def test_external_sessions_match_and_publish_recoverable_market_data(self):
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as feed:

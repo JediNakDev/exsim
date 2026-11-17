@@ -36,6 +36,8 @@ public:
     // Asks the running child for a fresh snapshot with a connections object.
     // On failure the child is stopped and state() is Failed.
     bool read_status();
+    // Executes one admin command; false on transport failure (stops the child).
+    bool admin(std::string_view command, std::string& reply);
     // Reaps the child if it already exited; an unclean exit becomes Failed.
     void reap_if_exited();
     void request_stop() noexcept;
