@@ -92,13 +92,15 @@ TEST_CASE(proto_fix, malformed_and_streams) {
     b[n - 2] = b[n - 2] == '0' ? '1' : '0';
     CHECK_EQ(p.parse(b, n), Status::checksum);
     b[n - 2] = b[n - 2] == '0' ? '1' : '0';
-    Builder duplicate(b);
-    duplicate.header('0', h);
-    duplicate.field(112, "A");
-    duplicate.field(112, "B");
-    n = duplicate.finish();
-    CHECK_EQ(p.parse(b, n), Status::duplicate_field);
-    CHECK_EQ(p.duplicate_tag(), 112u);
+    for (unsigned tag : {11u, 63u, 64u, 112u, 128u, UINT32_MAX}) {
+        Builder duplicate(b);
+        duplicate.header('0', h);
+        duplicate.field(tag, "A");
+        duplicate.field(tag, "B");
+        n = duplicate.finish();
+        CHECK_EQ(p.parse(b, n), Status::duplicate_field);
+        CHECK_EQ(p.duplicate_tag(), tag);
+    }
     Builder missing(b);
     missing.header('1', h);
     n = missing.finish();
