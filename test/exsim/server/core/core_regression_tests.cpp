@@ -1,6 +1,4 @@
-// Independent QA review reproducers (review of e2cdd11), updated to assert the
-// fixed behaviour. See /tmp/exsim-review-proto/REPORT.md, findings F4 and F5,
-// and the FIX QA review finding R1 (connection-aware unbind).
+// Guard deferred disconnects, connection bindings, and market data failure reporting.
 
 #include "test/exsim/server/core/core_test_support.hpp"
 
