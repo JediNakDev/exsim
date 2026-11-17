@@ -43,10 +43,11 @@ std::filesystem::path write_slow_exchange_script(const std::filesystem::path& di
     return path;
 }
 
-std::string exchange_config_json(const std::string& name, int market_data_port) {
+std::string exchange_config_json(const std::string& name, int market_data_port,
+                                 const std::string& password_line = "password = pw") {
     const std::string text = "[exchange]\nname = " + name + "\n[market_data]\nport = " + std::to_string(market_data_port) +
                              "\n[instrument AAPL]\ntick_size = 0.01\nmin_price = 0.01\nmax_price = 1000\nreference_price = 150\n"
-                             "[user ALICE]\npassword = pw\nsession_id = 1\n";
+                             "[user ALICE]\n" + password_line + "\nsession_id = 1\n";
     api::ApiJsonWriter json;
     return json.begin_object().key("config").string(text).end_object().take();
 }
@@ -121,4 +122,18 @@ TEST_CASE(api_exchange_service, admin_validates_command_and_requires_running_exc
         CHECK_EQ(api_request(service, "POST", path, body).status, 400);
     }
     CHECK_EQ(api_request(service, "POST", path, R"({"command":"help"})").status, 409);
+}
+
+// The config parser trims carriage returns around a key, so redaction has to as well.
+TEST_CASE(api_exchange_service, redaction_trims_keys_like_the_config_parser) {
+    TemporaryDirectory directory;
+    api::ExchangeService service(directory.path, "/unused/exsim_exchanged");
+    for (const auto* password_line : {"password\r= hunter2", "\rpassword = hunter2", "password = hunter2\r"}) {
+        const auto created = api_request(service, "POST", "/v1/exchanges", exchange_config_json("CRLF", 16100, password_line));
+        REQUIRE_EQ(created.status, 201);
+        CHECK(created.body.find("hunter2") == std::string::npos);
+        CHECK(api_request(service, "GET", "/v1/exchanges").body.find("hunter2") == std::string::npos);
+        const auto path = "/v1/exchanges/" + api::parse_json(created.body).find("id")->text;
+        CHECK_EQ(api_request(service, "DELETE", path).status, 204);
+    }
 }
