@@ -55,5 +55,5 @@ make -j4 bench
 - [API specs](./docs/api.md)
 - [Architecture](./docs/architecture.md)
 - [Choices of Data structures and Rationale](./docs/dsa.md)
-- [TEST](.test/README.md)
-- [BENCHMARK](.benchmark/README.md)
+- [TEST](./test/README.md)
+- [BENCHMARK](./benchmark/README.md)
