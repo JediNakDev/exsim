@@ -1,6 +1,7 @@
 #ifndef EXSIM_TESTS_COMMAND_GEN_HPP
 #define EXSIM_TESTS_COMMAND_GEN_HPP
 #include <server/journal/journal.hpp>
+#include <test/exsim/engine/live_orders.hpp>
 #include <random>
 namespace exsim::testsupport {
 struct CommandWeights { unsigned add=55,cancel=15,replace=18,mass=4,phase=8; };
@@ -18,8 +19,7 @@ public:
     explicit CommandGenerator(std::uint64_t seed,CommandWeights weights={}):rng_(seed),weights_(weights) {}
     template<class Engine> Command next(const Engine& engine) {
         ++step_;
-        std::vector<OrderInfo> orders;
-        engine.for_each_order([&](const OrderInfo& o){orders.push_back(o);});
+        const std::vector<OrderInfo> orders=live_orders(engine);
         OrderInfo live{};
         if(!orders.empty()) live=orders[pick(orders.size())];
         auto session=static_cast<SessionId>(1+pick(4));

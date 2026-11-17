@@ -172,7 +172,7 @@ TEST_CASE(server_core_journal, refused_commands_are_not_journaled) {
     const Replay replay = replay_journal(journal.path);
     REQUIRE_EQ(replay.commands.size(), 1u);
     CHECK_EQ(replay.commands[0].new_order.cl_ord_id, 2u);
-    CHECK_EQ(replay.commands[0].new_order.ts, 3 * kSecond);  // the stamp is journaled
+    CHECK_EQ(replay.commands[0].timestamp, 3 * kSecond);  // the stamp is journaled
 }
 
 TEST_CASE(server_core_journal, timer_flushes_periodically_so_the_file_is_readable_while_running) {
@@ -327,7 +327,7 @@ TEST_CASE(server_core_journal, header_preserves_full_instrument_identity_and_rec
     Command command;
     REQUIRE(reader.next(command));
     CHECK(command.type == CommandType::SetPhase);
-    CHECK_EQ(command.set_phase.ts, 123u);
+    CHECK_EQ(command.ts(), 123u);
     CHECK(!reader.next(command));
     REQUIRE(writer.append(limit_order(1, 9, 1, Side::BUY, 1'000'000, 10)));
     REQUIRE(writer.flush());

@@ -118,6 +118,8 @@ To run an exchange directly:
 
 Stop it with SIGINT or SIGTERM. It also starts with empty books.
 
+`[engine] max_orders` bounds the live orders across all instruments and defaults to 65536. Raise it for larger books; memory is allocated at startup.
+
 See [OpenAPI](openapi.json) for the HTTP contract and [architecture](architecture.md) for process boundaries.
 
 Journal flush writes to the OS page cache only, without `fsync` or `fdatasync`. The worker acknowledges completion through `drained()`; accepting a flush request is asynchronous. Journals are optional diagnostic logs, not automatic recovery. Use a distinct path per exchange; each start truncates that file.

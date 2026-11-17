@@ -67,16 +67,6 @@ TEST_CASE(foundation, comparison_temporary_and_noncopyable) {
     CHECK_EQ(ptr, ptr);
     CHECK_EQ(std::make_unique<int>(1) == nullptr, false);
 }
-// Explicit instantiations compile the erased wrapper without linking an engine.
-// The helper is never called; no production implementation is supplied here.
-static void free_callback(const exsim::OrderInfo&) {}
-[[maybe_unused]] static void compile_callbacks(const exsim::MatchingEngine& engine) {
-    const auto callback = [](const exsim::OrderInfo&) {};
-    engine.for_each_order(free_callback);
-    engine.for_each_order(callback);
-    engine.for_each_order(+callback);
-}
-
 TEST_CASE(foundation, instrument_validation) {
     exsim::InstrumentConfig c;
     CHECK(exsim::valid_instrument_config(c));
