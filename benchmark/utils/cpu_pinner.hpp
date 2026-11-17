@@ -1,4 +1,5 @@
-#pragma once
+#ifndef EXSIM_BENCH_CPU_PINNER_HPP
+#define EXSIM_BENCH_CPU_PINNER_HPP
 
 #include <string>
 
@@ -19,6 +20,7 @@ class CPUPinner {
 public:
     static bool pin(int core_id) {
 #ifdef __linux__
+        if (core_id < 0 || core_id >= CPU_SETSIZE) return false;
         cpu_set_t cpuset;
         CPU_ZERO(&cpuset);
         CPU_SET(core_id, &cpuset);
@@ -46,4 +48,6 @@ public:
     }
 };
 
-}
+}  // namespace bench
+
+#endif

@@ -9,11 +9,9 @@ CXXFLAGS += -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined
 LDFLAGS += -fsanitize=address,undefined
 else ifeq ($(MODE),release)
 CXXFLAGS += -O2 -g
-else ifeq ($(MODE),perf)
+else ifneq ($(filter $(MODE),perf bench),)
+# bench is the perf configuration under another name, so the benchmarked engine is the perf build.
 CXXFLAGS += -O3 -march=native -DNDEBUG -flto -fno-omit-frame-pointer
-LDFLAGS += -flto
-else ifeq ($(MODE),bench)
-CXXFLAGS += -O3 -march=native -mtune=native -DNDEBUG -flto -fno-omit-frame-pointer -DEXSIM_BOOK_DETERMINISTIC_POOL
 LDFLAGS += -flto
 else
 $(error MODE must be release, debug, perf or bench)
@@ -57,8 +55,9 @@ clean:
 	rm -rf $(BUILD)
 -include $(shell find $(BUILD)/obj -name '*.d' 2>/dev/null)
 
-# The benchmarks and the ITCH replay tool link only the order book.
+# The ITCH replay tool links only the order book. The benchmarks link the matching engine too.
 BOOK_OBJS := $(call obj,lib/src/book/order_book.cpp)
+ENGINE_OBJS := $(BOOK_OBJS) $(call obj,lib/src/engine/matching_engine.cpp)
 BENCH_SRCS := $(sort $(wildcard benchmark/*.cpp benchmark/cases/*.cpp benchmark/utils/*.cpp))
 BENCH_BUILD ?= build/bench
 BENCH_BIN := $(BENCH_BUILD)/exsim_benchmark
@@ -77,7 +76,7 @@ itch-replay:
 
 ifeq ($(MODE),bench)
 $(BUILD)/obj/benchmark/%.o: CPPFLAGS += -I benchmark $(BENCH_CPPFLAGS)
-$(BENCH_BIN): $(call obj,$(BENCH_SRCS)) $(BOOK_OBJS)
+$(BENCH_BIN): $(call obj,$(BENCH_SRCS)) $(ENGINE_OBJS)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $^ -o $@ $(BENCH_LDFLAGS) -lbenchmark $(LDLIBS)
 endif
 bench-build:
