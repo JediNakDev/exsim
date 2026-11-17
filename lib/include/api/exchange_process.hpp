@@ -58,7 +58,7 @@ private:
     std::string error_, snapshot_;
     pid_t pid_ = -1;
     net::Socket control_;
-    std::jthread exit_watcher_;
+    std::thread exit_watcher_;
     std::mutex exit_mutex_;
     std::condition_variable exit_condition_;
     bool exited_ = false;
