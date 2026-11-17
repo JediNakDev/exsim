@@ -7,6 +7,7 @@
 
 #include <protocol/moldudp64.hpp>
 #include <engine/types.hpp>
+#include <net/clocks.hpp>
 
 #include <array>
 #include <cstddef>
@@ -30,10 +31,6 @@ inline constexpr std::size_t kMinimumMaxPayload = kMoldHeaderSize + kMoldMessage
 // IPv4 UDP payload limit.
 inline constexpr std::size_t kMaximumMaxPayload = 65507;
 
-// ITCH timestamps are nanoseconds since the trading-day origin and must lie
-// in [0, 86,400,000,000,000).
-inline constexpr std::uint64_t kNanosecondsPerTradingDay = 86'400ULL * 1'000'000'000ULL;
-
 // ITCH Price(4) is an unsigned 32-bit field.
 inline constexpr Price kMaxItchPrice = static_cast<Price>(std::numeric_limits<std::uint32_t>::max());
 
@@ -52,7 +49,7 @@ using MoldSessionName = std::array<char, 10>;  // right-space-padded ASCII
                                                             std::uint64_t& itch_timestamp_out) noexcept {
     if (event_time < day_origin) return false;
     const std::uint64_t since_origin = event_time - day_origin;
-    if (since_origin >= kNanosecondsPerTradingDay) return false;
+    if (since_origin >= net::kNanosecondsPerDay) return false;  // ITCH: [0, one day)
     itch_timestamp_out = since_origin;
     return true;
 }

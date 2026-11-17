@@ -23,7 +23,7 @@ TEST_CASE(flat_hash_map, insert_find_erase) {
 
 TEST_CASE(flat_hash_map, full_without_growth_rejects) {
     FlatHashMap<int> map(4);
-    const std::size_t cap = map.max_entries();
+    const std::size_t cap = map.capacity() / 2;  // at most 50% load
     for (std::size_t i = 1; i <= cap; ++i) {
         CHECK(map.insert(i, static_cast<int>(i)));
     }
@@ -55,7 +55,7 @@ TEST_CASE(flat_hash_map, matches_unordered_map_under_churn) {
         const std::uint64_t k = key_d(rng);
         switch (rng() % 3) {
             case 0: {
-                const bool expect = ref.size() < map.max_entries() && !ref.count(k);
+                const bool expect = ref.size() < map.capacity() / 2 && !ref.count(k);
                 const bool got = map.insert(k, k * 3);
                 REQUIRE_EQ(got, expect);
                 if (got) ref[k] = k * 3;

@@ -3,6 +3,7 @@
 
 #include "engine/matching_engine.hpp"
 #include "md/publisher.hpp"
+#include "net/clocks.hpp"
 #include "protocol/mdp3.hpp"
 #include "server/config.hpp"
 
@@ -277,7 +278,7 @@ private:
 
     PublishStatus fail(PublishStatus reason) noexcept { state_ = PublisherState::Stopped; return reason_ = reason; }
     std::uint16_t trade_date(Timestamp now) const noexcept {
-        const auto days = (epoch_origin_ + now) / 86400000000000ull;
+        const auto days = (epoch_origin_ + now) / net::kNanosecondsPerDay;
         return days < UINT16_MAX ? static_cast<std::uint16_t>(days) : UINT16_MAX;
     }
     void emit(std::size_t size, Timestamp now, MdpStream stream) noexcept {

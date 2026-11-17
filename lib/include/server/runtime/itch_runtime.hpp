@@ -109,6 +109,7 @@ public:
         (void)publisher_.on_events(batch);  // a failure stops the feed: see stopped()
     }
 
+    // Pending output is the publisher's open packet (see CoreMarketData).
     void flush() { publisher_.flush(); }
 
     template <class Core>

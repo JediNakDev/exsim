@@ -16,14 +16,11 @@ TEST_CASE(foundation, zero_and_moved_map) {
     CHECK_EQ(moved.size(), 1u);
     CHECK_EQ(map.capacity(), 0u);
     CHECK(!map.find(2));
-    map.clear();
     map.reserve(8);
     CHECK(map.insert(3, 4));
     moved = std::move(map);
     CHECK(!map.find(3));
-    map.clear();
     CHECK_EQ(map.size(), 0u);
-    moved.clear();
     CHECK(!moved.contains(0));
 }
 TEST_CASE(foundation, reserve_overflow_and_constness) {
@@ -36,10 +33,8 @@ TEST_CASE(foundation, reserve_overflow_and_constness) {
         CHECK_EQ(*map.find(1), 2);
     }
     const auto& const_map = map;
-    const_map.for_each([](auto& key, auto& value) {
-        static_assert(std::is_const_v<std::remove_reference_t<decltype(key)>>);
-        static_assert(std::is_const_v<std::remove_reference_t<decltype(value)>>);
-    });
+    static_assert(std::is_const_v<std::remove_pointer_t<decltype(const_map.find(1))>>);
+    CHECK_EQ(*const_map.find(1), 2);
 }
 TEST_CASE(foundation, bounded_events) {
     exsim::EventBuffer out(2);

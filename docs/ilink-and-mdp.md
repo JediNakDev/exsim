@@ -42,8 +42,8 @@ Negotiate and Establish requests with the configured base64url HMAC key.
 ## Configuration and mappings
 
 Set `protocol=ilink3` for an iLink user. Configure `ilink_access_key`,
-`ilink_secret_key`, `ilink_session` (three characters), `ilink_firm`,
-`ilink_party_id`, and `ilink_account`. These are local simulator identities.
+`ilink_secret_key`, `ilink_session` (three characters), `ilink_firm`, and
+`ilink_party_id`. These are local simulator identities.
 The party ID represents a pre-registered record configured before startup.
 `ilink_port=0` requests an assigned port when iLink users exist. Without
 users or an explicit port, the iLink listener is disabled.

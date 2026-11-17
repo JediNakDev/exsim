@@ -20,6 +20,7 @@
 #include "md/packet_faults.hpp"
 #include "engine/price_text.hpp"
 
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -29,6 +30,22 @@
 #include <vector>
 
 namespace exsim::server {
+
+// Optional MarketData hooks only the admin commands use (the core's hooks
+// are in server/core/policies.hpp).
+template <typename MarketData>
+concept MarketDataPacketFaults = requires(MarketData& market_data) {
+    { market_data.packet_faults() } -> std::same_as<md::PacketFaultInjector&>;
+};
+
+template <typename MarketData>
+concept MarketDataPacketFaultReset = requires(MarketData& market_data) { market_data.reset_packet_faults(); };
+
+template <typename MarketData>
+concept MarketDataPublisherState = requires(const MarketData& market_data) {
+    { market_data.state() } -> std::same_as<md::PublisherState>;
+    { market_data.stop_reason() } -> std::same_as<md::PublishStatus>;
+};
 
 template <class Core>
 class CoreAdmin {
@@ -266,8 +283,6 @@ private:
         } else {
             market_data_state_line += "unavailable";
         }
-        market_data_state_line += " failed_batches=" + std::to_string(counters.market_data_failed_batches) +
-                                  " last_failure=" + std::string(md_status_text(counters.market_data_last_failure));
         append_line(reply, market_data_state_line);
         append_line(reply, "journal state=" + std::string(to_string(core_.journal_state())) +
                                (config.journal_path.empty() ? std::string() : " path=" + config.journal_path) +

@@ -140,27 +140,8 @@ public:
         return true;
     }
 
-    void clear() noexcept {
-        for (std::size_t i = 0; mask_ != 0 && i <= mask_; ++i) {
-            slots_[i].key = 0;
-        }
-        size_ = 0;
-    }
-
-    // Visits every (key, value). Must not insert or erase during iteration.
-    template <typename F>
-    void for_each(F&& f) const {
-        for (std::size_t i = 0; mask_ != 0 && i <= mask_; ++i) {
-            const Slot& slot = slots_[i];
-            if (slot.key != 0) {
-                f(slot.key, slot.value);
-            }
-        }
-    }
-
     [[nodiscard]] std::size_t size() const noexcept { return size_; }
     [[nodiscard]] bool empty() const noexcept { return size_ == 0; }
-    [[nodiscard]] std::size_t max_entries() const noexcept { return max_entries_; }
     [[nodiscard]] std::size_t capacity() const noexcept { return mask_ == 0 ? 0 : mask_ + 1; }
 
 private:

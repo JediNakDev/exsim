@@ -33,7 +33,7 @@
 //   [user <USERNAME>]          password, protocol, session_id, owner, stp,
 //                              cancel_on_disconnect, ilink_access_key,
 //                              ilink_secret_key, ilink_session, ilink_firm,
-//                              ilink_party_id, ilink_account
+//                              ilink_party_id
 // Keys of the other market data protocol are rejected because they would be
 // ignored. Prices are decimal dollars ("150.25"), stored with 4 implied
 // decimals. Trading-day times are "HH:MM[:SS[.fraction]]" local time; the end
@@ -42,6 +42,7 @@
 #include "engine/instrument.hpp"
 #include "engine/matching_engine.hpp"
 #include "engine/types.hpp"
+#include "net/clocks.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -76,10 +77,7 @@ struct UserConfig {
     std::string ilink_session;
     std::string ilink_firm;
     std::uint64_t ilink_party_id = 0;
-    std::string ilink_account;
 };
-
-inline constexpr Timestamp kNanosecondsPerDay = Timestamp{86'400} * 1'000'000'000;
 
 struct ExchangeSection {
     std::string name = "EXSIM";  // FIX TargetCompID clients must use
@@ -93,7 +91,7 @@ struct ExchangeSection {
     // Commands are accepted only while their stamped timestamp (ns since
     // local midnight) is in [trading_day_start_ns, trading_day_end_ns).
     Timestamp trading_day_start_ns = 0;
-    Timestamp trading_day_end_ns = kNanosecondsPerDay;
+    Timestamp trading_day_end_ns = net::kNanosecondsPerDay;
 };
 
 enum class MarketDataProtocol : std::uint8_t { Itch50, Mdp3 };
@@ -108,7 +106,7 @@ struct MarketDataSection {
     std::uint16_t retransmit_port = 0;  // MoldUDP64 request server
     std::uint32_t max_payload = 1400;   // bytes per MoldUDP64 packet incl. header; 72..65507 (md::kMinimumMaxPayload)
     std::string session = "EXSIM";      // MoldUDP64 session (<= 10 chars)
-    std::uint32_t retransmit_buffer = 1u << 20;  // messages kept for retransmission
+    std::uint32_t retransmit_buffer = 1u << 16;  // messages kept for retransmission (64 B each)
     std::uint32_t noii_interval_ms = 1000;
     std::uint16_t channel_id = 1;
     std::uint8_t market_segment_id = 1;
@@ -123,11 +121,14 @@ struct MarketDataSection {
     std::string replay_password;
 };
 
+// Per-session limits, allocated (and the stores prefaulted) for every
+// configured user at startup: about 13 MiB per user at these defaults, 31 MiB
+// for an iLink user (two stores). Raise them for long or busy trading days.
 struct EngineSection {
     EngineConfig engine{};
-    std::uint32_t max_tokens_per_session = 1u << 20;
-    std::size_t store_messages_per_session = 1u << 20;
-    std::size_t store_bytes_per_session = std::size_t{64} << 20;
+    std::uint32_t max_tokens_per_session = 1u << 16;          // client order IDs per day
+    std::size_t store_messages_per_session = 1u << 16;        // outbound messages kept for replay
+    std::size_t store_bytes_per_session = std::size_t{8} << 20;  // their bytes
 };
 
 // What the exchange core does when a journal write fails (exchange core).
@@ -149,8 +150,6 @@ struct ServerConfig {
     std::uint32_t journal_flush_interval_ms = 1000;  // periodic flush from the core timer; 0 = never
     std::vector<InstrumentConfig> instruments;
     std::vector<UserConfig> users;
-
-    [[nodiscard]] const UserConfig* find_user(std::string_view username) const noexcept;
 };
 
 // Parses `text`; on failure returns false and sets `error` to

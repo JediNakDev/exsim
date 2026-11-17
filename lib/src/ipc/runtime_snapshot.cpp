@@ -1,6 +1,7 @@
-#include "api/runtime_snapshot.hpp"
+#include "ipc/runtime_snapshot.hpp"
 #include "api/api_json.hpp"
-namespace exsim::api {
+namespace exsim::ipc {
+using api::ApiJsonWriter;
 std::string runtime_snapshot_json(server::ServerRuntime& runtime) {
     const auto& market_data = runtime.config().market_data;
     const bool mdp = market_data.protocol == server::MarketDataProtocol::Mdp3;
