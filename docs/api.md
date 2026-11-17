@@ -108,6 +108,8 @@ Stop the API with Ctrl+C. It stops and reaps its managed exchanges. Children als
 
 The data directory is locked to one API process. Config files retain full credentials with owner-only permissions. Books and sessions are not saved.
 
+`ilink_account` is no longer a `[user <name>]` key and nothing replaces it; the simulator never used the value. A config that still has it fails to load with `<line>: unknown key 'ilink_account'`. Because the API validates every saved `.conf` in its data directory at startup, one old file stops it with `exsim_api: <line>: unknown key 'ilink_account'`. Remove the line from saved configs, including those in the data directory, before starting the manager.
+
 Exchanges can use optional `[journal]` settings: `path`, `on_failure`, and `flush_interval_ms`. A relative `path` is relative to the config file. Managed exchanges accept only a file name ending in `.journal`, written to the API data directory. The legacy Exsim `fixp_sbe` protocol and public admin listeners are rejected. CME iLink 3 has its own FIXP/SBE gateway.
 
 To run an exchange directly:
