@@ -96,7 +96,8 @@ struct MessageView {
     if (body.size() > UINT16_MAX - kIlinkHeaderSize || header.block_length > body.size()) return 0;
     const std::size_t size = kIlinkHeaderSize + body.size();
     if (output.size() < size) return 0;
-    if (!body.empty()) std::memmove(output.data() + kIlinkHeaderSize, body.data(), body.size());
+    if (!body.empty() && body.data() != output.data() + kIlinkHeaderSize)
+        std::memmove(output.data() + kIlinkHeaderSize, body.data(), body.size());
     store_le(output.data(), static_cast<std::uint16_t>(size));
     store_le(output.data() + 2, kEncoding);
     encode_header(output.data() + 4, header);

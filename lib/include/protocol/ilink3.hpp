@@ -37,13 +37,15 @@ template<class Message> struct Root {
         if (!text.empty()) std::memcpy(bytes.data() + field.offset, text.data(), text.size());
         return true;
     }
+    // Writes root and tail at their final offsets after the framing header.
     [[nodiscard]] std::size_t encode(std::span<char> output, std::span<const char> tail = Message::empty_tail) const noexcept {
-        std::array<char, 2048> body{};
-        if (bytes.size() + tail.size() > body.size()) return 0;
-        std::memcpy(body.data(), bytes.data(), bytes.size());
-        if (!tail.empty()) std::memcpy(body.data() + bytes.size(), tail.data(), tail.size());
+        const std::size_t body_size = bytes.size() + tail.size();
+        if (output.size() < cme::kIlinkHeaderSize + body_size) return 0;
+        char* body = output.data() + cme::kIlinkHeaderSize;
+        std::memcpy(body, bytes.data(), bytes.size());
+        if (!tail.empty()) std::memcpy(body + bytes.size(), tail.data(), tail.size());
         return cme::encode_ilink({Message::block_length, Message::id, schema::id, schema::version},
-                                std::span(body).first(bytes.size() + tail.size()), output);
+                                 {body, body_size}, output);
     }
 };
 

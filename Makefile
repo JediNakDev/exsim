@@ -4,6 +4,11 @@ CXX ?= c++
 BUILD := build/$(MODE)
 CPPFLAGS := -I lib/include -I . -MMD -MP
 CXXFLAGS := -std=c++23 -Wall -Wextra -Wpedantic -Wshadow $(EXTRA_CXXFLAGS)
+# GCC warns that std::hardware_destructive_interference_size depends on -mtune;
+# every object in one build shares the same flags, so the value is consistent.
+ifneq ($(findstring Free Software Foundation,$(shell $(CXX) --version 2>/dev/null)),)
+CXXFLAGS += -Wno-interference-size
+endif
 ifeq ($(MODE),debug)
 CXXFLAGS += -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined
 LDFLAGS += -fsanitize=address,undefined

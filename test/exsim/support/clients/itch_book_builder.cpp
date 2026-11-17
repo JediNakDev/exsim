@@ -16,7 +16,8 @@ constexpr bool better_price(Side side, Price candidate, Price reference) noexcep
 ItchBookBuilder::ItchBookBuilder(const BookBuilderConfig& config)
     : max_instruments_(config.max_instruments),
       max_orders_(config.max_orders),
-      max_levels_per_side_(config.max_levels_per_side) {
+      max_levels_per_side_(config.max_levels_per_side),
+      order_slots_by_reference_(0) {
     if (max_instruments_ == 0 || max_instruments_ > std::numeric_limits<InstrumentId>::max())
         throw std::invalid_argument("book builder max_instruments out of range");
     if (max_orders_ == 0 || max_orders_ >= kNoOrderSlot) throw std::invalid_argument("book builder max_orders out of range");
@@ -26,7 +27,7 @@ ItchBookBuilder::ItchBookBuilder(const BookBuilderConfig& config)
     orders_ = std::make_unique<OrderSlot[]>(max_orders_);
     levels_ = std::make_unique<Level[]>(max_instruments_ * 2 * max_levels_per_side_);
     instruments_ = std::make_unique<InstrumentRecord[]>(max_instruments_ + 1);
-    order_slots_by_reference_.reserve(max_orders_);
+    order_slots_by_reference_ = exsim::util::FlatHashMap<std::uint32_t>(max_orders_);
     for (std::size_t slot = 0; slot < max_orders_; ++slot)
         orders_[slot].next = slot + 1 < max_orders_ ? static_cast<std::uint32_t>(slot + 1) : kNoOrderSlot;
     free_order_slot_ = 0;
