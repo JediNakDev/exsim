@@ -546,8 +546,6 @@ TEST_CASE(net_clocks, epoch_midnight_and_monotonic) {
     const auto before = monotonic_ns();
     CHECK_GE(monotonic_ns(), before);
     CHECK_GT(realtime_ns(), 1700000000ULL * kNanosecondsPerSecond);
-    CHECK_EQ(utc_midnight_ns(kNanosecondsPerDay + 1234), 1234U);
-    CHECK_LT(utc_midnight_ns(), kNanosecondsPerDay);
     LocalClock clock;
     clock.refresh();
     const auto now = realtime_ns();

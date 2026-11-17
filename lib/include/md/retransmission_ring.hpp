@@ -8,9 +8,11 @@
 
 #include <md/feed_common.hpp>
 
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <span>
 #include <stdexcept>
@@ -19,9 +21,10 @@ namespace exsim::md {
 
 class RetransmissionRing {
 public:
-    // Setup only: allocates `capacity_messages` slots (>= 1).
+    // Setup only: allocates `capacity_messages` (>= 1) slots, rounded up to a
+    // power of two so a sequence maps to its slot with a mask.
     explicit RetransmissionRing(std::size_t capacity_messages)
-        : capacity_(capacity_messages), slots_(make_slots(capacity_messages)) {}
+        : capacity_(rounded_capacity(capacity_messages)), slots_(std::make_unique<Slot[]>(capacity_)) {}
 
     RetransmissionRing(const RetransmissionRing&) = delete;
     RetransmissionRing& operator=(const RetransmissionRing&) = delete;
@@ -33,7 +36,7 @@ public:
     [[nodiscard]] bool append(std::uint64_t sequence, std::span<const char> message) noexcept {
         if (sequence == 0 || message.empty() || message.size() > kMaxItchMessageSize) return false;
         if (newest_sequence_ != 0 && sequence != newest_sequence_ + 1) return false;
-        Slot& slot = slots_[sequence % capacity_];
+        Slot& slot = slots_[sequence & (capacity_ - 1)];
         slot.sequence = sequence;
         slot.length = static_cast<std::uint8_t>(message.size());
         std::memcpy(slot.bytes, message.data(), message.size());
@@ -45,7 +48,7 @@ public:
     // The stored bytes of `sequence`, or an empty span when it is not held.
     [[nodiscard]] std::span<const char> find(std::uint64_t sequence) const noexcept {
         if (sequence == 0) return {};
-        const Slot& slot = slots_[sequence % capacity_];
+        const Slot& slot = slots_[sequence & (capacity_ - 1)];
         if (slot.sequence != sequence) return {};
         return {slot.bytes, slot.length};
     }
@@ -67,9 +70,11 @@ private:
     };
     static_assert(sizeof(Slot) == 64, "one cache line per retained message");
 
-    static std::unique_ptr<Slot[]> make_slots(std::size_t capacity_messages) {
+    static std::size_t rounded_capacity(std::size_t capacity_messages) {
         if (capacity_messages == 0) throw std::invalid_argument("RetransmissionRing capacity must be >= 1");
-        return std::make_unique<Slot[]>(capacity_messages);
+        if (capacity_messages > std::numeric_limits<std::size_t>::max() / sizeof(Slot))
+            throw std::length_error("RetransmissionRing capacity");
+        return std::bit_ceil(capacity_messages);
     }
 
     std::size_t capacity_;
