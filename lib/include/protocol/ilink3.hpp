@@ -51,8 +51,11 @@ struct Root {
     // Writes root and tail at their final offsets after the framing header.
     [[nodiscard]] std::size_t encode(std::span<char> output,
                                      std::span<const char> tail = Message::empty_tail) const noexcept {
+        // Compared without adding tail.size(), which could wrap (and GCC then warns that the copy may be huge).
+        if (output.size() < cme::kIlinkHeaderSize + bytes.size() ||
+            output.size() - cme::kIlinkHeaderSize - bytes.size() < tail.size())
+            return 0;
         const std::size_t body_size = bytes.size() + tail.size();
-        if (output.size() < cme::kIlinkHeaderSize + body_size) return 0;
         char* body = output.data() + cme::kIlinkHeaderSize;
         std::memcpy(body, bytes.data(), bytes.size());
         if (!tail.empty()) std::memcpy(body + bytes.size(), tail.data(), tail.size());
