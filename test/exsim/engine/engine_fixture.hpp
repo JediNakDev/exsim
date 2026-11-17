@@ -46,7 +46,7 @@ struct EngineFixture {
     EventBuffer events;
 
     explicit EngineFixture(Phase initial_phase = Phase::Continuous, std::size_t instrument_count = 1,
-                                EngineConfig config = EngineConfig{4, 64})
+                           EngineConfig config = EngineConfig{4, 64})
         : engine_config(config), engine(config), events(required_event_capacity(config)) {
         static const char* const kSymbols[] = {"AAA", "BBB", "CCC", "DDD"};
         for (std::size_t i = 0; i < instrument_count; ++i) {
@@ -101,8 +101,7 @@ inline NewOrder market_order(SessionId session, ClOrdId token, Side side, Quanti
     return order;
 }
 
-inline std::vector<OrderId> level_fifo(const MatchingEngine& engine, InstrumentId instrument, Side side,
-                                       Price price) {
+inline std::vector<OrderId> level_fifo(const MatchingEngine& engine, InstrumentId instrument, Side side, Price price) {
     std::vector<OrderId> ids(engine.live_order_count() + 1);
     ids.resize(exsim::testsupport::level_orders(engine, instrument, side, price, ids.data(), ids.size()));
     return ids;
@@ -138,57 +137,111 @@ inline std::uint64_t event_stream_digest(const EventBuffer& events) {
         }
     };
     auto mix_leg = [&](const FillLeg& leg) {
-        mix(leg.order_id); mix(leg.cl_ord_id); mix(leg.session); mix(leg.owner); mix(leg.leaves_qty); mix(leg.cum_qty);
+        mix(leg.order_id);
+        mix(leg.cl_ord_id);
+        mix(leg.session);
+        mix(leg.owner);
+        mix(leg.leaves_qty);
+        mix(leg.cum_qty);
     };
     mix(events.size());
     for (const Event& event : events) {
-        mix(event.type); mix(event.instrument); mix(event.ts);
+        mix(event.type);
+        mix(event.instrument);
+        mix(event.ts);
         switch (event.type) {
             case EventType::Accepted: {
                 const auto& x = event.accepted;
-                mix(x.order_id); mix(x.cl_ord_id); mix(x.session); mix(x.owner); mix(x.side); mix(x.ord_type);
-                mix(x.tif); mix(x.stp); mix(x.post_only); mix(x.price); mix(x.qty);
+                mix(x.order_id);
+                mix(x.cl_ord_id);
+                mix(x.session);
+                mix(x.owner);
+                mix(x.side);
+                mix(x.ord_type);
+                mix(x.tif);
+                mix(x.stp);
+                mix(x.post_only);
+                mix(x.price);
+                mix(x.qty);
                 break;
             }
             case EventType::Rejected: {
                 const auto& x = event.rejected;
-                mix(x.cmd); mix(x.reason); mix(x.session); mix(x.cl_ord_id); mix(x.orig_cl_ord_id); mix(x.order_id);
+                mix(x.cmd);
+                mix(x.reason);
+                mix(x.session);
+                mix(x.cl_ord_id);
+                mix(x.orig_cl_ord_id);
+                mix(x.order_id);
                 break;
             }
             case EventType::Rested: {
                 const auto& x = event.rested;
-                mix(x.order_id); mix(x.cl_ord_id); mix(x.session); mix(x.side); mix(x.price); mix(x.leaves_qty);
+                mix(x.order_id);
+                mix(x.cl_ord_id);
+                mix(x.session);
+                mix(x.side);
+                mix(x.price);
+                mix(x.leaves_qty);
                 break;
             }
             case EventType::Fill: {
                 const auto& x = event.fill;
-                mix(x.match_id); mix(x.price); mix(x.qty); mix(x.aggressor); mix_leg(x.buy); mix_leg(x.sell);
+                mix(x.match_id);
+                mix(x.price);
+                mix(x.qty);
+                mix(x.aggressor);
+                mix_leg(x.buy);
+                mix_leg(x.sell);
                 break;
             }
             case EventType::Canceled: {
                 const auto& x = event.canceled;
-                mix(x.order_id); mix(x.cl_ord_id); mix(x.request_cl_ord_id); mix(x.session); mix(x.side);
-                mix(x.price); mix(x.canceled_qty); mix(x.cum_qty); mix(x.reason); mix(x.was_resting);
+                mix(x.order_id);
+                mix(x.cl_ord_id);
+                mix(x.request_cl_ord_id);
+                mix(x.session);
+                mix(x.side);
+                mix(x.price);
+                mix(x.canceled_qty);
+                mix(x.cum_qty);
+                mix(x.reason);
+                mix(x.was_resting);
                 mix(x.leaves_qty);
                 break;
             }
             case EventType::Replaced: {
                 const auto& x = event.replaced;
-                mix(x.old_order_id); mix(x.new_order_id); mix(x.orig_cl_ord_id); mix(x.cl_ord_id); mix(x.session);
-                mix(x.side); mix(x.old_price); mix(x.price); mix(x.old_leaves_qty); mix(x.qty); mix(x.leaves_qty);
-                mix(x.cum_qty); mix(x.priority_kept);
+                mix(x.old_order_id);
+                mix(x.new_order_id);
+                mix(x.orig_cl_ord_id);
+                mix(x.cl_ord_id);
+                mix(x.session);
+                mix(x.side);
+                mix(x.old_price);
+                mix(x.price);
+                mix(x.old_leaves_qty);
+                mix(x.qty);
+                mix(x.leaves_qty);
+                mix(x.cum_qty);
+                mix(x.priority_kept);
                 break;
             }
             case EventType::MassCancelDone: {
                 const auto& x = event.mass_cancel_done;
-                mix(x.session); mix(x.request_cl_ord_id); mix(x.canceled_count); mix(x.reason);
+                mix(x.session);
+                mix(x.request_cl_ord_id);
+                mix(x.canceled_count);
+                mix(x.reason);
                 break;
             }
             case EventType::PhaseChanged:
-                mix(event.phase_changed.old_phase); mix(event.phase_changed.new_phase);
+                mix(event.phase_changed.old_phase);
+                mix(event.phase_changed.new_phase);
                 break;
             case EventType::AuctionSummary:
-                mix(event.auction_summary.price); mix(event.auction_summary.matched_qty);
+                mix(event.auction_summary.price);
+                mix(event.auction_summary.matched_qty);
                 mix(event.auction_summary.match_id);
                 break;
         }
@@ -209,21 +262,36 @@ inline std::uint64_t book_state_digest(const MatchingEngine& engine) {
     };
     mix(engine.live_order_count());
     for (const OrderInfo& order : testsupport::live_orders(engine)) {
-        mix(order.order_id); mix(order.cl_ord_id); mix(order.instrument); mix(order.session); mix(order.owner);
-        mix(order.side); mix(order.tif); mix(order.stp); mix(order.post_only); mix(order.price); mix(order.qty);
-        mix(order.leaves_qty); mix(order.cum_qty);
+        mix(order.order_id);
+        mix(order.cl_ord_id);
+        mix(order.instrument);
+        mix(order.session);
+        mix(order.owner);
+        mix(order.side);
+        mix(order.tif);
+        mix(order.stp);
+        mix(order.post_only);
+        mix(order.price);
+        mix(order.qty);
+        mix(order.leaves_qty);
+        mix(order.cum_qty);
     }
     for (InstrumentId id = 1; id <= engine.instrument_count(); ++id) {
         mix(engine.phase(id));
         mix(engine.last_trade_price(id).value_or(-1));
         for (Side side : {Side::BUY, Side::SELL}) {
             for (const LevelInfo& level : full_depth(engine, id, side)) {
-                mix(level.price); mix(level.qty); mix(level.order_count);
+                mix(level.price);
+                mix(level.qty);
+                mix(level.order_count);
                 for (OrderId order_id : level_fifo(engine, id, side, level.price)) mix(order_id);
             }
         }
         const AuctionIndicative indicative = engine.auction_indicative(id);
-        mix(indicative.crossed); mix(indicative.price); mix(indicative.paired_qty); mix(indicative.imbalance_qty);
+        mix(indicative.crossed);
+        mix(indicative.price);
+        mix(indicative.paired_qty);
+        mix(indicative.imbalance_qty);
         mix(indicative.imbalance_side);
     }
     return hash;
@@ -261,8 +329,10 @@ inline void check_book_invariants(const MatchingEngine& engine) {
             if (!levels.empty()) CHECK_EQ(levels.front().price, *best);
             for (std::size_t j = 0; j < levels.size(); ++j) {
                 if (j > 0) {
-                    if (side == Side::BUY) CHECK_LT(levels[j].price, levels[j - 1].price);
-                    else CHECK_GT(levels[j].price, levels[j - 1].price);
+                    if (side == Side::BUY)
+                        CHECK_LT(levels[j].price, levels[j - 1].price);
+                    else
+                        CHECK_GT(levels[j].price, levels[j - 1].price);
                 }
                 CHECK_GE(levels[j].order_count, 1u);
                 const std::vector<OrderId> fifo = level_fifo(engine, id, side, levels[j].price);

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef TEST_EXSIM_PROTOCOL_FIX44_READER_HPP
+#define TEST_EXSIM_PROTOCOL_FIX44_READER_HPP
 #include <protocol/fix44.hpp>
 namespace exsim::protocol::fix44 {
 class FrameReader {
@@ -30,4 +31,6 @@ public:
         }
     }
 };
-}
+}  // namespace exsim::protocol::fix44
+
+#endif  // TEST_EXSIM_PROTOCOL_FIX44_READER_HPP

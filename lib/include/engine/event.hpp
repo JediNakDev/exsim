@@ -83,25 +83,25 @@ struct CanceledEvent {
     SessionId session;
     Side side;
     Price price;
-    Quantity canceled_qty;      // leaves removed by this cancel
+    Quantity canceled_qty;  // leaves removed by this cancel
     Quantity cum_qty;
     CancelReason reason;
-    bool was_resting;           // true if the order was on the book
-    Quantity leaves_qty = 0;   // nonzero only for a partial CancelOrder reduction
+    bool was_resting;         // true if the order was on the book
+    Quantity leaves_qty = 0;  // nonzero only for a partial CancelOrder reduction
 };
 
 struct ReplacedEvent {
     OrderId old_order_id;
-    OrderId new_order_id;       // == old_order_id iff priority_kept
+    OrderId new_order_id;  // == old_order_id iff priority_kept
     ClOrdId orig_cl_ord_id;
-    ClOrdId cl_ord_id;          // token after the replace
+    ClOrdId cl_ord_id;  // token after the replace
     SessionId session;
     Side side;
     Price old_price;
     Price price;
     Quantity old_leaves_qty;
-    Quantity qty;               // new total quantity
-    Quantity leaves_qty;        // qty - cum_qty
+    Quantity qty;         // new total quantity
+    Quantity leaves_qty;  // qty - cum_qty
     Quantity cum_qty;
     bool priority_kept;
 };
@@ -166,7 +166,9 @@ public:
     [[nodiscard]] std::size_t capacity() const noexcept { return events_.capacity(); }
     [[nodiscard]] const Event& operator[](std::size_t i) const noexcept { return events_[i]; }
     [[nodiscard]] const Event* begin() const noexcept { return events_.data(); }
-    [[nodiscard]] const Event* end() const noexcept { return events_.empty() ? events_.data() : events_.data() + events_.size(); }
+    [[nodiscard]] const Event* end() const noexcept {
+        return events_.empty() ? events_.data() : events_.data() + events_.size();
+    }
 
 private:
     std::vector<Event> events_;

@@ -58,8 +58,8 @@ private:
         throw JsonError("JSON offset " + std::to_string(position_) + ": " + message);
     }
     void skip_whitespace() noexcept {
-        while (position_ < text_.size() &&
-               (text_[position_] == ' ' || text_[position_] == '\n' || text_[position_] == '\r' || text_[position_] == '\t'))
+        while (position_ < text_.size() && (text_[position_] == ' ' || text_[position_] == '\n' ||
+                                            text_[position_] == '\r' || text_[position_] == '\t'))
             ++position_;
     }
     bool consume(char expected) noexcept {

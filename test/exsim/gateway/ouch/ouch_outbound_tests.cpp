@@ -39,12 +39,12 @@ std::string order_accepted_golden(const AcceptedFields& fields) {
         .alpha("FRM1", 4)
         .byte(fields.display)
         .u64(fields.order_reference)
-        .byte('A')   // capacity
-        .byte('N')   // intermarket sweep
-        .u32(0)      // minimum quantity
-        .byte('N')   // cross type
-        .byte('L')   // order state: live
-        .byte(' ')   // BBO weight indicator
+        .byte('A')  // capacity
+        .byte('N')  // intermarket sweep
+        .u32(0)     // minimum quantity
+        .byte('N')  // cross type
+        .byte('L')  // order state: live
+        .byte(' ')  // BBO weight indicator
         .soup('S');
 }
 
@@ -168,7 +168,7 @@ TEST_CASE(gateway_ouch_outbound, engine_rejects_map_to_order_rejected_reasons) {
         {"TOOHIGH", 100, 2'000'100, 99999, 'Y', 'X'},
         {"ZERO", 0, kHundredDollars, 99999, 'Y', 'Z'},
         {"TOOBIG", 1'000'001, kHundredDollars, 99999, 'Y', 'Z'},
-        {"POSTX", 100, kHundredDollars, 99999, 'P', 'O'},  // post-only would cross the ask
+        {"POSTX", 100, kHundredDollars, 99999, 'P', 'O'},        // post-only would cross the ask
         {"POSTIOC", 100, kHundredDollars - kTick, 0, 'P', 'O'},  // post-only IOC: invalid field
     };
     for (const auto& reject_case : cases) {

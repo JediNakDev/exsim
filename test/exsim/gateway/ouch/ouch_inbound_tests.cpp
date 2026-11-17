@@ -347,10 +347,10 @@ TEST_CASE(gateway_ouch_inbound, replace_that_changes_engine_tif_or_post_only_is_
     login_alice(session);
     session.send(EnterOrderBytes{}.frame());
     session.take_frames();
-    session.send(replace_order_frame("T1", "R1", 100, kHundredDollars, 0));       // DAY -> IOC
+    session.send(replace_order_frame("T1", "R1", 100, kHundredDollars, 0));           // DAY -> IOC
     session.send(replace_order_frame("T1", "R2", 100, kHundredDollars, 99999, 'P'));  // add post-only
     session.send(replace_order_frame("T1", "R3", 100, kHundredDollars, 99999, 'N'));  // non-displayed
-    session.send(replace_order_frame("T1", "R4", 100, kHundredDollars, 30));      // timed
+    session.send(replace_order_frame("T1", "R4", 100, kHundredDollars, 30));          // timed
     const std::vector<std::string> frames = session.take_frames();
     REQUIRE_EQ(frames.size(), 4u);
     CHECK(frames[0] == order_rejected_golden(kNineThirty, "R1", 'O'));
@@ -420,10 +420,10 @@ TEST_CASE(gateway_ouch_inbound, malformed_application_messages_are_ignored_and_c
     login_alice(session);
     std::string short_enter_order = EnterOrderBytes{}.frame();
     short_enter_order = Golden().alpha(std::string_view(short_enter_order).substr(3, 48), 48).soup('U');
-    session.send(short_enter_order);                                     // 48-byte Enter Order
-    session.send(Golden().byte('Q').alpha("whatever", 20).soup('U'));    // unknown OUCH type
-    session.send(Golden().soup('U'));                                    // empty Unsequenced Data
-    session.send(Golden().byte('X').alpha("T1", 14).soup('U'));          // short Cancel
+    session.send(short_enter_order);                                   // 48-byte Enter Order
+    session.send(Golden().byte('Q').alpha("whatever", 20).soup('U'));  // unknown OUCH type
+    session.send(Golden().soup('U'));                                  // empty Unsequenced Data
+    session.send(Golden().byte('X').alpha("T1", 14).soup('U'));        // short Cancel
     CHECK(session.take_frames().empty());
     CHECK_EQ(exchange.user_state(1).statistics().malformed_messages_ignored, 4u);
     CHECK(session.connection().state() == OuchConnectionState::LoggedIn);

@@ -23,6 +23,6 @@ struct alignas(64) Order {
 
 static_assert(sizeof(Order) == 64, "Order must stay exactly one cache line");
 
-}
+}  // namespace exsim::book
 
 #endif

@@ -79,8 +79,7 @@ TEST_CASE(gateway_fix_logon, refusals_answer_unsequenced_logout) {
     CHECK_EQ(refused_logon_output(exchange, "CLIENT2", "98=0|108=301|"),
              refusal("CLIENT2", "HeartBtInt(108) out of range"));
     CHECK_EQ(refused_logon_output(exchange, "CLIENT2", "98=0|"), refusal("CLIENT2", "required tag missing"));
-    CHECK_EQ(refused_logon_output(exchange, "CLIENT2", "98=0|108=x|"),
-             refusal("CLIENT2", "incorrect data format"));
+    CHECK_EQ(refused_logon_output(exchange, "CLIENT2", "98=0|108=x|"), refusal("CLIENT2", "incorrect data format"));
     // Nothing was bound and no day state was touched.
     CHECK(!exchange.is_bound(1));
     CHECK(!exchange.is_bound(2));

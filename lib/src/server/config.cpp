@@ -67,31 +67,46 @@ bool parse_bool(std::string_view v, bool& out) {
 
 bool parse_stp(std::string_view v, StpMode& out) {
     const std::string s = lower(v);
-    if (s == "none") out = StpMode::None;
-    else if (s == "cancel_resting") out = StpMode::CancelResting;
-    else if (s == "cancel_aggressor") out = StpMode::CancelAggressor;
-    else if (s == "cancel_both") out = StpMode::CancelBoth;
-    else return false;
+    if (s == "none")
+        out = StpMode::None;
+    else if (s == "cancel_resting")
+        out = StpMode::CancelResting;
+    else if (s == "cancel_aggressor")
+        out = StpMode::CancelAggressor;
+    else if (s == "cancel_both")
+        out = StpMode::CancelBoth;
+    else
+        return false;
     return true;
 }
 
 bool parse_phase(std::string_view v, Phase& out) {
     const std::string s = lower(v);
-    if (s == "closed") out = Phase::Closed;
-    else if (s == "pre_open") out = Phase::PreOpen;
-    else if (s == "continuous") out = Phase::Continuous;
-    else if (s == "halted") out = Phase::Halted;
-    else if (s == "pre_close") out = Phase::PreClose;
-    else return false;
+    if (s == "closed")
+        out = Phase::Closed;
+    else if (s == "pre_open")
+        out = Phase::PreOpen;
+    else if (s == "continuous")
+        out = Phase::Continuous;
+    else if (s == "halted")
+        out = Phase::Halted;
+    else if (s == "pre_close")
+        out = Phase::PreClose;
+    else
+        return false;
     return true;
 }
 
 bool parse_protocol(std::string_view v, Protocol& out) {
     const std::string s = lower(v);
-    if (s == "ouch42" || s == "ouch") out = Protocol::Ouch42;
-    else if (s == "fix44" || s == "fix") out = Protocol::Fix44;
-    else if (s == "ilink3") out = Protocol::Ilink3;
-    else return false;
+    if (s == "ouch42" || s == "ouch")
+        out = Protocol::Ouch42;
+    else if (s == "fix44" || s == "fix")
+        out = Protocol::Fix44;
+    else if (s == "ilink3")
+        out = Protocol::Ilink3;
+    else
+        return false;
     return true;
 }
 
@@ -116,7 +131,6 @@ struct Parser {
         error = std::to_string(line_no) + ": " + msg;
         return false;
     }
-
 
     bool bad_value(std::string_view key, std::string_view value) {
         return fail("invalid value '" + std::string(value) + "' for '" + std::string(key) + "'");
@@ -163,16 +177,28 @@ struct Parser {
 
     bool exchange_key(const std::string& k, std::string_view v) {
         ExchangeSection& x = cfg.exchange;
-        if (k == "name") { x.name = std::string(v); return !v.empty() || bad_value(k, v); }
-        if (k == "bind_address") { x.bind_address = std::string(v); return true; }
+        if (k == "name") {
+            x.name = std::string(v);
+            return !v.empty() || bad_value(k, v);
+        }
+        if (k == "bind_address") {
+            x.bind_address = std::string(v);
+            return true;
+        }
         if (k == "ouch_port") return parse_uint(v, x.ouch_port) || bad_value(k, v);
         if (k == "fix_port") return parse_uint(v, x.fix_port) || bad_value(k, v);
         if (k == "ilink_port") return parse_uint(v, x.ilink_port) || bad_value(k, v);
-        if (k == "fixp_sbe_port") return fail("exchange.fixp_sbe_port is not supported: the legacy FIXP/SBE gateway was removed");
+        if (k == "fixp_sbe_port")
+            return fail("exchange.fixp_sbe_port is not supported: the legacy FIXP/SBE gateway was removed");
         if (k == "admin_port") return fail("exchange.admin_port is not supported: there is no public admin listener");
-        if (k == "max_connections") return (parse_uint(v, x.max_connections) && x.max_connections > 0) || bad_value(k, v);
-        if (k == "heartbeat_interval_ms") return (parse_uint(v, x.heartbeat_interval_ms) && x.heartbeat_interval_ms > 0) || bad_value(k, v);
-        if (k == "soup_session") { x.soup_session = std::string(v); return true; }
+        if (k == "max_connections")
+            return (parse_uint(v, x.max_connections) && x.max_connections > 0) || bad_value(k, v);
+        if (k == "heartbeat_interval_ms")
+            return (parse_uint(v, x.heartbeat_interval_ms) && x.heartbeat_interval_ms > 0) || bad_value(k, v);
+        if (k == "soup_session") {
+            x.soup_session = std::string(v);
+            return true;
+        }
         if (k == "trading_day_start") return parse_day_time(v, x.trading_day_start_ns) || bad_value(k, v);
         if (k == "trading_day_end") return parse_day_time(v, x.trading_day_end_ns) || bad_value(k, v);
         return unknown_key(k);
@@ -182,54 +208,96 @@ struct Parser {
         market_data_keys.insert(k);
         MarketDataSection& m = cfg.market_data;
         if (k == "protocol") {
-            if (v == "itch50") m.protocol = MarketDataProtocol::Itch50;
-            else if (v == "mdp3") m.protocol = MarketDataProtocol::Mdp3;
-            else return bad_value(k, v);
+            if (v == "itch50")
+                m.protocol = MarketDataProtocol::Itch50;
+            else if (v == "mdp3")
+                m.protocol = MarketDataProtocol::Mdp3;
+            else
+                return bad_value(k, v);
             return true;
         }
-        if (k == "channel_id") return (parse_uint(v, m.channel_id) && m.channel_id > 0 && m.channel_id <= INT16_MAX) || bad_value(k, v);
-        if (k == "market_segment_id") return (parse_uint(v, m.market_segment_id) && m.market_segment_id > 0 && m.market_segment_id < UINT8_MAX) || bad_value(k, v);
-        if (k == "book_depth") return (parse_uint(v, m.book_depth) && m.book_depth > 0 && m.book_depth <= 10) || bad_value(k, v);
+        if (k == "channel_id")
+            return (parse_uint(v, m.channel_id) && m.channel_id > 0 && m.channel_id <= INT16_MAX) || bad_value(k, v);
+        if (k == "market_segment_id")
+            return (parse_uint(v, m.market_segment_id) && m.market_segment_id > 0 && m.market_segment_id < UINT8_MAX) ||
+                   bad_value(k, v);
+        if (k == "book_depth")
+            return (parse_uint(v, m.book_depth) && m.book_depth > 0 && m.book_depth <= 10) || bad_value(k, v);
         if (k == "snapshot_port") return parse_uint(v, m.snapshot_port) || bad_value(k, v);
         if (k == "instrument_port") return parse_uint(v, m.instrument_port) || bad_value(k, v);
         if (k == "backup_port") return parse_uint(v, m.backup_port) || bad_value(k, v);
-        if (k == "snapshot_interval_ms") return (parse_uint(v, m.snapshot_interval_ms) && m.snapshot_interval_ms > 0) || bad_value(k, v);
-        if (k == "instrument_interval_ms") return (parse_uint(v, m.instrument_interval_ms) && m.instrument_interval_ms > 0) || bad_value(k, v);
-        if (k == "replay_buffer_packets") return (parse_uint(v, m.replay_buffer_packets) && m.replay_buffer_packets > 0) || bad_value(k, v);
-        if (k == "replay_username") { m.replay_username = std::string(v); return true; }
-        if (k == "replay_password") { m.replay_password = std::string(v); return true; }
-        if (k == "address") { m.address = std::string(v); return !v.empty() || bad_value(k, v); }
+        if (k == "snapshot_interval_ms")
+            return (parse_uint(v, m.snapshot_interval_ms) && m.snapshot_interval_ms > 0) || bad_value(k, v);
+        if (k == "instrument_interval_ms")
+            return (parse_uint(v, m.instrument_interval_ms) && m.instrument_interval_ms > 0) || bad_value(k, v);
+        if (k == "replay_buffer_packets")
+            return (parse_uint(v, m.replay_buffer_packets) && m.replay_buffer_packets > 0) || bad_value(k, v);
+        if (k == "replay_username") {
+            m.replay_username = std::string(v);
+            return true;
+        }
+        if (k == "replay_password") {
+            m.replay_password = std::string(v);
+            return true;
+        }
+        if (k == "address") {
+            m.address = std::string(v);
+            return !v.empty() || bad_value(k, v);
+        }
         if (k == "port") return parse_uint(v, m.port) || bad_value(k, v);
-        if (k == "interface") { m.interface_address = std::string(v); return true; }
+        if (k == "interface") {
+            m.interface_address = std::string(v);
+            return true;
+        }
         if (k == "ttl") return parse_uint(v, m.ttl) || bad_value(k, v);
         if (k == "loopback") return parse_bool(v, m.loopback) || bad_value(k, v);
         if (k == "retransmit_port") return parse_uint(v, m.retransmit_port) || bad_value(k, v);
-        if (k == "max_payload") return (parse_uint(v, m.max_payload) && m.max_payload >= md::kMinimumMaxPayload && m.max_payload <= md::kMaximumMaxPayload) || bad_value(k, v);
-        if (k == "session") { m.session = std::string(v); return true; }
-        if (k == "retransmit_buffer") return (parse_uint(v, m.retransmit_buffer) && m.retransmit_buffer > 0) || bad_value(k, v);
+        if (k == "max_payload")
+            return (parse_uint(v, m.max_payload) && m.max_payload >= md::kMinimumMaxPayload &&
+                    m.max_payload <= md::kMaximumMaxPayload) ||
+                   bad_value(k, v);
+        if (k == "session") {
+            m.session = std::string(v);
+            return true;
+        }
+        if (k == "retransmit_buffer")
+            return (parse_uint(v, m.retransmit_buffer) && m.retransmit_buffer > 0) || bad_value(k, v);
         if (k == "noii_interval_ms") return parse_uint(v, m.noii_interval_ms) || bad_value(k, v);
         return unknown_key(k);
     }
 
     bool engine_key(const std::string& k, std::string_view v) {
         EngineSection& e = cfg.engine;
-        if (k == "max_instruments") return (parse_uint(v, e.engine.max_instruments) && e.engine.max_instruments > 0 &&
-            e.engine.max_instruments <= std::numeric_limits<InstrumentId>::max()) || bad_value(k, v);
-        if (k == "max_orders") return (parse_uint(v, e.engine.max_orders) && e.engine.max_orders > 0 &&
-            e.engine.max_orders <= std::numeric_limits<std::uint32_t>::max()) || bad_value(k, v);
-        if (k == "max_tokens_per_session") return (parse_uint(v, e.max_tokens_per_session) && e.max_tokens_per_session > 0) || bad_value(k, v);
-        if (k == "store_messages_per_session") return (parse_uint(v, e.store_messages_per_session) && e.store_messages_per_session > 0) || bad_value(k, v);
-        if (k == "store_bytes_per_session") return (parse_uint(v, e.store_bytes_per_session) && e.store_bytes_per_session > 0) || bad_value(k, v);
+        if (k == "max_instruments")
+            return (parse_uint(v, e.engine.max_instruments) && e.engine.max_instruments > 0 &&
+                    e.engine.max_instruments <= std::numeric_limits<InstrumentId>::max()) ||
+                   bad_value(k, v);
+        if (k == "max_orders")
+            return (parse_uint(v, e.engine.max_orders) && e.engine.max_orders > 0 &&
+                    e.engine.max_orders <= std::numeric_limits<std::uint32_t>::max()) ||
+                   bad_value(k, v);
+        if (k == "max_tokens_per_session")
+            return (parse_uint(v, e.max_tokens_per_session) && e.max_tokens_per_session > 0) || bad_value(k, v);
+        if (k == "store_messages_per_session")
+            return (parse_uint(v, e.store_messages_per_session) && e.store_messages_per_session > 0) || bad_value(k, v);
+        if (k == "store_bytes_per_session")
+            return (parse_uint(v, e.store_bytes_per_session) && e.store_bytes_per_session > 0) || bad_value(k, v);
         return unknown_key(k);
     }
 
     bool journal_key(const std::string& k, std::string_view v) {
-        if (k == "path") { cfg.journal_path = std::string(v); return true; }
+        if (k == "path") {
+            cfg.journal_path = std::string(v);
+            return true;
+        }
         if (k == "on_failure") {
             const std::string policy = lower(v);
-            if (policy == "shutdown") cfg.journal_failure_policy = JournalFailurePolicy::Shutdown;
-            else if (policy == "continue") cfg.journal_failure_policy = JournalFailurePolicy::Continue;
-            else return bad_value(k, v);
+            if (policy == "shutdown")
+                cfg.journal_failure_policy = JournalFailurePolicy::Shutdown;
+            else if (policy == "continue")
+                cfg.journal_failure_policy = JournalFailurePolicy::Continue;
+            else
+                return bad_value(k, v);
             return true;
         }
         if (k == "flush_interval_ms") return parse_uint(v, cfg.journal_flush_interval_ms) || bad_value(k, v);
@@ -238,15 +306,20 @@ struct Parser {
 
     bool instrument_key(const std::string& k, std::string_view v) {
         InstrumentConfig& ic = cfg.instruments.back();
-        if (k == "cme_security_id") return (parse_uint(v, ic.cme_security_id) && ic.cme_security_id > 0 && ic.cme_security_id < INT32_MAX) || bad_value(k, v);
-        if (k == "cme_contract_size") return (parse_uint(v, ic.cme_contract_size) && ic.cme_contract_size > 0) || bad_value(k, v);
+        if (k == "cme_security_id")
+            return (parse_uint(v, ic.cme_security_id) && ic.cme_security_id > 0 && ic.cme_security_id < INT32_MAX) ||
+                   bad_value(k, v);
+        if (k == "cme_contract_size")
+            return (parse_uint(v, ic.cme_contract_size) && ic.cme_contract_size > 0) || bad_value(k, v);
         if (k == "cme_maturity_date") {
             std::uint32_t value = 0;
             if (!parse_uint(v, value) || value < 19700101 || value > 99991231) return bad_value(k, v);
             const std::chrono::year_month_day date{std::chrono::year(static_cast<int>(value / 10000)),
-                std::chrono::month(value / 100 % 100), std::chrono::day(value % 100)};
+                                                   std::chrono::month(value / 100 % 100),
+                                                   std::chrono::day(value % 100)};
             if (!date.ok()) return bad_value(k, v);
-            ic.cme_maturity_date = value; return true;
+            ic.cme_maturity_date = value;
+            return true;
         }
         if (k == "cme_symbol") {
             if (v.empty() || v.size() > ic.cme_symbol.size() || !printable_ascii(v)) return bad_value(k, v);
@@ -266,17 +339,34 @@ struct Parser {
 
     bool user_key(const std::string& k, std::string_view v) {
         UserConfig& u = cfg.users.back();
-        if (k == "password") { u.password = std::string(v); return true; }
+        if (k == "password") {
+            u.password = std::string(v);
+            return true;
+        }
         if (k == "protocol") return parse_protocol(v, u.protocol) || bad_value(k, v);
         if (k == "session_id") return (parse_uint(v, u.session_id) && u.session_id != 0) || bad_value(k, v);
         if (k == "owner") return parse_uint(v, u.owner) || bad_value(k, v);
         if (k == "stp") return parse_stp(v, u.stp) || bad_value(k, v);
         if (k == "cancel_on_disconnect") return parse_bool(v, u.cancel_on_disconnect) || bad_value(k, v);
-        if (k == "ilink_access_key") { u.ilink_access_key = std::string(v); return true; }
-        if (k == "ilink_secret_key") { u.ilink_secret_key = std::string(v); return true; }
-        if (k == "ilink_session") { u.ilink_session = std::string(v); return true; }
-        if (k == "ilink_firm") { u.ilink_firm = std::string(v); return true; }
-        if (k == "ilink_party_id") return (parse_uint(v, u.ilink_party_id) && u.ilink_party_id > 0 && u.ilink_party_id < UINT64_MAX) || bad_value(k, v);
+        if (k == "ilink_access_key") {
+            u.ilink_access_key = std::string(v);
+            return true;
+        }
+        if (k == "ilink_secret_key") {
+            u.ilink_secret_key = std::string(v);
+            return true;
+        }
+        if (k == "ilink_session") {
+            u.ilink_session = std::string(v);
+            return true;
+        }
+        if (k == "ilink_firm") {
+            u.ilink_firm = std::string(v);
+            return true;
+        }
+        if (k == "ilink_party_id")
+            return (parse_uint(v, u.ilink_party_id) && u.ilink_party_id > 0 && u.ilink_party_id < UINT64_MAX) ||
+                   bad_value(k, v);
         return unknown_key(k);
     }
 
@@ -307,11 +397,12 @@ struct Parser {
         const bool mdp = cfg.market_data.protocol == MarketDataProtocol::Mdp3;
         for (const auto& key : market_data_keys) {
             const bool itch_only = key == "retransmit_buffer" || key == "noii_interval_ms" || key == "session";
-            const bool mdp_only = key == "channel_id" || key == "book_depth" ||
-                key == "snapshot_port" || key == "instrument_port" || key == "backup_port" ||
-                key == "snapshot_interval_ms" || key == "instrument_interval_ms" ||
-                key == "replay_buffer_packets" || key == "replay_username" || key == "replay_password";
-            if ((mdp && itch_only) || (!mdp && mdp_only)) return fail("market_data." + key + " is ignored by the selected protocol");
+            const bool mdp_only = key == "channel_id" || key == "book_depth" || key == "snapshot_port" ||
+                                  key == "instrument_port" || key == "backup_port" || key == "snapshot_interval_ms" ||
+                                  key == "instrument_interval_ms" || key == "replay_buffer_packets" ||
+                                  key == "replay_username" || key == "replay_password";
+            if ((mdp && itch_only) || (!mdp && mdp_only))
+                return fail("market_data." + key + " is ignored by the selected protocol");
         }
         if (cfg.exchange.soup_session.size() > 10 || !printable_ascii(cfg.exchange.soup_session)) {
             return fail("exchange.soup_session must be at most 10 printable characters");
@@ -327,7 +418,8 @@ struct Parser {
         }
         std::set<std::string> symbols;
         const bool cme_profile = cfg.market_data.protocol == MarketDataProtocol::Mdp3 ||
-            std::any_of(cfg.users.begin(), cfg.users.end(), [](const auto& user) { return user.protocol == Protocol::Ilink3; });
+                                 std::any_of(cfg.users.begin(), cfg.users.end(),
+                                             [](const auto& user) { return user.protocol == Protocol::Ilink3; });
         std::set<std::int32_t> security_ids;
         std::set<std::string> cme_symbols;
         for (const InstrumentConfig& ic : cfg.instruments) {
@@ -352,10 +444,12 @@ struct Parser {
                 if (ic.cme_security_id <= 0 || !security_ids.insert(ic.cme_security_id).second)
                     return fail("MDP requires a unique positive cme_security_id per instrument");
                 const auto end = std::find(ic.cme_symbol.begin(), ic.cme_symbol.end(), char{0});
-                const std::string external = end == ic.cme_symbol.begin() ? sym : std::string(ic.cme_symbol.begin(), end);
+                const std::string external =
+                    end == ic.cme_symbol.begin() ? sym : std::string(ic.cme_symbol.begin(), end);
                 if (!cme_symbols.insert(external).second) return fail("duplicate cme_symbol " + external);
                 std::int64_t encoded = 0;
-                if (!protocol::cme::price_to_price9(ic.max_price, encoded) || ic.max_order_qty >= INT32_MAX || ic.lot_size > INT32_MAX / 10000u)
+                if (!protocol::cme::price_to_price9(ic.max_price, encoded) || ic.max_order_qty >= INT32_MAX ||
+                    ic.lot_size > INT32_MAX / 10000u)
                     return fail("MDP instrument price or quantity exceeds wire range");
             }
         }
@@ -363,10 +457,12 @@ struct Parser {
             const auto& m = cfg.market_data;
             if (!m.snapshot_port || !m.instrument_port || !m.port || m.max_payload < 1400 ||
                 m.port == m.snapshot_port || m.port == m.instrument_port || m.snapshot_port == m.instrument_port ||
-                (m.backup_port && (m.backup_port == m.port || m.backup_port == m.snapshot_port || m.backup_port == m.instrument_port)))
+                (m.backup_port &&
+                 (m.backup_port == m.port || m.backup_port == m.snapshot_port || m.backup_port == m.instrument_port)))
                 return fail("MDP requires distinct feed/snapshot/instrument destinations and max_payload >= 1400");
-            if (m.replay_username.empty() || m.replay_password.empty() || m.replay_username.size() > 128 || m.replay_password.size() > 128 ||
-                !printable_ascii(m.replay_username) || !printable_ascii(m.replay_password))
+            if (m.replay_username.empty() || m.replay_password.empty() || m.replay_username.size() > 128 ||
+                m.replay_password.size() > 128 || !printable_ascii(m.replay_username) ||
+                !printable_ascii(m.replay_password))
                 return fail("MDP requires printable replay_username and replay_password");
         }
         std::set<std::string> names;
@@ -385,18 +481,19 @@ struct Parser {
             if (u.protocol == Protocol::Ouch42 && (u.username.size() > 6 || u.password.size() > 10)) {
                 return fail("user " + u.username + ": SoupBinTCP limits username to 6 and password to 10 characters");
             }
-            if (u.protocol == Protocol::Fix44 &&
-                (u.username.size() > gateway::fix::kMaxCompIdLength ||
-                 u.password.size() > gateway::fix::kMaxInboundTextFieldLength)) {
+            if (u.protocol == Protocol::Fix44 && (u.username.size() > gateway::fix::kMaxCompIdLength ||
+                                                  u.password.size() > gateway::fix::kMaxInboundTextFieldLength)) {
                 return fail("user " + u.username + ": FIX username or password exceeds gateway field length limit");
             }
             if (u.protocol == Protocol::Ilink3) {
                 std::array<char, 32> key{};
-                if (u.ilink_access_key.empty() || u.ilink_access_key.size() > 20 || !printable_ascii(u.ilink_access_key) ||
-                    !protocol::ilink3::decode_secret(u.ilink_secret_key, key) || u.ilink_session.size() != 3 ||
-                    !printable_ascii(u.ilink_session) || u.ilink_firm.empty() || u.ilink_firm.size() > 5 || !printable_ascii(u.ilink_firm) ||
-                    !u.ilink_party_id || u.ilink_party_id == UINT64_MAX)
-                    return fail("iLink user requires access key, base64url secret, three-character session, firm and party ID");
+                if (u.ilink_access_key.empty() || u.ilink_access_key.size() > 20 ||
+                    !printable_ascii(u.ilink_access_key) || !protocol::ilink3::decode_secret(u.ilink_secret_key, key) ||
+                    u.ilink_session.size() != 3 || !printable_ascii(u.ilink_session) || u.ilink_firm.empty() ||
+                    u.ilink_firm.size() > 5 || !printable_ascii(u.ilink_firm) || !u.ilink_party_id ||
+                    u.ilink_party_id == UINT64_MAX)
+                    return fail(
+                        "iLink user requires access key, base64url secret, three-character session, firm and party ID");
                 if (!ilink_sessions.insert(u.ilink_session + "/" + u.ilink_firm).second)
                     return fail("duplicate iLink session/firm identity");
             }
@@ -409,14 +506,11 @@ struct Parser {
         }
         return true;
     }
-
 };
 
 }  // namespace
 
-bool parse_price(std::string_view text, Price& out) noexcept {
-    return exsim::parse_decimal_price(text, out);
-}
+bool parse_price(std::string_view text, Price& out) noexcept { return exsim::parse_decimal_price(text, out); }
 
 bool parse_day_time(std::string_view text, Timestamp& out) noexcept {
     // HH:MM[:SS[.fraction]]

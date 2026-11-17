@@ -59,15 +59,12 @@ struct InstrumentBook {
         return qty != 0 && qty <= config.max_order_qty && (config.lot_size == 1 || qty % config.lot_size == 0);
     }
 
-    [[nodiscard]] bool is_crossed() const noexcept {
-        return order_book.best_bid_tick() >= order_book.best_ask_tick();
-    }
+    [[nodiscard]] bool is_crossed() const noexcept { return order_book.best_bid_tick() >= order_book.best_ask_tick(); }
 
     // Would a `side` order at `tick` cross the opposite best?
     [[nodiscard]] bool crosses_opposite_best(Side side, std::int32_t tick) const noexcept {
         return side == Side::BUY ? tick >= order_book.best_ask_tick() : tick <= order_book.best_bid_tick();
     }
-
 };
 
 }  // namespace exsim::engine

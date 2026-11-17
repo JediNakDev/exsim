@@ -71,8 +71,8 @@ TEST_CASE(md_udp, loopback_round_trip_with_retransmission) {
                                                    UdpFeedSink{&injector, &feed_sender, feed_endpoint});
     md::RetransmissionServer server(publisher.ring(), md::RetransmissionConfig{});
 
-    md::ItchBookBuilder builder(md::BookBuilderConfig{setup.engine.max_instruments, setup.engine.max_orders,
-                                                      setup.engine.max_orders});
+    md::ItchBookBuilder builder(
+        md::BookBuilderConfig{setup.engine.max_instruments, setup.engine.max_orders, setup.engine.max_orders});
     md::ReceiverConfig receiver_config;
     receiver_config.session = "EXSIM";
     receiver_config.request_timeout_ns = 20'000'000;

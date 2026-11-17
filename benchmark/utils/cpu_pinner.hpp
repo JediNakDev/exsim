@@ -28,8 +28,7 @@ public:
 #elif defined(__APPLE__)
         thread_affinity_policy_data_t policy = {core_id};
         thread_port_t mach_thread = pthread_mach_thread_np(pthread_self());
-        return thread_policy_set(mach_thread, THREAD_AFFINITY_POLICY,
-                                 reinterpret_cast<thread_policy_t>(&policy),
+        return thread_policy_set(mach_thread, THREAD_AFFINITY_POLICY, reinterpret_cast<thread_policy_t>(&policy),
                                  THREAD_AFFINITY_POLICY_COUNT) == KERN_SUCCESS;
 #else
         (void)core_id;

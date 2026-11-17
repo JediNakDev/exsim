@@ -84,8 +84,7 @@ inline constexpr char kSoupLoginRejectSessionNotAvailable = 'S';
 // Liquidity of one Fill leg. `phase_being_left` is only consulted for
 // auction executions (aggressor None): the old phase of the PhaseChanged that
 // follows the uncross in the same batch.
-[[nodiscard]] constexpr char ouch_liquidity_flag(Aggressor aggressor, Side leg_side,
-                                                 Phase phase_being_left) noexcept {
+[[nodiscard]] constexpr char ouch_liquidity_flag(Aggressor aggressor, Side leg_side, Phase phase_being_left) noexcept {
     if (aggressor == Aggressor::None) {
         if (phase_being_left == Phase::PreOpen) return kOuchLiquidityOpeningCross;
         if (phase_being_left == Phase::PreClose) return kOuchLiquidityClosingCross;
@@ -98,9 +97,7 @@ inline constexpr char kSoupLoginRejectSessionNotAvailable = 'S';
 // ---- Inbound field mapping --------------------------------------------------
 
 // 'B' buys; 'S' (sell), 'T' (sell short) and 'E' (sell short exempt) sell.
-[[nodiscard]] constexpr Side engine_side(char ouch_side) noexcept {
-    return ouch_side == 'B' ? Side::BUY : Side::SELL;
-}
+[[nodiscard]] constexpr Side engine_side(char ouch_side) noexcept { return ouch_side == 'B' ? Side::BUY : Side::SELL; }
 
 [[nodiscard]] constexpr bool supported_time_in_force(std::uint32_t seconds) noexcept {
     return seconds == kOuchTimeInForceImmediateOrCancel || seconds == kOuchTimeInForceMarketHours ||
@@ -112,9 +109,7 @@ inline constexpr char kSoupLoginRejectSessionNotAvailable = 'S';
 }
 
 // Only displayed 'Y' and post-only 'P' are supported.
-[[nodiscard]] constexpr bool supported_display(char display) noexcept {
-    return display == 'Y' || display == 'P';
-}
+[[nodiscard]] constexpr bool supported_display(char display) noexcept { return display == 'Y' || display == 'P'; }
 
 [[nodiscard]] constexpr bool display_is_post_only(char display) noexcept { return display == 'P'; }
 

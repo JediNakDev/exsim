@@ -41,8 +41,8 @@ namespace exsim::gateway::fix {
 template <ByteSink Sink>
 class FixSessionDayState {
 public:
-    FixSessionDayState(std::string_view own_comp_id, std::string_view peer_comp_id,
-                       std::size_t store_max_messages, std::size_t store_max_bytes)
+    FixSessionDayState(std::string_view own_comp_id, std::string_view peer_comp_id, std::size_t store_max_messages,
+                       std::size_t store_max_bytes)
         : store_(store_max_messages, store_max_bytes),
           sequence_by_store_slot_(std::make_unique<std::uint64_t[]>(store_max_messages + 1)),
           pending_session_messages_(16, 16 * kMaxOutboundMessageBytes) {
@@ -184,8 +184,7 @@ private:
             ++messages_not_stored_;
             return false;
         }
-        const fix44::Header header{own_comp_id_.view(), peer_comp_id_.view(), next_outbound_seq_,
-                                   now.realtime_ns};
+        const fix44::Header header{own_comp_id_.view(), peer_comp_id_.view(), next_outbound_seq_, now.realtime_ns};
         const std::size_t size = encoder(header, std::span<char>(encode_buffer_));
         if (size == 0) {
             return false;
@@ -249,9 +248,10 @@ private:
         const bool stored_in_range =
             slot <= store_.last_seq() && sequence_by_store_slot_[slot] <= resend_last_sequence_;
         const auto pending = pending_session_messages_.get(next_pending_session_slot_);
-        const bool session_in_range = !pending.bytes.empty() && pending.meta >= resend_next_sequence_ &&
-                                      pending.meta <= resend_last_sequence_;
-        const std::uint64_t following_stored = stored_in_range ? sequence_by_store_slot_[slot] : resend_last_sequence_ + 1;
+        const bool session_in_range =
+            !pending.bytes.empty() && pending.meta >= resend_next_sequence_ && pending.meta <= resend_last_sequence_;
+        const std::uint64_t following_stored =
+            stored_in_range ? sequence_by_store_slot_[slot] : resend_last_sequence_ + 1;
         const std::uint64_t following_session = session_in_range ? pending.meta : resend_last_sequence_ + 1;
         const std::uint64_t next_message = std::min(following_stored, following_session);
         std::size_t size = 0;

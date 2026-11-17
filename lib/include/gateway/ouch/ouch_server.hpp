@@ -83,10 +83,12 @@ struct OuchSessionSettings {
     // connection. Before login it is also the login deadline.
     Timestamp client_idle_timeout_ns = Timestamp{kDefaultClientIdleTimeoutMs} * 1'000'000;
 
-    [[nodiscard]] static OuchSessionSettings from(const server::ExchangeSection& exchange,
-                                                  std::uint32_t client_idle_timeout_ms = kDefaultClientIdleTimeoutMs) noexcept {
+    [[nodiscard]] static OuchSessionSettings from(
+        const server::ExchangeSection& exchange,
+        std::uint32_t client_idle_timeout_ms = kDefaultClientIdleTimeoutMs) noexcept {
         OuchSessionSettings settings;
-        const std::string_view session = std::string_view(exchange.soup_session).substr(0, settings.soup_session.size());
+        const std::string_view session =
+            std::string_view(exchange.soup_session).substr(0, settings.soup_session.size());
         protocol::wire::alpha(settings.soup_session.data(), settings.soup_session.size(), session);
         settings.server_heartbeat_interval_ns = Timestamp{exchange.heartbeat_interval_ms} * 1'000'000;
         settings.client_idle_timeout_ns = Timestamp{client_idle_timeout_ms} * 1'000'000;
@@ -129,16 +131,16 @@ enum class OuchConnectionState : std::uint8_t { AwaitingLogin, LoggedIn, Closed 
 
 enum class OuchCloseReason : std::uint8_t {
     None,
-    LoginRejected,      // Login Rejected sent
-    ProtocolViolation,  // bad framing, unknown packet type, data before login, second login
-    ClientLogout,       // Logout Request received
-    ClientIdleTimeout,  // nothing received for client_idle_timeout_ns
-    SendBufferFull,     // sink.prepare failed for live output
-    StoreFull,          // the user's sequenced store overflowed; End of Session sent
+    LoginRejected,        // Login Rejected sent
+    ProtocolViolation,    // bad framing, unknown packet type, data before login, second login
+    ClientLogout,         // Logout Request received
+    ClientIdleTimeout,    // nothing received for client_idle_timeout_ns
+    SendBufferFull,       // sink.prepare failed for live output
+    StoreFull,            // the user's sequenced store overflowed; End of Session sent
     StoreReserveReached,  // O/U/M received with the store at its reserve; nothing stored, reconnect allowed
     FaultDropOut,         // `fault user X drop_out n`: n messages stored, not written, then the link is cut
-    EndOfSession,       // end_session(): End of Session sent
-    TransportClosed,    // on_disconnect() without an earlier close request
+    EndOfSession,         // end_session(): End of Session sent
+    TransportClosed,      // on_disconnect() without an earlier close request
 };
 
 template <gateway::ByteSink ByteSink>
@@ -153,22 +155,22 @@ class OuchConnection;
 // command, runs the engine and dispatches the batch to the sessions before
 // returning. submit returns void (always applied) or server::SubmitResult.
 template <class Context>
-concept OuchServerContext = requires(Context& context, const Context& const_context, std::string_view text,
-                                     SessionId session, server::ConnectionId connection, const Symbol& symbol,
-                                     InstrumentId instrument, const Command& command) {
-    { context.authenticate(text, text, server::Protocol::Ouch42) } -> std::same_as<const server::UserConfig*>;
-    { context.bind(session, connection) } -> std::same_as<bool>;
-    context.unbind(session, connection);
-    { const_context.find_instrument(symbol) } -> std::same_as<InstrumentId>;
-    { const_context.instrument(instrument) } -> std::same_as<const InstrumentConfig*>;
-    requires std::is_void_v<decltype(context.submit(command))> ||
-                 std::same_as<decltype(context.submit(command)), server::SubmitResult>;
-    { const_context.now() } -> std::same_as<Timestamp>;
-    { const_context.phase_left_by_batch(instrument) } -> std::same_as<Phase>;
-    { context.consume_injected_reject(session) } -> std::same_as<bool>;
-    { context.consume_drop_out(session) } -> std::same_as<bool>;
-    { const_context.has_pending_drop_out(session) } -> std::same_as<bool>;
-};
+concept OuchServerContext =
+    requires(Context& context, const Context& const_context, std::string_view text, SessionId session,
+             server::ConnectionId connection, const Symbol& symbol, InstrumentId instrument, const Command& command) {
+        { context.authenticate(text, text, server::Protocol::Ouch42) } -> std::same_as<const server::UserConfig*>;
+        { context.bind(session, connection) } -> std::same_as<bool>;
+        context.unbind(session, connection);
+        { const_context.find_instrument(symbol) } -> std::same_as<InstrumentId>;
+        { const_context.instrument(instrument) } -> std::same_as<const InstrumentConfig*>;
+        requires std::is_void_v<decltype(context.submit(command))> ||
+                     std::same_as<decltype(context.submit(command)), server::SubmitResult>;
+        { const_context.now() } -> std::same_as<Timestamp>;
+        { const_context.phase_left_by_batch(instrument) } -> std::same_as<Phase>;
+        { context.consume_injected_reject(session) } -> std::same_as<bool>;
+        { context.consume_drop_out(session) } -> std::same_as<bool>;
+        { const_context.has_pending_drop_out(session) } -> std::same_as<bool>;
+    };
 
 // No gateway reject: the command reached the engine (or will, if deferred).
 inline constexpr char kCommandApplied = '\0';
@@ -245,12 +247,13 @@ public:
                                                        : Phase::Continuous;
                     // Buy leg before sell leg, also when both legs are ours.
                     if (fill.buy.session == session_id_) {
-                        append_order_executed(event, fill.buy,
-                                              ouch_liquidity_flag(fill.aggressor, Side::BUY, phase_being_left), context);
+                        append_order_executed(
+                            event, fill.buy, ouch_liquidity_flag(fill.aggressor, Side::BUY, phase_being_left), context);
                     }
                     if (fill.sell.session == session_id_) {
                         append_order_executed(event, fill.sell,
-                                              ouch_liquidity_flag(fill.aggressor, Side::SELL, phase_being_left), context);
+                                              ouch_liquidity_flag(fill.aggressor, Side::SELL, phase_being_left),
+                                              context);
                     }
                     break;
                 }
@@ -337,7 +340,8 @@ private:
     // next live sequenced message must stay stored but not be transmitted.
     template <class Context>
     [[nodiscard]] bool consume_outbound_drop(Context& context) noexcept {
-        if (!context.consume_drop_out(session_id_)) [[likely]] return false;
+        if (!context.consume_drop_out(session_id_)) [[likely]]
+            return false;
         ++statistics_.outbound_messages_dropped_by_fault;
         return true;
     }
@@ -492,7 +496,8 @@ private:
     // client may reconnect and replay. The reserve stays for reports on live
     // orders (X, fills, cancel-on-disconnect, end of day).
     [[nodiscard]] bool refuse_request_at_store_reserve() noexcept {
-        if (store_admits_new_requests()) [[likely]] return false;
+        if (store_admits_new_requests()) [[likely]]
+            return false;
         ++statistics_.requests_refused_at_store_reserve;
         if (attached_connection_ != nullptr) attached_connection_->close(OuchCloseReason::StoreReserveReached);
         return true;
@@ -501,7 +506,8 @@ private:
     [[nodiscard]] bool store_admits_new_requests() const noexcept {
         const std::size_t free_messages = store_.max_messages() - static_cast<std::size_t>(store_.last_seq());
         const std::size_t free_bytes = store_.max_bytes() - store_.bytes_used();
-        return free_messages > store_reserve_messages_ && free_bytes / kMaxFramedOutboundBytes > store_reserve_messages_;
+        return free_messages > store_reserve_messages_ &&
+               free_bytes / kMaxFramedOutboundBytes > store_reserve_messages_;
     }
 
     // ---- Outbound mapping ---------------------------------------------------
@@ -613,8 +619,8 @@ private:
         char frame[kMaxFramedOutboundBytes];
         const std::size_t frame_size =
             payload_size == 0 ? 0
-                              : protocol::soupbintcp::encode(protocol::soupbintcp::SequencedData{{payload, payload_size}},
-                                                             frame, sizeof frame);
+                              : protocol::soupbintcp::encode(
+                                    protocol::soupbintcp::SequencedData{{payload, payload_size}}, frame, sizeof frame);
         if (frame_size == 0) [[unlikely]] {
             ++statistics_.outbound_encode_failures;
             return;
@@ -630,7 +636,8 @@ private:
 
     [[nodiscard]] const OuchOrderInstructions& instructions_for(ClOrdId cl_ord_id) const noexcept {
         static constexpr OuchOrderInstructions kUnknownOrderInstructions{};
-        if (cl_ord_id == 0 || cl_ord_id > tokens_.max_tokens()) [[unlikely]] return kUnknownOrderInstructions;
+        if (cl_ord_id == 0 || cl_ord_id > tokens_.max_tokens()) [[unlikely]]
+            return kUnknownOrderInstructions;
         return instructions_by_cl_ord_id_[cl_ord_id];
     }
 
@@ -884,10 +891,9 @@ private:
             return;
         }
         const Timestamp now = context.now();
-        const server::UserConfig* user =
-            context.authenticate(protocol::wire::alpha(request.username.data(), request.username.size()),
-                                 protocol::wire::alpha(request.password.data(), request.password.size()),
-                                 server::Protocol::Ouch42);
+        const server::UserConfig* user = context.authenticate(
+            protocol::wire::alpha(request.username.data(), request.username.size()),
+            protocol::wire::alpha(request.password.data(), request.password.size()), server::Protocol::Ouch42);
         OuchUserState<ByteSink>* user_state = user != nullptr ? user_states_->find(user->session_id) : nullptr;
         if (user_state == nullptr) {
             reject_login(kSoupLoginRejectNotAuthorized, now);
@@ -904,7 +910,8 @@ private:
     // Requested sequence 0 starts after the last stored message; N >= 1
     // replays from N, clamped to the next message to be generated.
     template <class Context>
-    void accept_login(OuchUserState<ByteSink>& user_state, std::uint64_t requested_sequence, Context& context) noexcept {
+    void accept_login(OuchUserState<ByteSink>& user_state, std::uint64_t requested_sequence,
+                      Context& context) noexcept {
         const Timestamp now = context.now();
         const std::uint64_t next_unstored = user_state.store().next_seq();
         const std::uint64_t first_sequence =

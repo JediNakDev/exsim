@@ -10,14 +10,13 @@
 namespace exsim::server {
 
 struct UserFaultState {
-    std::uint32_t reject_next_new_orders = 0;    // gateway rejects this many next new orders itself
-    std::uint64_t inbound_delay_ns = 0;          // hold each inbound application message this long
-    std::uint32_t drop_next_outbound = 0;        // do not transmit this many next sequenced messages
-    bool disconnect_requested = false;           // server loop closes the bound connection
+    std::uint32_t reject_next_new_orders = 0;  // gateway rejects this many next new orders itself
+    std::uint64_t inbound_delay_ns = 0;        // hold each inbound application message this long
+    std::uint32_t drop_next_outbound = 0;      // do not transmit this many next sequenced messages
+    bool disconnect_requested = false;         // server loop closes the bound connection
 
     [[nodiscard]] bool any() const noexcept {
-        return reject_next_new_orders != 0 || inbound_delay_ns != 0 || drop_next_outbound != 0 ||
-               disconnect_requested;
+        return reject_next_new_orders != 0 || inbound_delay_ns != 0 || drop_next_outbound != 0 || disconnect_requested;
     }
 };
 

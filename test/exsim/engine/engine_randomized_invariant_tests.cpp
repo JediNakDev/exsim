@@ -42,8 +42,8 @@ struct RandomCommandSource {
     // edge cases are exercised alongside matching.
     Price random_price() {
         const std::uint64_t roll = below(40);
-        if (roll == 0) return 5;      // off grid
-        if (roll == 1) return 210;    // above the band
+        if (roll == 0) return 5;    // off grid
+        if (roll == 1) return 210;  // above the band
         if (roll == 2) return 0;
         return static_cast<Price>(10 * (6 + below(9)));  // 60..140 around the reference
     }
@@ -71,7 +71,7 @@ struct RandomCommandSource {
             // Mostly resting orders so the book gets deep: Day 45%, GTC 35%,
             // IOC 12%, FOK 8%.
             const std::uint64_t tif_roll = below(100);
-            order.tif = tif_roll < 45 ? TimeInForce::Day
+            order.tif = tif_roll < 45   ? TimeInForce::Day
                         : tif_roll < 80 ? TimeInForce::GTC
                         : tif_roll < 92 ? TimeInForce::IOC
                                         : TimeInForce::FOK;
@@ -97,7 +97,8 @@ struct RandomCommandSource {
             Price price = random_price();
             if (target && below(2) == 0) price = target->price;  // exercise priority kept
             Quantity qty = random_qty();
-            if (target && below(3) == 0) qty = target->cum_qty + (target->leaves_qty > 1 ? below(target->leaves_qty) : 0);
+            if (target && below(3) == 0)
+                qty = target->cum_qty + (target->leaves_qty > 1 ? below(target->leaves_qty) : 0);
             const ClOrdId new_token = below(3) == 0 ? 0 : random_token();
             return ReplaceOrder{ts, target_session, target_token, new_token, price, qty, below(6) == 0};
         }
@@ -106,8 +107,8 @@ struct RandomCommandSource {
             return MassCancel{ts, session, filter, random_token(), below(2) == 0};
         }
         // Phase changes: Continuous most often so matching dominates.
-        static const Phase kPhases[] = {Phase::Continuous, Phase::Continuous, Phase::PreOpen, Phase::PreClose,
-                                        Phase::Halted, Phase::Closed};
+        static const Phase kPhases[] = {Phase::Continuous, Phase::Continuous, Phase::PreOpen,
+                                        Phase::PreClose,   Phase::Halted,     Phase::Closed};
         const InstrumentId phase_target = below(4) == 0 ? 0 : instrument;
         return SetPhase{ts, phase_target, kPhases[below(6)]};
     }
@@ -126,8 +127,10 @@ struct ConservationLedger {
     std::map<OrderId, Quantity> shadow_leaves;  // event-derived live leaves
 
     void set_shadow(OrderId order_id, Quantity leaves) {
-        if (leaves == 0) shadow_leaves.erase(order_id);
-        else shadow_leaves[order_id] = leaves;
+        if (leaves == 0)
+            shadow_leaves.erase(order_id);
+        else
+            shadow_leaves[order_id] = leaves;
     }
 
     void observe_new_order_id(OrderId order_id) {
@@ -150,9 +153,7 @@ struct ConservationLedger {
                     observe_new_order_id(event.accepted.order_id);
                     set_shadow(event.accepted.order_id, event.accepted.qty);
                     break;
-                case EventType::Rested:
-                    CHECK_EQ(shadow_leaves[event.rested.order_id], event.rested.leaves_qty);
-                    break;
+                case EventType::Rested: CHECK_EQ(shadow_leaves[event.rested.order_id], event.rested.leaves_qty); break;
                 case EventType::Fill:
                     filled_qty += static_cast<std::int64_t>(event.fill.qty);
                     observe_match_id(event.fill.match_id);
@@ -186,8 +187,7 @@ struct ConservationLedger {
                     if (event.rejected.reason == RejectReason::CapacityExceeded) ++capacity_rejection_count;
                     break;
                 case EventType::MassCancelDone:
-                case EventType::PhaseChanged:
-                    break;
+                case EventType::PhaseChanged: break;
             }
         }
     }
@@ -266,9 +266,7 @@ void run_randomized_invariant_sweep(std::uint64_t seed, int step_count) {
 
 }  // namespace
 
-TEST_CASE(engine_randomized, invariants_hold_after_every_command_seed_1) {
-    run_randomized_invariant_sweep(1, 6000);
-}
+TEST_CASE(engine_randomized, invariants_hold_after_every_command_seed_1) { run_randomized_invariant_sweep(1, 6000); }
 
 TEST_CASE(engine_randomized, invariants_hold_after_every_command_seed_20261103) {
     run_randomized_invariant_sweep(20261103, 6000);

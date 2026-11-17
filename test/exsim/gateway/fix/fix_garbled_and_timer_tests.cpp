@@ -62,7 +62,8 @@ TEST_CASE(gateway_fix_garbled, bad_body_length_and_junk_resynchronise) {
     std::string wrong_length = client_message("D", 2, order("G2"), "CLIENT2");
     const std::size_t length_position = wrong_length.find("9=") + 2;
     wrong_length[length_position] = static_cast<char>(wrong_length[length_position] - 1);
-    std::string stream = "garbage\001bytes" + wrong_length + "more junk" + client_message("D", 2, order("G2B"), "CLIENT2") +
+    std::string stream = "garbage\001bytes" + wrong_length + "more junk" +
+                         client_message("D", 2, order("G2B"), "CLIENT2") +
                          client_message("D", 3, order("G3"), "CLIENT2");
     CHECK_EQ(client.feed(stream), stream.size());
     CHECK_EQ(engine_command_tokens(exchange, 2), (Tokens{"D:G2B", "D:G3"}));
@@ -124,8 +125,7 @@ TEST_CASE(gateway_fix_timers, heartbeat_after_outbound_silence) {
     client.tick(kSecond);
     const auto messages = client.drain();
     REQUIRE_EQ(messages.size(), std::size_t{1});
-    CHECK_EQ(messages[0].pipes(),
-             with_pipes(fix_frame("35=0|49=EXSIM|56=CLIENT2|34=2|52=20261103-09:30:30.000|")));
+    CHECK_EQ(messages[0].pipes(), with_pipes(fix_frame("35=0|49=EXSIM|56=CLIENT2|34=2|52=20261103-09:30:30.000|")));
 }
 
 TEST_CASE(gateway_fix_timers, test_request_then_timeout_at_twice_the_interval) {

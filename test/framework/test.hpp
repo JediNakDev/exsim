@@ -67,35 +67,35 @@ std::string show(const T& v) {
 #define TESTFW_CONCAT_(a, b) a##b
 #define TESTFW_CONCAT(a, b) TESTFW_CONCAT_(a, b)
 
-#define TEST_CASE(suite, name)                                                              \
-    static void TESTFW_CONCAT(test_fn_, TESTFW_CONCAT(suite, TESTFW_CONCAT(_, name)))();     \
+#define TEST_CASE(suite, name)                                                                               \
+    static void TESTFW_CONCAT(test_fn_, TESTFW_CONCAT(suite, TESTFW_CONCAT(_, name)))();                     \
     static const ::testfw::Registrar TESTFW_CONCAT(test_reg_, TESTFW_CONCAT(suite, TESTFW_CONCAT(_, name)))( \
-        #suite, #name, &TESTFW_CONCAT(test_fn_, TESTFW_CONCAT(suite, TESTFW_CONCAT(_, name)))); \
+        #suite, #name, &TESTFW_CONCAT(test_fn_, TESTFW_CONCAT(suite, TESTFW_CONCAT(_, name))));              \
     static void TESTFW_CONCAT(test_fn_, TESTFW_CONCAT(suite, TESTFW_CONCAT(_, name)))()
 
-#define CHECK(expr)                                                              \
-    do {                                                                         \
+#define CHECK(expr)                                                                    \
+    do {                                                                               \
         if (!(expr)) ::testfw::report_failure(__FILE__, __LINE__, "CHECK(" #expr ")"); \
     } while (0)
 
-#define REQUIRE(expr)                                                                \
-    do {                                                                             \
-        if (!(expr)) {                                                               \
-            ::testfw::report_failure(__FILE__, __LINE__, "REQUIRE(" #expr ")");      \
-            throw ::testfw::AbortTest{};                                             \
-        }                                                                            \
+#define REQUIRE(expr)                                                           \
+    do {                                                                        \
+        if (!(expr)) {                                                          \
+            ::testfw::report_failure(__FILE__, __LINE__, "REQUIRE(" #expr ")"); \
+            throw ::testfw::AbortTest{};                                        \
+        }                                                                       \
     } while (0)
 
-#define TESTFW_CMP_(kind, a, b, op, fatal)                                                    \
-    do {                                                                                      \
-        [&](const auto& testfw_a_, const auto& testfw_b_) {                                  \
-        if (!(testfw_a_ op testfw_b_)) {                                                      \
-            ::testfw::report_failure(__FILE__, __LINE__,                                      \
-                std::string(kind "(" #a ", " #b ")  lhs=") + ::testfw::show(testfw_a_) +       \
-                    "  rhs=" + ::testfw::show(testfw_b_));                                    \
-            if (fatal) throw ::testfw::AbortTest{};                                           \
-        }                                                                                     \
-        }((a), (b));                                                                          \
+#define TESTFW_CMP_(kind, a, b, op, fatal)                                                                        \
+    do {                                                                                                          \
+        [&](const auto& testfw_a_, const auto& testfw_b_) {                                                       \
+            if (!(testfw_a_ op testfw_b_)) {                                                                      \
+                ::testfw::report_failure(__FILE__, __LINE__,                                                      \
+                                         std::string(kind "(" #a ", " #b ")  lhs=") + ::testfw::show(testfw_a_) + \
+                                             "  rhs=" + ::testfw::show(testfw_b_));                               \
+                if (fatal) throw ::testfw::AbortTest{};                                                           \
+            }                                                                                                     \
+        }((a), (b));                                                                                              \
     } while (0)
 
 #define CHECK_EQ(a, b) TESTFW_CMP_("CHECK_EQ", a, b, ==, false)
@@ -107,10 +107,10 @@ std::string show(const T& v) {
 #define REQUIRE_EQ(a, b) TESTFW_CMP_("REQUIRE_EQ", a, b, ==, true)
 
 // Fails the current test with a message and aborts it.
-#define FAIL(msg)                                                         \
-    do {                                                                  \
-        ::testfw::report_failure(__FILE__, __LINE__, std::string(msg));   \
-        throw ::testfw::AbortTest{};                                      \
+#define FAIL(msg)                                                       \
+    do {                                                                \
+        ::testfw::report_failure(__FILE__, __LINE__, std::string(msg)); \
+        throw ::testfw::AbortTest{};                                    \
     } while (0)
 
 #endif

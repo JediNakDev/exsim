@@ -51,39 +51,48 @@ min_price = 1
 max_price = 100
 reference_price = 10
 )";
-    for (const auto extra : {"book_depth=11\n", "channel_id=32768\n", "market_segment_id=255\n", "snapshot_port=19001\n",
-                             "max_payload=1399\n", "replay_password=\n"}) {
-        ServerConfig config; std::string error;
+    for (const auto extra : {"book_depth=11\n", "channel_id=32768\n", "market_segment_id=255\n",
+                             "snapshot_port=19001\n", "max_payload=1399\n", "replay_password=\n"}) {
+        ServerConfig config;
+        std::string error;
         CHECK(!parse_config(prefix + extra + instrument, config, error));
     }
-    for (const auto extra : {"cme_security_id=2147483647\n", "cme_security_id=0\n", "cme_symbol=123456789012345678901\n",
-                             "tick_size=0.00001\n"}) {
-        ServerConfig config; std::string error;
+    for (const auto extra : {"cme_security_id=2147483647\n", "cme_security_id=0\n",
+                             "cme_symbol=123456789012345678901\n", "tick_size=0.00001\n"}) {
+        ServerConfig config;
+        std::string error;
         CHECK(!parse_config(prefix + instrument + extra, config, error));
     }
-    ServerConfig config; std::string error;
+    ServerConfig config;
+    std::string error;
     CHECK(!parse_config(prefix + instrument + "[instrument NQ]\ncme_security_id=800001\n", config, error));
 }
 
 TEST_CASE(server_config_mdp, rejects_keys_of_the_other_market_data_protocol) {
-    const std::string mdp = "[market_data]\nprotocol = mdp3\nport = 19001\nsnapshot_port = 19002\ninstrument_port = 19003\n"
-                            "replay_username = CME\nreplay_password = secret\nmarket_segment_id = 2\n";
-    const std::string instrument = "[instrument ES]\ncme_security_id = 800001\nmin_price = 1\nmax_price = 100\nreference_price = 10\n";
-    ServerConfig config; std::string error;
+    const std::string mdp =
+        "[market_data]\nprotocol = mdp3\nport = 19001\nsnapshot_port = 19002\ninstrument_port = 19003\n"
+        "replay_username = CME\nreplay_password = secret\nmarket_segment_id = 2\n";
+    const std::string instrument =
+        "[instrument ES]\ncme_security_id = 800001\nmin_price = 1\nmax_price = 100\nreference_price = 10\n";
+    ServerConfig config;
+    std::string error;
     REQUIRE(parse_config(mdp + instrument, config, error));
     for (const auto itch_key : {"session = EXSIM\n", "retransmit_buffer = 16\n", "noii_interval_ms = 5\n"}) {
         CHECK(!parse_config(mdp + itch_key + instrument, config, error));
         CHECK(error.find("ignored by the selected protocol") != std::string::npos);
     }
-    for (const auto mdp_key : {"channel_id = 7\n", "book_depth = 5\n", "snapshot_port = 19002\n", "replay_password = x\n"}) {
+    for (const auto mdp_key :
+         {"channel_id = 7\n", "book_depth = 5\n", "snapshot_port = 19002\n", "replay_password = x\n"}) {
         CHECK(!parse_config(std::string(kMinimal) + "[market_data]\nport = 19001\n" + mdp_key, config, error));
         CHECK(error.find("ignored by the selected protocol") != std::string::npos);
     }
-    CHECK(parse_config(std::string(kMinimal) + "[market_data]\nport = 19001\nsession = ABC\nmarket_segment_id = 2\n", config, error));
+    CHECK(parse_config(std::string(kMinimal) + "[market_data]\nport = 19001\nsession = ABC\nmarket_segment_id = 2\n",
+                       config, error));
 }
 
 TEST_CASE(server_config_ilink, current_schema_fixture_and_missing_credentials) {
-    ServerConfig config; std::string error;
+    ServerConfig config;
+    std::string error;
     REQUIRE(load_config("test/fixtures/ilink3-mdp.conf", config, error));
     REQUIRE_EQ(config.users.back().protocol, Protocol::Ilink3);
     CHECK_EQ(config.users.back().ilink_party_id, 1001u);
@@ -144,8 +153,8 @@ TEST_CASE(server_config, price_int64_limits_and_transactional_overflow) {
     REQUIRE(parse_price("-922337203685477.5808", price));
     CHECK_EQ(price, INT64_MIN);
     CHECK_EQ(format_price(price, 0), "-922337203685477.5808");
-    for (const auto text : {"922337203685477.5808", "-922337203685477.5809",
-                            "-922337203685477.587.", "922337203685478", "--1"}) {
+    for (const auto text :
+         {"922337203685477.5808", "-922337203685477.5809", "-922337203685477.587.", "922337203685478", "--1"}) {
         price = 123;
         CHECK(!parse_price(text, price));
         CHECK_EQ(price, 123);
@@ -217,7 +226,7 @@ TEST_CASE(server_config, errors_carry_line_numbers) {
         CHECK(!parse_config(text, cfg, err));
         return err;
     };
-    CHECK(error_of("tick_size = 1\n") .rfind("1: ", 0) == 0);
+    CHECK(error_of("tick_size = 1\n").rfind("1: ", 0) == 0);
     CHECK(error_of("\n[bogus]\n").rfind("2: unknown section", 0) == 0);
     CHECK(error_of("[instrument X]\nfoo = 1\n").rfind("2: unknown key", 0) == 0);
     CHECK(error_of("[instrument X]\ntick_size = abc\n").rfind("2: invalid value", 0) == 0);
@@ -231,14 +240,14 @@ TEST_CASE(server_config, semantic_validation) {
         std::string err;
         return !parse_config(std::string(kMinimal) + extra, cfg, err);
     };
-    CHECK(fails("[user ALICE]\nsession_id = 2\n"));                 // duplicate user
-    CHECK(fails("[user BOB]\nsession_id = 1\n"));                   // duplicate session
-    CHECK(fails("[user BOB]\npassword = x\n"));                     // missing session_id
-    CHECK(fails("[user TOOLONGNAME]\nsession_id = 5\n"));           // OUCH username > 6
+    CHECK(fails("[user ALICE]\nsession_id = 2\n"));        // duplicate user
+    CHECK(fails("[user BOB]\nsession_id = 1\n"));          // duplicate session
+    CHECK(fails("[user BOB]\npassword = x\n"));            // missing session_id
+    CHECK(fails("[user TOOLONGNAME]\nsession_id = 5\n"));  // OUCH username > 6
     CHECK(!fails("[user TOOLONGNAME]\nsession_id = 5\nprotocol = fix44\n"));
-    CHECK(fails("[instrument AAPL]\n"));                            // duplicate instrument
-    CHECK(fails("[instrument B]\nmin_price = 0.015\n"));            // off-tick band
-    CHECK(fails("[instrument B]\nreference_price = 2000\n"));       // outside default band
+    CHECK(fails("[instrument AAPL]\n"));                       // duplicate instrument
+    CHECK(fails("[instrument B]\nmin_price = 0.015\n"));       // off-tick band
+    CHECK(fails("[instrument B]\nreference_price = 2000\n"));  // outside default band
     CHECK(fails("[exchange]\nsoup_session = ELEVENCHARS\n"));
     {
         ServerConfig cfg;
@@ -328,7 +337,8 @@ TEST_CASE(server_config, rejects_legacy_listeners_and_protocols) {
         CHECK(err.find("not supported") != std::string::npos);
     }
     for (const auto protocol : {"fixp_sbe", "sbe"})
-        CHECK(!parse_config(std::string(kMinimal) + "\n[user LEGACY]\nsession_id=7\nprotocol=" + protocol + "\n", cfg, err));
+        CHECK(!parse_config(std::string(kMinimal) + "\n[user LEGACY]\nsession_id=7\nprotocol=" + protocol + "\n", cfg,
+                            err));
 }
 
 // The publisher needs room for its largest ITCH message in one packet, so the
@@ -337,8 +347,8 @@ TEST_CASE(server_config, max_payload_matches_the_publisher_minimum) {
     auto parses = [](std::uint32_t max_payload) {
         ServerConfig cfg;
         std::string err;
-        return parse_config(std::string(kMinimal) + "[market_data]\nmax_payload = " + std::to_string(max_payload) + "\n",
-                            cfg, err);
+        return parse_config(
+            std::string(kMinimal) + "[market_data]\nmax_payload = " + std::to_string(max_payload) + "\n", cfg, err);
     };
     CHECK(!parses(64));
     CHECK(!parses(static_cast<std::uint32_t>(md::kMinimumMaxPayload) - 1));

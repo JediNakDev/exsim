@@ -48,7 +48,7 @@ public:
           packet_faults_(config.market_data.max_payload, settings.max_held_packets),
           publisher_(publisher_config(config, settings), FeedPacketSink{this}),
           retransmission_server_(publisher_.ring(), md::RetransmissionConfig{config.market_data.session,
-                                                                            config.market_data.max_payload, 1024}) {}
+                                                                             config.market_data.max_payload, 1024}) {}
 
     ItchRuntime(const ItchRuntime&) = delete;
     ItchRuntime& operator=(const ItchRuntime&) = delete;
@@ -56,7 +56,8 @@ public:
     // Opens the feed sender and the retransmission socket and registers the
     // latter with `poller` under `retransmission_token`. Returns "" or an
     // error message.
-    [[nodiscard]] std::string open(const ServerConfig& config, net::Poller& poller, std::uint64_t retransmission_token) {
+    [[nodiscard]] std::string open(const ServerConfig& config, net::Poller& poller,
+                                   std::uint64_t retransmission_token) {
         const MarketDataSection& section = config.market_data;
         std::uint32_t feed_address = 0;
         if (!net::parse_ipv4_address(section.address, feed_address)) {
@@ -88,7 +89,8 @@ public:
             return "retransmission socket on port " + std::to_string(section.retransmit_port) + ": " +
                    std::strerror(error);
         }
-        if (net::ErrorCode error = poller.add(retransmission_socket_.fd(), retransmission_token, net::PollInterest::Read);
+        if (net::ErrorCode error =
+                poller.add(retransmission_socket_.fd(), retransmission_token, net::PollInterest::Read);
             error != 0) {
             return "poller: " + std::string(std::strerror(error));
         }
@@ -135,7 +137,8 @@ public:
             (void)publisher_.end_session(now);
         }
         if (send_failure_count())
-            std::fprintf(stderr, "ITCH UDP send failures: %llu\n", static_cast<unsigned long long>(send_failure_count()));
+            std::fprintf(stderr, "ITCH UDP send failures: %llu\n",
+                         static_cast<unsigned long long>(send_failure_count()));
     }
 
     // ---- retransmission ----------------------------------------------------------

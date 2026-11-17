@@ -75,7 +75,8 @@ public:
         char chunk[4096];
         const auto count_markers = [&] {
             std::size_t found = 0;
-            for (std::size_t at = received.find(marker); at != std::string::npos; at = received.find(marker, at + 1)) ++found;
+            for (std::size_t at = received.find(marker); at != std::string::npos; at = received.find(marker, at + 1))
+                ++found;
             return found;
         };
         while (count_markers() < occurrences) {
@@ -155,9 +156,10 @@ TEST_CASE(api_http_parse, complete_request_with_query_and_body) {
     CHECK_EQ(request.method, std::string("POST"));
     CHECK_EQ(request.path, std::string("/v1/runs/x"));
     CHECK_EQ(request.body, std::string("body"));
-    CHECK_EQ(result.consumed_bytes, std::string_view(
-        "POST /v1/runs%2Fx?state=queued,paused&masterSeed=7&name=a+b%21 HTTP/1.1\r\nHost: x\r\nContent-Length: 4\r\n"
-        "Idempotency-Key:  key-12345678 \r\n\r\nbody").size());
+    CHECK_EQ(result.consumed_bytes, std::string_view("POST /v1/runs%2Fx?state=queued,paused&masterSeed=7&name=a+b%21 "
+                                                     "HTTP/1.1\r\nHost: x\r\nContent-Length: 4\r\n"
+                                                     "Idempotency-Key:  key-12345678 \r\n\r\nbody")
+                                        .size());
     REQUIRE(request.header("idempotency-key") != nullptr);
     CHECK_EQ(*request.header("idempotency-key"), std::string("key-12345678"));
     REQUIRE_EQ(request.query_values("state").size(), 1u);
@@ -201,7 +203,8 @@ TEST_CASE(api_http_parse, malformed_requests_are_rejected) {
         CHECK(!result.error_message.empty());
     }
     HttpRequest request;
-    CHECK(parse_text("POST /v1/runs HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n", request).status == HttpParseStatus::NotImplemented);
+    CHECK(parse_text("POST /v1/runs HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n", request).status ==
+          HttpParseStatus::NotImplemented);
 }
 
 TEST_CASE(api_http_parse, limits_are_enforced_before_reading_everything) {
@@ -213,11 +216,15 @@ TEST_CASE(api_http_parse, limits_are_enforced_before_reading_everything) {
     HttpRequest request;
     // A request line that never ends is rejected once it passes the limit.
     CHECK(parse_text("GET /" + std::string(100, 'a'), request, limits).status == HttpParseStatus::HeadersTooLarge);
-    CHECK(parse_text("GET / HTTP/1.1\r\nX: " + std::string(300, 'a'), request, limits).status == HttpParseStatus::HeadersTooLarge);
-    CHECK(parse_text("GET / HTTP/1.1\r\nA: 1\r\nB: 2\r\nC: 3\r\nD: 4\r\n\r\n", request, limits).status == HttpParseStatus::HeadersTooLarge);
+    CHECK(parse_text("GET / HTTP/1.1\r\nX: " + std::string(300, 'a'), request, limits).status ==
+          HttpParseStatus::HeadersTooLarge);
+    CHECK(parse_text("GET / HTTP/1.1\r\nA: 1\r\nB: 2\r\nC: 3\r\nD: 4\r\n\r\n", request, limits).status ==
+          HttpParseStatus::HeadersTooLarge);
     // The body limit applies to the declared length, before the body arrives.
-    CHECK(parse_text("POST / HTTP/1.1\r\nContent-Length: 11\r\n\r\n", request, limits).status == HttpParseStatus::BodyTooLarge);
-    CHECK(parse_text("POST / HTTP/1.1\r\nContent-Length: 99999999999999999999999\r\n\r\n", request, limits).status != HttpParseStatus::Complete);
+    CHECK(parse_text("POST / HTTP/1.1\r\nContent-Length: 11\r\n\r\n", request, limits).status ==
+          HttpParseStatus::BodyTooLarge);
+    CHECK(parse_text("POST / HTTP/1.1\r\nContent-Length: 99999999999999999999999\r\n\r\n", request, limits).status !=
+          HttpParseStatus::Complete);
 }
 
 TEST_CASE(api_http_parse, connection_close_and_http_1_0) {
@@ -253,7 +260,9 @@ TEST_CASE(api_http_server, serves_pipelined_requests_and_rejects_garbage) {
     {
         TestClientConnection client(server.port());
         REQUIRE(client.connected());
-        client.send_text("GET /one HTTP/1.1\r\n\r\nPOST /two HTTP/1.1\r\nContent-Length: 3\r\n\r\nabcGET /three HTTP/1.1\r\nConnection: close\r\n\r\n");
+        client.send_text(
+            "GET /one HTTP/1.1\r\n\r\nPOST /two HTTP/1.1\r\nContent-Length: 3\r\n\r\nabcGET /three "
+            "HTTP/1.1\r\nConnection: close\r\n\r\n");
         const std::string received = client.receive_until_closed();
         const std::size_t first = received.find("GET /one body=0");
         const std::size_t second = received.find("POST /two body=3");
@@ -388,7 +397,8 @@ TEST_CASE(api_http_parse, header_errors_take_precedence_over_body_size) {
     HttpLimits limits;
     limits.max_body_bytes = 10;
     const std::pair<const char*, HttpParseStatus> cases[] = {
-        {"POST / HTTP/1.1\r\nContent-Length: 11\r\nTransfer-Encoding: chunked\r\n\r\n", HttpParseStatus::NotImplemented},
+        {"POST / HTTP/1.1\r\nContent-Length: 11\r\nTransfer-Encoding: chunked\r\n\r\n",
+         HttpParseStatus::NotImplemented},
         {"POST / HTTP/1.1\r\nContent-Length: 11\r\nBad Name: x\r\n\r\n", HttpParseStatus::BadRequest},
         {"POST / HTTP/1.1\r\nContent-Length: 11\r\nContent-Length: 12\r\n\r\n", HttpParseStatus::BadRequest},
         {"POST / HTTP/1.1\r\nContent-Length: 11\r\n\r\n", HttpParseStatus::BodyTooLarge},
@@ -415,7 +425,8 @@ TEST_CASE(api_http_server, fragmented_bodies_keep_pipeline_boundaries) {
         // Splits inside the body, at a request boundary and inside a header name.
         TestClientConnection client(server.port());
         std::size_t offset = 0;
-        for (const std::size_t split : {std::size_t{43}, std::size_t{50}, std::size_t{70}, std::size_t{90}, std::size_t{130}, pipeline.size()}) {
+        for (const std::size_t split :
+             {std::size_t{43}, std::size_t{50}, std::size_t{70}, std::size_t{90}, std::size_t{130}, pipeline.size()}) {
             client.send_text(std::string_view(pipeline).substr(offset, split - offset));
             offset = split;
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
@@ -509,9 +520,10 @@ TEST_CASE(api_http_server, fragmented_body_parses_the_head_once) {
         client.send_text("GET /start HTTP/1.1\r\n\r\n");
         (void)client.receive_until("done", 1);
         // A header value longer than the small-string buffer, as browsers send.
-        client.send_text("POST /upload HTTP/1.1\r\nContent-Type: application/octet-stream\r\n"
-                         "User-Agent: exsim-http-tests fragmented body allocation regression\r\nContent-Length: " +
-                         std::to_string(body_bytes) + "\r\n\r\n" + std::string(body_bytes, 'b'));
+        client.send_text(
+            "POST /upload HTTP/1.1\r\nContent-Type: application/octet-stream\r\n"
+            "User-Agent: exsim-http-tests fragmented body allocation regression\r\nContent-Length: " +
+            std::to_string(body_bytes) + "\r\n\r\n" + std::string(body_bytes, 'b'));
         (void)client.receive_until("done", 1);
         return measurement.allocations_while_reading.load();
     };

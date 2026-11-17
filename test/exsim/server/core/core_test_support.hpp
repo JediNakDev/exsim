@@ -78,8 +78,6 @@ session_id = 101
 owner = 101
 )";
 
-
-
 inline ServerConfig parse_test_config(const std::string& extra = "") {
     ServerConfig config;
     std::string error;

@@ -20,7 +20,8 @@ ItchBookBuilder::ItchBookBuilder(const BookBuilderConfig& config)
       order_slots_by_reference_(0) {
     if (max_instruments_ == 0 || max_instruments_ > std::numeric_limits<InstrumentId>::max())
         throw std::invalid_argument("book builder max_instruments out of range");
-    if (max_orders_ == 0 || max_orders_ >= kNoOrderSlot) throw std::invalid_argument("book builder max_orders out of range");
+    if (max_orders_ == 0 || max_orders_ >= kNoOrderSlot)
+        throw std::invalid_argument("book builder max_orders out of range");
     if (max_levels_per_side_ == 0 ||
         max_levels_per_side_ > std::numeric_limits<std::size_t>::max() / sizeof(Level) / 2 / max_instruments_)
         throw std::invalid_argument("book builder max_levels_per_side out of range");
@@ -121,11 +122,13 @@ BookUpdateStatus ItchBookBuilder::apply(const protocol::itch50::NetOrderImbalanc
 // ---- order messages -----------------------------------------------------------
 
 BookUpdateStatus ItchBookBuilder::apply(const protocol::itch50::AddOrder& message) noexcept {
-    return record(add_order(message.stock_locate, message.order_reference, message.side, message.price, message.shares));
+    return record(
+        add_order(message.stock_locate, message.order_reference, message.side, message.price, message.shares));
 }
 
 BookUpdateStatus ItchBookBuilder::apply(const protocol::itch50::AddOrderMPID& message) noexcept {
-    return record(add_order(message.stock_locate, message.order_reference, message.side, message.price, message.shares));
+    return record(
+        add_order(message.stock_locate, message.order_reference, message.side, message.price, message.shares));
 }
 
 BookUpdateStatus ItchBookBuilder::apply(const protocol::itch50::OrderExecuted& message) noexcept {
@@ -159,7 +162,8 @@ BookUpdateStatus ItchBookBuilder::apply(const protocol::itch50::OrderReplace& me
     const Level* original_level = find_level(instrument, original.side, original.price);
     const bool original_level_vanishes = original_level != nullptr && original_level->order_count == 1;
     const Level* target_level = find_level(instrument, original.side, message.price);
-    const bool target_level_survives = target_level != nullptr && !(target_level == original_level && original_level_vanishes);
+    const bool target_level_survives =
+        target_level != nullptr && !(target_level == original_level && original_level_vanishes);
     if (!target_level_survives) {
         const std::size_t levels_after_removal =
             instruments_[instrument].level_counts[side_index(original.side)] - (original_level_vanishes ? 1 : 0);

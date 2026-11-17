@@ -20,7 +20,8 @@ namespace exsim::server {
 class DeferredCommandQueue {
 public:
     explicit DeferredCommandQueue(std::size_t capacity)
-        : capacity_(std::bit_ceil(std::max<std::size_t>(capacity, 1))), slots_(std::make_unique<Command[]>(capacity_)) {}
+        : capacity_(std::bit_ceil(std::max<std::size_t>(capacity, 1))),
+          slots_(std::make_unique<Command[]>(capacity_)) {}
 
     [[nodiscard]] bool push(const Command& command) noexcept {
         if (size_ == capacity_) {

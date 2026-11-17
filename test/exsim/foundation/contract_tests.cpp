@@ -28,7 +28,11 @@ TEST_CASE(foundation, capacity_overflow_and_constness) {
     CHECK(map.insert(1, 2));
     for (auto n : {std::numeric_limits<std::size_t>::max(), std::size_t{1} << 63}) {
         bool rejected = false;
-        try { exsim::util::FlatHashMap<int> oversized(n); } catch (const std::length_error&) { rejected = true; }
+        try {
+            exsim::util::FlatHashMap<int> oversized(n);
+        } catch (const std::length_error&) {
+            rejected = true;
+        }
         CHECK(rejected);
         CHECK_EQ(*map.find(1), 2);
     }
@@ -51,12 +55,17 @@ TEST_CASE(foundation, bounded_events) {
     CHECK(!empty.push(event));
     CHECK_EQ(exsim::required_event_capacity({2, 10}), 28u);
     bool rejected = false;
-    try { (void)exsim::required_event_capacity({65536, 10}); }
-    catch (const std::invalid_argument&) { rejected = true; }
+    try {
+        (void)exsim::required_event_capacity({65536, 10});
+    } catch (const std::invalid_argument&) {
+        rejected = true;
+    }
     CHECK(rejected);
 }
 TEST_CASE(foundation, comparison_temporary_and_noncopyable) {
-    struct Item { int value; };
+    struct Item {
+        int value;
+    };
     CHECK_EQ(std::optional<Item>({7})->value, 7);
     auto ptr = std::make_unique<int>(4);
     CHECK_EQ(ptr, ptr);

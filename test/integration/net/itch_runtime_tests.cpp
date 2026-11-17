@@ -26,7 +26,9 @@ TEST_CASE(itch_runtime, counts_udp_send_failures_but_not_successes_or_disabled_f
         REQUIRE(runtime.open(config, poller, 1).empty());
         REQUIRE(runtime.start(0, engine, 0) == md::PublishStatus::Ok);
         runtime.flush();
-        if (mode == 1) CHECK_GT(runtime.send_failure_count(), 0u);
-        else CHECK_EQ(runtime.send_failure_count(), 0u);
+        if (mode == 1)
+            CHECK_GT(runtime.send_failure_count(), 0u);
+        else
+            CHECK_EQ(runtime.send_failure_count(), 0u);
     }
 }

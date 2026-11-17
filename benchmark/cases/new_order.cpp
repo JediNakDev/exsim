@@ -9,8 +9,7 @@ static void BM_NewOrder(benchmark::State& state) {
         std::vector<exsim::Command> commands;
         for (std::size_t i = 0; i < 65536; ++i) {
             const exsim::Side side = scenario.random_side();
-            commands.push_back(scenario.new_order(scenario.next_cl_ord_id(), side,
-                                                  scenario.random_price(side),
+            commands.push_back(scenario.new_order(scenario.next_cl_ord_id(), side, scenario.random_price(side),
                                                   scenario.random_quantity()));
         }
         return commands;

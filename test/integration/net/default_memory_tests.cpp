@@ -48,12 +48,18 @@ session_id = 2
 
 // The exchange binary is built with the same flags as this test. ASan adds
 // shadow memory and its own runtime (about 120 MiB peak at default sizes),
-// still far below the 300+ MiB the old defaults prefaulted.
-#if defined(__SANITIZE_ADDRESS__)
+// still far below the 300+ MiB the old defaults prefaulted. ThreadSanitizer's shadow
+// memory is several times the heap (about 220 MiB here), so it has no limit; the test
+// then only checks that the default-sized exchange starts and exits cleanly.
+#if defined(__SANITIZE_THREAD__)
+constexpr std::uint64_t kPeakLimitBytes = UINT64_MAX;
+#elif defined(__SANITIZE_ADDRESS__)
 constexpr std::uint64_t kPeakLimitBytes = std::uint64_t{192} << 20;
 #elif defined(__has_feature)
 #if __has_feature(address_sanitizer)
 constexpr std::uint64_t kPeakLimitBytes = std::uint64_t{192} << 20;
+#elif __has_feature(thread_sanitizer)
+constexpr std::uint64_t kPeakLimitBytes = UINT64_MAX;
 #else
 constexpr std::uint64_t kPeakLimitBytes = std::uint64_t{96} << 20;
 #endif
@@ -91,8 +97,7 @@ TEST_CASE(exchange_process_memory, default_sizes_peak_below_the_limit) {
     ::close(ready_pipe[1]);
     // The ready line is printed after start(): every startup allocation is done.
     char byte = 0;
-    while (::read(ready_pipe[0], &byte, 1) == 1 && byte != '\n') {
-    }
+    while (::read(ready_pipe[0], &byte, 1) == 1 && byte != '\n') {}
     ::close(ready_pipe[0]);
     CHECK_EQ(byte, '\n');
     ::kill(pid, SIGTERM);

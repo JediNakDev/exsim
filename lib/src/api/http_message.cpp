@@ -15,8 +15,21 @@ bool is_token_character(char character) noexcept {
     if (byte >= '0' && byte <= '9') return true;
     if ((byte | 0x20) >= 'a' && (byte | 0x20) <= 'z') return true;
     switch (character) {
-        case '!': case '#': case '$': case '%': case '&': case '\'': case '*': case '+':
-        case '-': case '.': case '^': case '_': case '`': case '|': case '~': return true;
+        case '!':
+        case '#':
+        case '$':
+        case '%':
+        case '&':
+        case '\'':
+        case '*':
+        case '+':
+        case '-':
+        case '.':
+        case '^':
+        case '_':
+        case '`':
+        case '|':
+        case '~': return true;
         default: return false;
     }
 }
@@ -122,14 +135,17 @@ std::optional<std::string> percent_decode(std::string_view text, bool plus_is_sp
 HttpParseResult parse_http_request_head(std::string_view buffer, const HttpLimits& limits, HttpRequest& request) {
     const std::size_t request_line_end = buffer.find(kLineEnd);
     if (request_line_end == std::string_view::npos) {
-        if (buffer.size() > limits.max_request_line_bytes) return rejection(HttpParseStatus::HeadersTooLarge, "request line too long");
+        if (buffer.size() > limits.max_request_line_bytes)
+            return rejection(HttpParseStatus::HeadersTooLarge, "request line too long");
         return {};
     }
-    if (request_line_end > limits.max_request_line_bytes) return rejection(HttpParseStatus::HeadersTooLarge, "request line too long");
+    if (request_line_end > limits.max_request_line_bytes)
+        return rejection(HttpParseStatus::HeadersTooLarge, "request line too long");
 
     const std::size_t header_section_end = buffer.find(kHeaderSectionEnd);
     if (header_section_end == std::string_view::npos) {
-        if (buffer.size() > limits.max_header_section_bytes) return rejection(HttpParseStatus::HeadersTooLarge, "header section too large");
+        if (buffer.size() > limits.max_header_section_bytes)
+            return rejection(HttpParseStatus::HeadersTooLarge, "header section too large");
         return {};
     }
     if (header_section_end + kHeaderSectionEnd.size() > limits.max_header_section_bytes)
@@ -140,7 +156,8 @@ HttpParseResult parse_http_request_head(std::string_view buffer, const HttpLimit
     // Request line: METHOD SP request-target SP HTTP/1.x
     const std::string_view request_line = buffer.substr(0, request_line_end);
     const std::size_t first_space = request_line.find(' ');
-    if (first_space == std::string_view::npos || first_space == 0) return rejection(HttpParseStatus::BadRequest, "malformed request line");
+    if (first_space == std::string_view::npos || first_space == 0)
+        return rejection(HttpParseStatus::BadRequest, "malformed request line");
     const std::size_t second_space = request_line.find(' ', first_space + 1);
     if (second_space == std::string_view::npos || second_space == first_space + 1)
         return rejection(HttpParseStatus::BadRequest, "malformed request line");
@@ -150,9 +167,12 @@ HttpParseResult parse_http_request_head(std::string_view buffer, const HttpLimit
     for (const char character : method)
         if (character < 'A' || character > 'Z') return rejection(HttpParseStatus::BadRequest, "malformed method");
     bool http_1_0 = false;
-    if (version == "HTTP/1.0") http_1_0 = true;
-    else if (version != "HTTP/1.1") return rejection(HttpParseStatus::BadRequest, "unsupported HTTP version");
-    if (target.empty() || target.front() != '/') return rejection(HttpParseStatus::BadRequest, "request target must be an absolute path");
+    if (version == "HTTP/1.0")
+        http_1_0 = true;
+    else if (version != "HTTP/1.1")
+        return rejection(HttpParseStatus::BadRequest, "unsupported HTTP version");
+    if (target.empty() || target.front() != '/')
+        return rejection(HttpParseStatus::BadRequest, "request target must be an absolute path");
     for (const char character : target)
         if (!is_target_byte(character)) return rejection(HttpParseStatus::BadRequest, "invalid byte in request target");
 
@@ -160,7 +180,8 @@ HttpParseResult parse_http_request_head(std::string_view buffer, const HttpLimit
     request.target = std::string(target);
     const std::size_t question_mark = target.find('?');
     const std::string_view raw_path = target.substr(0, question_mark);
-    if (raw_path.find('#') != std::string_view::npos) return rejection(HttpParseStatus::BadRequest, "fragment in request target");
+    if (raw_path.find('#') != std::string_view::npos)
+        return rejection(HttpParseStatus::BadRequest, "fragment in request target");
     auto decoded_path = percent_decode(raw_path, false);
     if (!decoded_path) return rejection(HttpParseStatus::BadRequest, "malformed percent escape in path");
     request.path = std::move(*decoded_path);
@@ -172,7 +193,8 @@ HttpParseResult parse_http_request_head(std::string_view buffer, const HttpLimit
             if (!pair.empty()) {
                 const std::size_t equals = pair.find('=');
                 auto key = percent_decode(pair.substr(0, equals), true);
-                auto value = percent_decode(equals == std::string_view::npos ? std::string_view{} : pair.substr(equals + 1), true);
+                auto value = percent_decode(
+                    equals == std::string_view::npos ? std::string_view{} : pair.substr(equals + 1), true);
                 if (!key || !value) return rejection(HttpParseStatus::BadRequest, "malformed percent escape in query");
                 request.query.emplace_back(std::move(*key), std::move(*value));
             }
@@ -191,24 +213,32 @@ HttpParseResult parse_http_request_head(std::string_view buffer, const HttpLimit
         const std::string_view line = buffer.substr(line_start, line_end - line_start);
         line_start = line_end + kLineEnd.size();
         if (line.empty()) break;
-        if (line.front() == ' ' || line.front() == '\t') return rejection(HttpParseStatus::BadRequest, "obsolete header line folding");
+        if (line.front() == ' ' || line.front() == '\t')
+            return rejection(HttpParseStatus::BadRequest, "obsolete header line folding");
         const std::size_t colon = line.find(':');
-        if (colon == std::string_view::npos || colon == 0) return rejection(HttpParseStatus::BadRequest, "malformed header field");
+        if (colon == std::string_view::npos || colon == 0)
+            return rejection(HttpParseStatus::BadRequest, "malformed header field");
         const std::string_view name = line.substr(0, colon);
         for (const char character : name)
             if (!is_token_character(character)) return rejection(HttpParseStatus::BadRequest, "malformed header name");
         const std::string_view value = trim_whitespace(line.substr(colon + 1));
         for (const char character : value)
-            if (!is_header_value_byte(character)) return rejection(HttpParseStatus::BadRequest, "control character in header value");
-        if (request.headers.size() == limits.max_header_count) return rejection(HttpParseStatus::HeadersTooLarge, "too many header fields");
+            if (!is_header_value_byte(character))
+                return rejection(HttpParseStatus::BadRequest, "control character in header value");
+        if (request.headers.size() == limits.max_header_count)
+            return rejection(HttpParseStatus::HeadersTooLarge, "too many header fields");
         HttpHeader header{to_lower_ascii(name), std::string(value)};
-        if (header.name == "transfer-encoding") return rejection(HttpParseStatus::NotImplemented, "Transfer-Encoding is not supported; send Content-Length");
+        if (header.name == "transfer-encoding")
+            return rejection(HttpParseStatus::NotImplemented,
+                             "Transfer-Encoding is not supported; send Content-Length");
         if (header.name == "content-length") {
             std::uint64_t parsed = 0;
             const auto result = std::from_chars(value.data(), value.data() + value.size(), parsed);
-            if (value.empty() || result.ec != std::errc() || result.ptr != value.data() + value.size() || value.front() == '+')
+            if (value.empty() || result.ec != std::errc() || result.ptr != value.data() + value.size() ||
+                value.front() == '+')
                 return rejection(HttpParseStatus::BadRequest, "malformed Content-Length");
-            if (content_length && *content_length != parsed) return rejection(HttpParseStatus::BadRequest, "conflicting Content-Length headers");
+            if (content_length && *content_length != parsed)
+                return rejection(HttpParseStatus::BadRequest, "conflicting Content-Length headers");
             content_length = parsed;
         }
         if (header.name == "connection") {

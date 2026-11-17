@@ -42,15 +42,19 @@ TEST_CASE(engine_queries, depth_and_level_orders_in_priority_order_with_truncati
     CHECK_EQ(ids[1], OrderId{4});
     CHECK_EQ(exsim::testsupport::level_orders(fixture.engine, 1, Side::BUY, 100, ids, 1), std::size_t{1});
     CHECK_EQ(exsim::testsupport::level_orders(fixture.engine, 1, Side::SELL, 100, ids, 2), std::size_t{0});
-    CHECK_EQ(exsim::testsupport::level_orders(fixture.engine, 1, Side::BUY, 110, ids, 2), std::size_t{0});   // empty level
-    CHECK_EQ(exsim::testsupport::level_orders(fixture.engine, 1, Side::BUY, 95, ids, 2), std::size_t{0});    // off grid
-    CHECK_EQ(exsim::testsupport::level_orders(fixture.engine, 1, Side::BUY, 5000, ids, 2), std::size_t{0});  // out of band
+    CHECK_EQ(exsim::testsupport::level_orders(fixture.engine, 1, Side::BUY, 110, ids, 2),
+             std::size_t{0});  // empty level
+    CHECK_EQ(exsim::testsupport::level_orders(fixture.engine, 1, Side::BUY, 95, ids, 2), std::size_t{0});  // off grid
+    CHECK_EQ(exsim::testsupport::level_orders(fixture.engine, 1, Side::BUY, 5000, ids, 2),
+             std::size_t{0});  // out of band
     CHECK_EQ(exsim::testsupport::level_orders(fixture.engine, 1, Side::BUY, -10, ids, 2), std::size_t{0});
     CHECK_EQ(exsim::testsupport::level_orders(fixture.engine, 3, Side::BUY, 100, ids, 2), std::size_t{0});
     CHECK_EQ(exsim::testsupport::level_orders(fixture.engine, 0, Side::BUY, 100, ids, 2), std::size_t{0});
     CHECK_EQ(exsim::testsupport::level_orders(fixture.engine, 1, static_cast<Side>(2), 100, ids, 2), std::size_t{0});
-    CHECK_EQ(exsim::testsupport::level_orders(fixture.engine, 1, Side::BUY, std::numeric_limits<Price>::max(), ids, 2), std::size_t{0});
-    CHECK_EQ(exsim::testsupport::level_orders(fixture.engine, 1, Side::BUY, std::numeric_limits<Price>::min(), ids, 2), std::size_t{0});
+    CHECK_EQ(exsim::testsupport::level_orders(fixture.engine, 1, Side::BUY, std::numeric_limits<Price>::max(), ids, 2),
+             std::size_t{0});
+    CHECK_EQ(exsim::testsupport::level_orders(fixture.engine, 1, Side::BUY, std::numeric_limits<Price>::min(), ids, 2),
+             std::size_t{0});
 
     CHECK_EQ(*fixture.engine.best_bid(1), Price{100});
     CHECK_EQ(*fixture.engine.best_ask(1), Price{120});
@@ -150,11 +154,11 @@ TEST_CASE(engine_buffer, insufficient_output_changes_neither_engine_nor_output) 
         Command{limit_order(kCarolSession, 1, Side::BUY, 120, 3)},
         Command{limit_order(kCarolSession, 1, Side::BUY, 7, 3)},  // would be a rejection
         Command{CancelOrder{1, kAliceSession, 1, 0, 0}},
-        Command{CancelOrder{1, kAliceSession, 99, 0, 0}},         // would be a rejection
+        Command{CancelOrder{1, kAliceSession, 99, 0, 0}},  // would be a rejection
         Command{ReplaceOrder{1, kAliceSession, 1, 0, 120, 5, false}},
         Command{MassCancel{1, kBobSession, 0, 0, false}},
         Command{SetPhase{1, 0, Phase::Closed}},
-        Command{SetPhase{1, 9, Phase::Closed}},                    // would be a rejection
+        Command{SetPhase{1, 9, Phase::Closed}},  // would be a rejection
     };
     for (const Command& command : commands) {
         const std::uint64_t state_before = book_state_digest(fixture.engine);
@@ -322,8 +326,8 @@ TEST_CASE(engine_capacity, default_engine_is_small) {
 }
 
 TEST_CASE(engine_commands, timestamp_header_applies_to_every_payload) {
-    for (Command command : {Command{NewOrder{11}}, Command{CancelOrder{11}},
-                            Command{ReplaceOrder{11}}, Command{MassCancel{11}}, Command{SetPhase{11}}}) {
+    for (Command command : {Command{NewOrder{11}}, Command{CancelOrder{11}}, Command{ReplaceOrder{11}},
+                            Command{MassCancel{11}}, Command{SetPhase{11}}}) {
         CHECK_EQ(command.ts(), Timestamp{11});
         command.timestamp = 29;
         CHECK_EQ(command.ts(), Timestamp{29});

@@ -166,8 +166,7 @@ public:
                 return reject_new_order_at_gateway(request, 99, "ClOrdID capacity exhausted", now, ctx);
             case TokenTable::InternStatus::Existing:
                 return reject_new_order_at_gateway(request, 6, "duplicate ClOrdID", now, ctx);
-            case TokenTable::InternStatus::Inserted:
-                break;
+            case TokenTable::InternStatus::Inserted: break;
         }
         FixOrderRecord& record = initialize_record(interned.id, 'D');
         record.market_order = request.order_type_code == '1';
@@ -202,10 +201,10 @@ public:
             return reject_new_order_at_gateway(request, 99, "INVALID_QUANTITY", now, ctx);
         }
         const bool market = request.order_type_code == '1';
-        const auto failure = submit_command(ctx, NewOrder{now.monotonic_ns, instrument, session_id_, owner_, interned.id, request.side,
-                            market ? OrdType::Market : OrdType::Limit, time_in_force, request.stp,
-                            request.post_only, market ? Price{0} : request.price,
-                            static_cast<Quantity>(request.order_qty)});
+        const auto failure = submit_command(
+            ctx, NewOrder{now.monotonic_ns, instrument, session_id_, owner_, interned.id, request.side,
+                          market ? OrdType::Market : OrdType::Limit, time_in_force, request.stp, request.post_only,
+                          market ? Price{0} : request.price, static_cast<Quantity>(request.order_qty)});
         if (!failure.empty()) {
             reject_new_order_at_gateway(request, 99, failure, now, ctx);
         }
@@ -215,8 +214,8 @@ public:
     void submit_cancel(const FixCancelRequest& request, Context& ctx) noexcept {
         const FixTime now{ctx.now(), ctx.realtime_ns()};
         ClOrdId request_token_id = 0;
-        if (!intern_request_token(request.client_order_id, request.original_client_order_id, '1', now,
-                                  request_token_id, ctx)) {
+        if (!intern_request_token(request.client_order_id, request.original_client_order_id, '1', now, request_token_id,
+                                  ctx)) {
             return;
         }
         const ClOrdId original_token_id = tokens_.find(request.original_client_order_id);
@@ -227,7 +226,8 @@ public:
             return send_cancel_reject(request.client_order_id, request.original_client_order_id, '1',
                                       CancelRejectReason::UnknownOrder, "unknown order", now, ctx);
         }
-        const auto failure = submit_command(ctx, CancelOrder{now.monotonic_ns, session_id_, original_token_id, request_token_id, 0});
+        const auto failure =
+            submit_command(ctx, CancelOrder{now.monotonic_ns, session_id_, original_token_id, request_token_id, 0});
         if (!failure.empty()) {
             send_cancel_reject(request.client_order_id, request.original_client_order_id, '1',
                                CancelRejectReason::Other, failure, now, ctx);
@@ -238,8 +238,8 @@ public:
     void submit_replace(const FixReplaceRequest& request, Context& ctx) noexcept {
         const FixTime now{ctx.now(), ctx.realtime_ns()};
         ClOrdId new_token_id = 0;
-        if (!intern_request_token(request.client_order_id, request.original_client_order_id, '2', now,
-                                  new_token_id, ctx)) {
+        if (!intern_request_token(request.client_order_id, request.original_client_order_id, '2', now, new_token_id,
+                                  ctx)) {
             return;
         }
         const ClOrdId original_token_id = tokens_.find(request.original_client_order_id);
@@ -258,8 +258,9 @@ public:
             return send_cancel_reject(request.client_order_id, request.original_client_order_id, '2',
                                       CancelRejectReason::Other, "INVALID_QUANTITY", now, ctx);
         }
-        const auto failure = submit_command(ctx, ReplaceOrder{now.monotonic_ns, session_id_, original_token_id, new_token_id, request.price,
-                                static_cast<Quantity>(request.order_qty), false});
+        const auto failure =
+            submit_command(ctx, ReplaceOrder{now.monotonic_ns, session_id_, original_token_id, new_token_id,
+                                             request.price, static_cast<Quantity>(request.order_qty), false});
         if (!failure.empty()) {
             send_cancel_reject(request.client_order_id, request.original_client_order_id, '2',
                                CancelRejectReason::Other, failure, now, ctx);
@@ -287,7 +288,8 @@ public:
                                                   MassCancelRejectReason::InvalidOrUnknownSecurity, now, ctx);
             }
         }
-        const auto failure = submit_command(ctx, MassCancel{now.monotonic_ns, session_id_, instrument, interned.id, false});
+        const auto failure =
+            submit_command(ctx, MassCancel{now.monotonic_ns, session_id_, instrument, interned.id, false});
         if (!failure.empty()) {
             send_mass_cancel_rejection(request.client_order_id, request.request_type, MassCancelRejectReason::Other,
                                        now, ctx);
@@ -338,8 +340,7 @@ public:
                                                 event.mass_cancel_done.canceled_count, nullptr, now, ctx);
                     }
                     break;
-                default:
-                    break;
+                default: break;
             }
         }
     }
@@ -353,7 +354,8 @@ private:
         } else {
             const server::SubmitResult result = ctx.submit(command);
             return result == server::SubmitResult::Applied || result == server::SubmitResult::Deferred
-                       ? std::string_view{} : server::to_string(result);
+                       ? std::string_view{}
+                       : server::to_string(result);
         }
     }
 
@@ -473,8 +475,8 @@ private:
     // record (a live replaced order is not reported Canceled).
     template <class Context>
     void send_cancel_reject(std::string_view client_order_id, std::string_view original_client_order_id,
-                            char response_to, CancelRejectReason reason, std::string_view text,
-                            FixTime now, Context& ctx) noexcept {
+                            char response_to, CancelRejectReason reason, std::string_view text, FixTime now,
+                            Context& ctx) noexcept {
         const FixOrderRecord* original = order_record(original_client_order_id);
         const char order_status = cancel_reject_order_status(original);
         const bool order_known = order_status != '8';
@@ -498,8 +500,8 @@ private:
 
     // MassCancelResponse(531)=0 with MassCancelRejectReason(532).
     template <class Context>
-    void send_mass_cancel_rejection(std::string_view client_order_id, char request_type,
-                                    MassCancelRejectReason reason, FixTime now, Context& ctx) noexcept {
+    void send_mass_cancel_rejection(std::string_view client_order_id, char request_type, MassCancelRejectReason reason,
+                                    FixTime now, Context& ctx) noexcept {
         send_mass_cancel_report(client_order_id, request_type, '0', 0, &reason, now, ctx);
     }
 
@@ -532,8 +534,17 @@ private:
         if (record == nullptr) {
             return;
         }
-        *record = FixOrderRecord{0, accepted.price, accepted.order_id, accepted.qty, 0, event.instrument,
-                                 accepted.side, '0', 'D', accepted.ord_type == OrdType::Market, false};
+        *record = FixOrderRecord{0,
+                                 accepted.price,
+                                 accepted.order_id,
+                                 accepted.qty,
+                                 0,
+                                 event.instrument,
+                                 accepted.side,
+                                 '0',
+                                 'D',
+                                 accepted.ord_type == OrdType::Market,
+                                 false};
         const DecimalText order_id(accepted.order_id);
         fix44::ExecutionReport report;
         report.order_id.borrow(order_id.view());
@@ -681,8 +692,8 @@ private:
     // replace, 150=5 39=2, with OrderQty(38) = CumQty and LeavesQty 0; the new
     // ClOrdID now identifies the (complete) order.
     template <class Context>
-    void report_replaced_to_filled(const Event& event, FixOrderRecord& previous, FixOrderRecord& current,
-                                   Context& ctx, FixTime now) noexcept {
+    void report_replaced_to_filled(const Event& event, FixOrderRecord& previous, FixOrderRecord& current, Context& ctx,
+                                   FixTime now) noexcept {
         const CanceledEvent& canceled = event.canceled;
         current = previous;
         current.reserving_message_type = 'G';

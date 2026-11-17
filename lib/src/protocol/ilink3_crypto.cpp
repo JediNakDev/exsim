@@ -17,11 +17,19 @@ bool decode_secret(std::string_view encoded, std::array<char, 32>& key) noexcept
     unsigned count = 0;
     std::size_t size = 0;
     for (const char ch : encoded) {
-        const int value = ch >= 'A' && ch <= 'Z' ? ch - 'A' : ch >= 'a' && ch <= 'z' ? ch - 'a' + 26 :
-                          ch >= '0' && ch <= '9' ? ch - '0' + 52 : ch == '-' ? 62 : ch == '_' ? 63 : -1;
+        const int value = ch >= 'A' && ch <= 'Z'   ? ch - 'A'
+                          : ch >= 'a' && ch <= 'z' ? ch - 'a' + 26
+                          : ch >= '0' && ch <= '9' ? ch - '0' + 52
+                          : ch == '-'              ? 62
+                          : ch == '_'              ? 63
+                                                   : -1;
         if (value < 0) return false;
-        bits = (bits << 6) | static_cast<unsigned>(value); count += 6;
-        if (count >= 8) { count -= 8; result[size++] = static_cast<char>((bits >> count) & 255); }
+        bits = (bits << 6) | static_cast<unsigned>(value);
+        count += 6;
+        if (count >= 8) {
+            count -= 8;
+            result[size++] = static_cast<char>((bits >> count) & 255);
+        }
     }
     if (size != 32 || (bits & ((1u << count) - 1)) != 0) return false;
     key = result;
@@ -35,7 +43,9 @@ std::array<char, 32> hmac_sha256(std::span<const char> key, std::string_view mes
     unsigned size = 0;
     if (!HMAC(EVP_sha256(), key.data(), static_cast<int>(key.size()),
               reinterpret_cast<const unsigned char*>(message.data()), message.size(),
-              reinterpret_cast<unsigned char*>(result.data()), &size) || size != result.size()) std::terminate();
+              reinterpret_cast<unsigned char*>(result.data()), &size) ||
+        size != result.size())
+        std::terminate();
 #endif
     return result;
 }

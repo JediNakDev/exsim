@@ -46,8 +46,7 @@ struct Harness {
     fix::FixConnection<Core, TestByteSink> connection{directory};
     std::uint64_t sequence = 1;
 
-    explicit Harness(exsim::server::CoreOptions options = {})
-        : core(settings, sessions, market_data, clock, options) {
+    explicit Harness(exsim::server::CoreOptions options = {}) : core(settings, sessions, market_data, clock, options) {
         connection.start(sink, 123, core);
         send("A", "98=0|108=30|554=secret1|");
         sink.clear();
@@ -68,7 +67,7 @@ struct Harness {
         CHECK(reply.find("ERR") == std::string::npos);
     }
 };
-}
+}  // namespace
 
 TEST_CASE(gateway_fix_core, admin_reject_drop_and_recovery) {
     Harness h;
@@ -92,7 +91,7 @@ TEST_CASE(gateway_fix_core, admin_reject_drop_and_recovery) {
     CHECK_EQ(frames[0].get(43), std::string("Y"));
     h.connection.on_disconnected(h.core);
     CHECK(!h.core.is_bound(1));
-    CHECK_EQ(h.core.counters().commands_applied, 2u); // cancel-on-disconnect
+    CHECK_EQ(h.core.counters().commands_applied, 2u);  // cancel-on-disconnect
 }
 
 // FIX QA R1: a connection's release unbinds only its own binding. If the
