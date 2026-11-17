@@ -119,9 +119,7 @@ struct CoreExchange {
           user_states(config, small_limits()),
           sessions{user_states},
           session_settings(OuchSessionSettings::from(config.exchange)),
-          core(config, sessions, market_data, clock) {
-
-    }
+          core(config, sessions, market_data, clock) {}
 
     std::string admin(std::string_view line) {
         std::string reply;

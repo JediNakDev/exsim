@@ -8,14 +8,13 @@ OrderBookStorage::OrderBookStorage(std::size_t max_orders)
     : orders(max_orders), order_pool(max_orders), level_pool(max_orders) {}
 
 OrderBook::OrderBook(std::uint32_t tick_count, OrderBookStorage& storage)
-    : storage_(storage)
-    , bid_ladder_(tick_count, nullptr)
-    , ask_ladder_(tick_count, nullptr)
-    , bid_active_levels_(tick_count)
-    , ask_active_levels_(tick_count) {}
+    : storage_(storage),
+      bid_ladder_(tick_count, nullptr),
+      ask_ladder_(tick_count, nullptr),
+      bid_active_levels_(tick_count),
+      ask_active_levels_(tick_count) {}
 
-Order* OrderBook::rest_order(OrderId id, std::int32_t tick, Quantity leaves, Side side,
-                             std::uint32_t context_index) {
+Order* OrderBook::rest_order(OrderId id, std::int32_t tick, Quantity leaves, Side side, std::uint32_t context_index) {
     Order* const order = storage_.order_pool.create();
     if (!order) return nullptr;
     // The insert is the only hash probe: it reports a duplicate id itself.

@@ -5,7 +5,7 @@ namespace exsim::net {
 // Caller registers fd() for write readiness during connect and while output
 // is pending, and read readiness when connected. Storage survives reconnects.
 class TcpClient {
-   public:
+public:
     TcpClient(std::size_t receive_capacity = 65536, std::size_t send_capacity = 1048576)
         : connection_(receive_capacity, send_capacity) {}
     ErrorCode connect(Ipv4Endpoint remote) noexcept;
@@ -28,7 +28,7 @@ class TcpClient {
     ReceiveResult receive() noexcept;
     FlushResult flush() noexcept;
 
-   private:
+private:
     TcpConnection connection_;
     bool connecting_ = false;
     bool connected_ = false;

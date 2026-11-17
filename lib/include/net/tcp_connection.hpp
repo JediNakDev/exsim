@@ -13,7 +13,7 @@
 namespace exsim::net {
 
 class TcpConnection {
-   public:
+public:
     TcpConnection(std::size_t receive_buffer_capacity, std::size_t send_buffer_capacity)
         : receive_buffer_(receive_buffer_capacity), send_buffer_(send_buffer_capacity) {}
 
@@ -36,7 +36,6 @@ class TcpConnection {
 
     int fd() const noexcept { return socket_.fd(); }
 
-
     ReceiveBuffer& receive_buffer() noexcept { return receive_buffer_; }
     const ReceiveBuffer& receive_buffer() const noexcept { return receive_buffer_; }
     SendBuffer& send_buffer() noexcept { return send_buffer_; }
@@ -45,7 +44,7 @@ class TcpConnection {
     ReceiveResult receive() noexcept { return receive_buffer_.receive_from(socket_.fd()); }
     FlushResult flush() noexcept { return send_buffer_.flush_to(socket_.fd()); }
 
-   private:
+private:
     Socket socket_;
     ReceiveBuffer receive_buffer_;
     SendBuffer send_buffer_;

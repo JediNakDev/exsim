@@ -27,13 +27,13 @@ namespace exsim::itch_replay {
 [[nodiscard]] inline std::size_t book_message_size(char type) noexcept {
     namespace itch50 = protocol::itch50;
     switch (type) {
-    case itch50::AddOrder::type: return itch50::AddOrder::wire_size;
-    case itch50::AddOrderMPID::type: return itch50::AddOrderMPID::wire_size;
-    case itch50::OrderExecuted::type: return itch50::OrderExecuted::wire_size;
-    case itch50::OrderCancel::type: return itch50::OrderCancel::wire_size;
-    case itch50::OrderDelete::type: return itch50::OrderDelete::wire_size;
-    case itch50::OrderReplace::type: return itch50::OrderReplace::wire_size;
-    default: return 0;
+        case itch50::AddOrder::type: return itch50::AddOrder::wire_size;
+        case itch50::AddOrderMPID::type: return itch50::AddOrderMPID::wire_size;
+        case itch50::OrderExecuted::type: return itch50::OrderExecuted::wire_size;
+        case itch50::OrderCancel::type: return itch50::OrderCancel::wire_size;
+        case itch50::OrderDelete::type: return itch50::OrderDelete::wire_size;
+        case itch50::OrderReplace::type: return itch50::OrderReplace::wire_size;
+        default: return 0;
     }
 }
 
@@ -55,9 +55,7 @@ struct ReplayStats {
     std::uint64_t unknown_ref = 0;
     std::uint64_t dropped_cross = 0;  // adds and replaces that would have crossed the book
     std::uint64_t rejected = 0;       // any other engine rejection (price band, capacity, ...)
-    std::uint64_t total() const noexcept {
-        return adds + executes + cancels + deletes + replaces;
-    }
+    std::uint64_t total() const noexcept { return adds + executes + cancels + deletes + replaces; }
 };
 
 class ItchReplayer {
@@ -82,47 +80,46 @@ public:
     bool apply(std::span<const char> message) {
         namespace itch50 = protocol::itch50;
         switch (message[0]) {
-        case itch50::AddOrder::type: {
-            itch50::AddOrder m;
-            if (itch50::decode(message, m) != protocol::Status::ok) return false;
-            add(m.order_reference, m.side, m.price, m.shares);
-            return true;
-        }
-        case itch50::AddOrderMPID::type: {
-            itch50::AddOrderMPID m;
-            if (itch50::decode(message, m) != protocol::Status::ok) return false;
-            add(m.order_reference, m.side, m.price, m.shares);
-            return true;
-        }
-        case itch50::OrderExecuted::type: {
-            itch50::OrderExecuted m;
-            if (itch50::decode(message, m) != protocol::Status::ok) return false;
-            reduce(m.order_reference, m.shares);
-            ++stats_.executes;
-            return true;
-        }
-        case itch50::OrderCancel::type: {
-            itch50::OrderCancel m;
-            if (itch50::decode(message, m) != protocol::Status::ok) return false;
-            reduce(m.order_reference, m.shares);
-            ++stats_.cancels;
-            return true;
-        }
-        case itch50::OrderDelete::type: {
-            itch50::OrderDelete m;
-            if (itch50::decode(message, m) != protocol::Status::ok) return false;
-            reduce(m.order_reference, std::numeric_limits<Quantity>::max());
-            ++stats_.deletes;
-            return true;
-        }
-        case itch50::OrderReplace::type: {
-            itch50::OrderReplace m;
-            if (itch50::decode(message, m) != protocol::Status::ok) return false;
-            replace(m.original_reference, m.new_reference, m.price, m.shares);
-            return true;
-        }
-        default:
-            return false;
+            case itch50::AddOrder::type: {
+                itch50::AddOrder m;
+                if (itch50::decode(message, m) != protocol::Status::ok) return false;
+                add(m.order_reference, m.side, m.price, m.shares);
+                return true;
+            }
+            case itch50::AddOrderMPID::type: {
+                itch50::AddOrderMPID m;
+                if (itch50::decode(message, m) != protocol::Status::ok) return false;
+                add(m.order_reference, m.side, m.price, m.shares);
+                return true;
+            }
+            case itch50::OrderExecuted::type: {
+                itch50::OrderExecuted m;
+                if (itch50::decode(message, m) != protocol::Status::ok) return false;
+                reduce(m.order_reference, m.shares);
+                ++stats_.executes;
+                return true;
+            }
+            case itch50::OrderCancel::type: {
+                itch50::OrderCancel m;
+                if (itch50::decode(message, m) != protocol::Status::ok) return false;
+                reduce(m.order_reference, m.shares);
+                ++stats_.cancels;
+                return true;
+            }
+            case itch50::OrderDelete::type: {
+                itch50::OrderDelete m;
+                if (itch50::decode(message, m) != protocol::Status::ok) return false;
+                reduce(m.order_reference, std::numeric_limits<Quantity>::max());
+                ++stats_.deletes;
+                return true;
+            }
+            case itch50::OrderReplace::type: {
+                itch50::OrderReplace m;
+                if (itch50::decode(message, m) != protocol::Status::ok) return false;
+                replace(m.original_reference, m.new_reference, m.price, m.shares);
+                return true;
+            }
+            default: return false;
         }
     }
 
@@ -144,9 +141,9 @@ private:
         // A zero-share reduction changes nothing and emits no event.
         if (events_.empty() || events_[0].type != EventType::Rejected) return true;
         switch (events_[0].rejected.reason) {
-        case RejectReason::UnknownOrder: ++stats_.unknown_ref; break;
-        case RejectReason::PostOnlyWouldCross: ++stats_.dropped_cross; break;
-        default: ++stats_.rejected; break;
+            case RejectReason::UnknownOrder: ++stats_.unknown_ref; break;
+            case RejectReason::PostOnlyWouldCross: ++stats_.dropped_cross; break;
+            default: ++stats_.rejected; break;
         }
         return false;
     }

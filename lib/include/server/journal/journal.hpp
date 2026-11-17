@@ -10,24 +10,28 @@
 #include <string>
 #include <vector>
 namespace exsim::server::journal {
-struct JournalSetup { EngineConfig engine; std::vector<InstrumentConfig> instruments; };
+struct JournalSetup {
+    EngineConfig engine;
+    std::vector<InstrumentConfig> instruments;
+};
 class JournalWriter {
 public:
     JournalWriter(const std::string& path, const JournalSetup& setup);
     ~JournalWriter();
-    JournalWriter(const JournalWriter&)=delete;
-    JournalWriter& operator=(const JournalWriter&)=delete;
-    [[nodiscard]] bool append(const Command& command) noexcept; // no allocation, including flush
+    JournalWriter(const JournalWriter&) = delete;
+    JournalWriter& operator=(const JournalWriter&) = delete;
+    [[nodiscard]] bool append(const Command& command) noexcept;  // no allocation, including flush
     // Writes buffered records and a checkpoint to the OS page cache only.
     // No fsync/fdatasync: success does not guarantee survival of power loss.
     [[nodiscard]] bool flush() noexcept;
+
 private:
-    int fd_=-1;
-    std::array<unsigned char,128*128> buffer_{};
-    std::size_t used_=0;
-    std::uint64_t sequence_=0;
-    bool footer_=false;
-    bool failed_=false;
+    int fd_ = -1;
+    std::array<unsigned char, 128 * 128> buffer_{};
+    std::size_t used_ = 0;
+    std::uint64_t sequence_ = 0;
+    bool footer_ = false;
+    bool failed_ = false;
 };
-}
+}  // namespace exsim::server::journal
 #endif

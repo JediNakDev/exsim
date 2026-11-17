@@ -29,9 +29,9 @@
 namespace exsim::md {
 
 struct BookBuilderConfig {
-    std::size_t max_instruments = 64;           // highest stock locate accepted
-    std::size_t max_orders = 1u << 20;          // live orders across all instruments
-    std::size_t max_levels_per_side = 4096;     // price levels per instrument side
+    std::size_t max_instruments = 64;        // highest stock locate accepted
+    std::size_t max_orders = 1u << 20;       // live orders across all instruments
+    std::size_t max_levels_per_side = 4096;  // price levels per instrument side
 };
 
 enum class BookUpdateStatus : std::uint8_t {

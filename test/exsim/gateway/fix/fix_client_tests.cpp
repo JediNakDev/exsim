@@ -22,18 +22,18 @@ struct RecordingHandler {
 
     void on_logon(const fix::FixInboundMessageInfo& info) { events.push_back("A:" + std::to_string(info.sequence)); }
     void on_execution_report(const fix44::ExecutionReport& report, const fix::FixInboundMessageInfo& info) {
-        events.push_back("8:" + std::to_string(info.sequence) + ":" + std::string(report.client_order_id.view()) +
-                         ":" + std::string(1, report.execution_type) + ":" +
-                         std::to_string(report.leaves_quantity) + possdup_suffix(info));
+        events.push_back("8:" + std::to_string(info.sequence) + ":" + std::string(report.client_order_id.view()) + ":" +
+                         std::string(1, report.execution_type) + ":" + std::to_string(report.leaves_quantity) +
+                         possdup_suffix(info));
     }
     void on_order_cancel_reject(const fix44::OrderCancelReject& reject, const fix::FixInboundMessageInfo& info) {
-        events.push_back("9:" + std::to_string(info.sequence) + ":" + std::string(reject.client_order_id.view()) +
-                         ":" + std::string(1, reject.response_to) + ":" + std::to_string(reject.reason));
+        events.push_back("9:" + std::to_string(info.sequence) + ":" + std::string(reject.client_order_id.view()) + ":" +
+                         std::string(1, reject.response_to) + ":" + std::to_string(reject.reason));
     }
     void on_order_mass_cancel_report(const fix44::OrderMassCancelReport& report,
                                      const fix::FixInboundMessageInfo& info) {
-        events.push_back("r:" + std::to_string(info.sequence) + ":" + std::string(report.client_order_id.view()) +
-                         ":" + std::string(1, report.response) + ":" + std::to_string(report.total_affected_orders));
+        events.push_back("r:" + std::to_string(info.sequence) + ":" + std::string(report.client_order_id.view()) + ":" +
+                         std::string(1, report.response) + ":" + std::to_string(report.total_affected_orders));
     }
     void on_session_reject(const fix44::Reject& reject, const fix::FixInboundMessageInfo& info) {
         events.push_back("3:" + std::to_string(info.sequence) + ":" + std::to_string(reject.reference_tag) + ":" +
@@ -41,8 +41,8 @@ struct RecordingHandler {
     }
     void on_business_message_reject(const fix44::BusinessMessageReject& reject,
                                     const fix::FixInboundMessageInfo& info) {
-        events.push_back("j:" + std::to_string(info.sequence) + ":" + std::string(reject.reference_type.view()) +
-                         ":" + std::to_string(reject.reason));
+        events.push_back("j:" + std::to_string(info.sequence) + ":" + std::string(reject.reference_type.view()) + ":" +
+                         std::to_string(reject.reason));
     }
     void on_logout(std::string_view text) {
         last_logout_text = std::string(text);
@@ -105,8 +105,7 @@ TEST_CASE(gateway_fix_client, typed_callbacks_for_every_application_message) {
     connected.wire.pump();
     CHECK_EQ(connected.handler.events, (Strings{"A:1", "8:2:B1:0:100", "8:3:B1R:5:80", "9:4:C1:1:1", "8:5:B2:0:10",
                                                 "8:6:MC1:4:0", "8:7:MC1:4:0", "r:8:MC1:7:2", "3:9:55:4"}));
-    CHECK_EQ(engine_command_tokens(connected.exchange, 1),
-             (Strings{"D:B1", "G:B1R", "D:B2", "q:MC1"}));
+    CHECK_EQ(engine_command_tokens(connected.exchange, 1), (Strings{"D:B1", "G:B1R", "D:B2", "q:MC1"}));
 }
 
 TEST_CASE(gateway_fix_client, sends_refused_when_not_active) {
@@ -204,8 +203,7 @@ TEST_CASE(gateway_fix_client, reconnect_continues_sequences_and_recovers) {
     CHECK_EQ(connected.wire.client_to_exchange().bytes().find("34=3\001") != std::string_view::npos, true);
     connected.wire.pump();
     CHECK(client.active());
-    CHECK_EQ(connected.handler.events,
-             (Strings{"A:1", "8:2:B1:0:100", "A:4", "8:3:B1:4:0:dup"}));
+    CHECK_EQ(connected.handler.events, (Strings{"A:1", "8:2:B1:0:100", "A:4", "8:3:B1:4:0:dup"}));
     CHECK_EQ(client.session_day_state().expected_inbound_seq(), 5u);
 }
 

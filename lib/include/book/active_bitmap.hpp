@@ -66,8 +66,7 @@ private:
         }
         if (layer + 1 == layers_.size() || (!ascending && word_index == 0)) return std::nullopt;
         // The summary layer names the nearest nonzero word in this layer.
-        const auto nonzero_word =
-            find_in_layer(layer + 1, ascending ? word_index + 1 : word_index - 1, ascending);
+        const auto nonzero_word = find_in_layer(layer + 1, ascending ? word_index + 1 : word_index - 1, ascending);
         if (!nonzero_word) return std::nullopt;
         return *nonzero_word * 64 + first_bit_in_direction(words[*nonzero_word], ascending);
     }

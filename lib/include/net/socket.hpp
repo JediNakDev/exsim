@@ -27,7 +27,7 @@ using ErrorCode = int;  // 0 = success, otherwise an errno value
 
 // Owns one file descriptor and closes it on destruction. Move-only.
 class Socket {
-   public:
+public:
     Socket() noexcept = default;
     explicit Socket(int fd) noexcept : fd_(fd) {}
     ~Socket() { close(); }
@@ -55,7 +55,7 @@ class Socket {
 
     void close() noexcept;
 
-   private:
+private:
     int fd_ = -1;
 };
 
@@ -70,13 +70,9 @@ struct Ipv4Endpoint {
 inline constexpr std::uint32_t kIpv4AnyAddress = 0x00000000;       // INADDR_ANY
 inline constexpr std::uint32_t kIpv4LoopbackAddress = 0x7F000001;  // 127.0.0.1
 
-constexpr Ipv4Endpoint loopback_endpoint(std::uint16_t port) noexcept {
-    return {kIpv4LoopbackAddress, port};
-}
+constexpr Ipv4Endpoint loopback_endpoint(std::uint16_t port) noexcept { return {kIpv4LoopbackAddress, port}; }
 
-constexpr bool is_ipv4_multicast_address(std::uint32_t address) noexcept {
-    return (address >> 28) == 0xE;
-}
+constexpr bool is_ipv4_multicast_address(std::uint32_t address) noexcept { return (address >> 28) == 0xE; }
 
 // Parses a dotted quad ("10.0.0.1"); no hostnames. Returns false on malformed input.
 bool parse_ipv4_address(std::string_view text, std::uint32_t& address_out) noexcept;
@@ -154,9 +150,7 @@ inline ssize_t receive_some(int fd, char* data, std::size_t capacity) noexcept {
     }
 }
 
-inline bool is_would_block(ErrorCode error) noexcept {
-    return error == EAGAIN || error == EWOULDBLOCK;
-}
+inline bool is_would_block(ErrorCode error) noexcept { return error == EAGAIN || error == EWOULDBLOCK; }
 
 }  // namespace exsim::net
 

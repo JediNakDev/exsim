@@ -127,10 +127,10 @@ TEST_CASE(server_admin, numeric_limits_and_complete_tokens) {
     const auto no_user_delay = ok("fault user TraderA delay 0");
     CHECK_EQ(no_user_delay.delay, 0u);
     CHECK_EQ(no_user_delay.user, "TraderA");
-    for (const auto invalid : {"fault md drop 4294967296", "fault md drop 1x",
-                              "fault md drop +1", "fault md rate seed=18446744073709551616",
-                              "fault md rate delay=0", "fault md rate drop=", "fault md rate =1",
-                              "fault md rate seed=1 seed=2", "shutdown now", "book AAPL 1 2"}) {
+    for (const auto invalid :
+         {"fault md drop 4294967296", "fault md drop 1x", "fault md drop +1", "fault md rate seed=18446744073709551616",
+          "fault md rate delay=0", "fault md rate drop=", "fault md rate =1", "fault md rate seed=1 seed=2",
+          "shutdown now", "book AAPL 1 2"}) {
         CHECK(bad(invalid));
     }
 }

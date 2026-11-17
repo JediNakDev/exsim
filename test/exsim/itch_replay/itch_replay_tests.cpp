@@ -69,11 +69,6 @@ TEST_CASE(itch_replay, replay_matches_reference) {
         REQUIRE(*bid < *ask && "engine reports crossed book");
     }
 
-    std::cout << "[itch] parsed=" << parsed
-              << " adds=" << s.adds
-              << " execs=" << s.executes
-              << " cancels=" << s.cancels
-              << " deletes=" << s.deletes
-              << " replaces=" << s.replaces
-              << " unknown_ref=" << s.unknown_ref << " ";
+    std::cout << "[itch] parsed=" << parsed << " adds=" << s.adds << " execs=" << s.executes << " cancels=" << s.cancels
+              << " deletes=" << s.deletes << " replaces=" << s.replaces << " unknown_ref=" << s.unknown_ref << " ";
 }

@@ -47,9 +47,9 @@ concept FixClientHandler =
     };
 
 struct FixClientSettings {
-    std::string_view sender_comp_id{};           // the configured FIX username
+    std::string_view sender_comp_id{};  // the configured FIX username
     std::string_view target_comp_id = "EXSIM";
-    std::string_view password{};                 // sent as Password(554) when not empty
+    std::string_view password{};  // sent as Password(554) when not empty
     std::uint64_t heartbeat_interval_seconds = 30;
     std::size_t store_max_messages = 1u << 16;
     std::size_t store_max_bytes = 8u << 20;

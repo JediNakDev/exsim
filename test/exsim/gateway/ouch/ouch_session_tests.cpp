@@ -47,12 +47,12 @@ TEST_CASE(gateway_ouch_session, replay_from_n_after_orders_completed_is_byte_ide
     {
         RawSession bob(exchange);
         REQUIRE(bob.login("bob", "bobpw"));
-        bob.send_message(enter_order("ASK1", 'S', 100, "AAPL", kHundredDollars));     // 2: A
+        bob.send_message(enter_order("ASK1", 'S', 100, "AAPL", kHundredDollars));  // 2: A
         exchange.advance(10);
-        alice.send_message(enter_order("BID1", 'B', 100, "AAPL", kHundredDollars));   // 3: E (ASK1 done)
-        bob.send_message(enter_order("ASK2", 'S', 100, "AAPL", kHundredDollars + kTick));  // 4: A
-        bob.send_message(replace_order("ASK2", "ASK2R", 50, kHundredDollars + kTick));      // 5: U
-        bob.send_message(cancel_order("ASK2R", 0));                                         // 6: C (done)
+        alice.send_message(enter_order("BID1", 'B', 100, "AAPL", kHundredDollars));           // 3: E (ASK1 done)
+        bob.send_message(enter_order("ASK2", 'S', 100, "AAPL", kHundredDollars + kTick));     // 4: A
+        bob.send_message(replace_order("ASK2", "ASK2R", 50, kHundredDollars + kTick));        // 5: U
+        bob.send_message(cancel_order("ASK2R", 0));                                           // 6: C (done)
         bob.send_message(enter_order("ASK3", 'S', 50, "AAPL", kHundredDollars + 2 * kTick));  // 7: A
         bob_live_frames = only_sequenced(bob.take_frames());
     }  // TCP loss; bob has no cancel-on-disconnect, ASK3 stays live
@@ -68,8 +68,8 @@ TEST_CASE(gateway_ouch_session, replay_from_n_after_orders_completed_is_byte_ide
         REQUIRE(!frames.empty());
         CHECK(frames[0] == login_accepted_golden(first_sequence));
         const std::vector<std::string> replayed(frames.begin() + 1, frames.end());
-        const std::vector<std::string> expected(bob_live_frames.begin() + static_cast<std::ptrdiff_t>(first_sequence - 1),
-                                                bob_live_frames.end());
+        const std::vector<std::string> expected(
+            bob_live_frames.begin() + static_cast<std::ptrdiff_t>(first_sequence - 1), bob_live_frames.end());
         CHECK(replayed == expected);
         CHECK(!bob.connection().is_replaying());
         CHECK_EQ(bob.connection().next_sequence_to_send(), 8u);
@@ -113,7 +113,8 @@ TEST_CASE(gateway_ouch_session, replay_pauses_on_a_full_sink_and_resumes_in_orde
         RawSession bob(exchange);
         REQUIRE(bob.login("bob", "bobpw"));
         for (int index = 0; index < 40; ++index) {
-            bob.send_message(enter_order("ASK" + std::to_string(index), 'S', 10, "AAPL", kHundredDollars + index * kTick));
+            bob.send_message(
+                enter_order("ASK" + std::to_string(index), 'S', 10, "AAPL", kHundredDollars + index * kTick));
         }
     }
     const std::uint64_t stored_before_replay = exchange.user_state(2).store().last_seq();
@@ -162,7 +163,7 @@ TEST_CASE(gateway_ouch_session, replay_pauses_on_a_full_sink_and_resumes_in_orde
 TEST_CASE(gateway_ouch_session, live_output_that_does_not_fit_closes_with_send_buffer_full) {
     TestExchange exchange;
     RawSession bob(exchange, 200);
-    REQUIRE(bob.login("bob", "bobpw"));  // 33 + 13 bytes
+    REQUIRE(bob.login("bob", "bobpw"));                                       // 33 + 13 bytes
     bob.send_message(enter_order("ASK1", 'S', 10, "AAPL", kHundredDollars));  // + 69
     bob.send_message(enter_order("ASK2", 'S', 10, "AAPL", kHundredDollars));  // + 69 = 184
     CHECK(bob.connection().state() == OuchConnectionState::LoggedIn);
@@ -334,8 +335,8 @@ TEST_CASE(gateway_ouch_session, store_admission_reserve_closes_instead_of_storin
     config.limits.store_messages = 8;
     config.limits.store_reserve_messages = 3;
     TestExchange exchange(config);
-    RawSession bob(exchange);                // no cancel-on-disconnect
-    REQUIRE(bob.login("bob", "bobpw"));      // 1: S
+    RawSession bob(exchange);            // no cancel-on-disconnect
+    REQUIRE(bob.login("bob", "bobpw"));  // 1: S
     for (int index = 1; index <= 4; ++index) {
         bob.send_message(enter_order("BID" + std::to_string(index), 'B', 10, "AAPL", kHundredDollars));
     }
@@ -405,10 +406,10 @@ TEST_CASE(gateway_ouch_session, store_admission_precedes_every_gateway_reject) {
     TestExchange exchange(config);
     RawSession bob(exchange);
     REQUIRE(bob.login("bob", "bobpw"));                                       // 1: S
-    bob.send_message(enter_order("ASK", 'S', 10, "AAPL", kHundredDollars));  // 2: A, the only token
-    bob.send_message(enter_order("FULL1", 'B', 1, "AAPL", kHundredDollars)); // 3: J, token table full
-    bob.send_message(enter_order("FULL2", 'B', 1, "AAPL", kHundredDollars)); // 4: J, 2 free: at the reserve
-    bob.send_message(enter_order("FULL3", 'B', 1, "AAPL", kHundredDollars)); // nothing stored, closed
+    bob.send_message(enter_order("ASK", 'S', 10, "AAPL", kHundredDollars));   // 2: A, the only token
+    bob.send_message(enter_order("FULL1", 'B', 1, "AAPL", kHundredDollars));  // 3: J, token table full
+    bob.send_message(enter_order("FULL2", 'B', 1, "AAPL", kHundredDollars));  // 4: J, 2 free: at the reserve
+    bob.send_message(enter_order("FULL3", 'B', 1, "AAPL", kHundredDollars));  // nothing stored, closed
     CHECK_EQ(bob.take_types(), "SAJJ");
     CHECK(bob.connection().close_reason() == OuchCloseReason::StoreReserveReached);
     CHECK_EQ(exchange.user_state(2).statistics().gateway_rejects, 2u);
@@ -439,7 +440,7 @@ TEST_CASE(gateway_ouch_session, store_admission_counts_bytes_too) {
     config.limits.store_reserve_messages = 2;
     TestExchange exchange(config);
     RawSession alice(exchange);
-    REQUIRE(alice.login("alice", "alicepw"));  // S: 13 bytes, 319 free
+    REQUIRE(alice.login("alice", "alicepw"));                                   // S: 13 bytes, 319 free
     alice.send_message(enter_order("BID1", 'B', 10, "AAPL", kHundredDollars));  // 250 free afterwards
     alice.send_message(enter_order("BID2", 'B', 10, "AAPL", kHundredDollars));  // admitted (250 / 83 = 3)
     alice.send_message(enter_order("BID3", 'B', 10, "AAPL", kHundredDollars));  // 181 / 83 = 2: refused
@@ -493,7 +494,7 @@ TEST_CASE(gateway_ouch_session, drop_out_cleared_mid_cut_still_closes) {
     exchange.drop_next_outbound_messages(2, 2);
     bob.send_message(enter_order("BID1", 'B', 10, "AAPL", kHundredDollars));  // 2: dropped
     CHECK(bob.connection().state() == OuchConnectionState::LoggedIn);
-    exchange.drop_next_outbound_messages(2, 0);  // `fault user BOB off`
+    exchange.drop_next_outbound_messages(2, 0);                               // `fault user BOB off`
     bob.send_message(enter_order("BID2", 'B', 10, "AAPL", kHundredDollars));  // 3: not written
     CHECK(bob.take_frames().empty());
     CHECK(bob.connection().close_reason() == OuchCloseReason::FaultDropOut);

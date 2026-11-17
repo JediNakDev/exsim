@@ -13,6 +13,7 @@ ifeq ($(MODE),debug)
 CXXFLAGS += -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined
 LDFLAGS += -fsanitize=address,undefined
 else ifeq ($(MODE),release)
+# Release keeps asserts on (no -DNDEBUG) on purpose: a broken invariant aborts. Only perf and bench define NDEBUG.
 CXXFLAGS += -O2 -g
 else ifneq ($(filter $(MODE),perf bench),)
 # bench is the perf configuration under another name, so the benchmarked engine is the perf build.
@@ -31,12 +32,11 @@ LIB_SRCS := $(filter-out $(TEST_LIB_SRCS),$(shell find lib/src -name '*.cpp' | s
 obj = $(patsubst %.cpp,$(BUILD)/obj/%.o,$(1))
 LIB_OBJS := $(call obj,$(LIB_SRCS))
 TEST_LIB_OBJS := $(call obj,$(TEST_LIB_SRCS))
-# Unit coverage stays local to codecs, gateways, matching and core policies.
-UNIT_SRCS := $(shell find test/exsim/book test/exsim/util test/exsim/itch_replay test/framework test/exsim/engine test/exsim/protocol test/exsim/gateway test/exsim/md test/exsim/server/core test/exsim/server/admin -name '*.cpp' | sort)
-UNIT_SRCS := $(filter-out %udp_loopback_tests.cpp,$(UNIT_SRCS))
-UNIT_SRCS += test/exsim/api/api_json_tests.cpp test/exsim/server/config_tests.cpp test/exsim/server/config_review_tests.cpp test/exsim/foundation/contract_tests.cpp
-INTEGRATION_SRCS := $(shell find test/exsim/net -name '*.cpp' | sort) test/exsim/api/http_tests.cpp test/exsim/api/exchange_service_tests.cpp test/exsim/md/udp_loopback_tests.cpp test/framework/alloc_counter.cpp
-.PHONY: all apps test unit integration clean
+# A suite is a folder: test/exsim holds unit tests (mirrors lib/), test/integration holds sockets and processes.
+# Both hold *_tests.cpp only; shared helpers under test/exsim/support are not picked up here.
+UNIT_SRCS := $(shell find test/exsim test/framework -name '*_tests.cpp' | sort) test/framework/alloc_counter.cpp
+INTEGRATION_SRCS := $(shell find test/integration -name '*_tests.cpp' | sort) test/framework/alloc_counter.cpp
+.PHONY: all apps test unit integration clean format format-check
 all: apps
 apps: $(BUILD)/exsim_api $(BUILD)/exsim_exchanged
 $(BUILD)/obj/%.o: %.cpp Makefile
@@ -52,12 +52,21 @@ unit: $(BUILD)/unit_tests
 	./$(BUILD)/unit_tests $(FILTER)
 $(BUILD)/integration_tests: $(call obj,test/main.cpp $(INTEGRATION_SRCS)) $(LIB_OBJS) $(TEST_LIB_OBJS)
 	$(CXX) $(LDFLAGS) $^ -o $@ $(LDLIBS)
+# FILTER goes to both runners (substring for native cases, -k for Python). A runner that matches
+# nothing exits 2 (native) or 5 (Python 3.12+); that is not a failure.
 integration: apps $(BUILD)/integration_tests
-	EXSIM_BUILD=$(BUILD) ./$(BUILD)/integration_tests $(FILTER)
-	EXSIM_BUILD=$(BUILD) python3 -B test/integration/exchange_api_test.py
+	EXSIM_BUILD=$(BUILD) ./$(BUILD)/integration_tests $(FILTER); [ $$? -eq 0 -o $$? -eq 2 ]
+	EXSIM_BUILD=$(BUILD) python3 -B test/integration/exchange_api_test.py $(if $(FILTER),-k '$(FILTER)'); [ $$? -eq 0 -o $$? -eq 5 ]
 test: unit integration
 clean:
 	rm -rf $(BUILD)
+# One pinned clang-format for local runs and CI. Generated files are skipped through .clang-format-ignore.
+CLANG_FORMAT ?= clang-format-18
+FORMAT_SRCS = $(shell git ls-files '*.cpp' '*.hpp')
+format:
+	$(CLANG_FORMAT) -i $(FORMAT_SRCS)
+format-check:
+	$(CLANG_FORMAT) --dry-run --Werror $(FORMAT_SRCS)
 -include $(shell find $(BUILD)/obj -name '*.d' 2>/dev/null)
 
 # The ITCH replay tool and the benchmarks link only the matching engine and its order book.

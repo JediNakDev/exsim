@@ -74,7 +74,7 @@ struct Snapshot {
 // One message is bounded by the wire's uint8 group counts. The caller
 // supplies all storage and decides packet boundaries and channel sequences.
 [[nodiscard]] inline std::size_t encode_book(std::uint64_t transact_time, std::uint8_t event_indicator,
-                                            std::span<const BookEntry> entries, std::span<char> output) noexcept {
+                                             std::span<const BookEntry> entries, std::span<char> output) noexcept {
     constexpr std::size_t fixed = 10 + 11 + 3 + 8;
     if (entries.size() > 255 || output.size() < fixed + 32 * entries.size()) return 0;
     const std::size_t size = fixed + 32 * entries.size();
@@ -104,11 +104,11 @@ struct Snapshot {
 }
 
 [[nodiscard]] inline std::size_t encode_trades(std::uint64_t transact_time, std::uint8_t event_indicator,
-                                              std::span<const TradeEntry> entries,
-                                              std::span<const TradeOrder> orders, std::span<char> output) noexcept {
+                                               std::span<const TradeEntry> entries, std::span<const TradeOrder> orders,
+                                               std::span<char> output) noexcept {
     constexpr std::size_t fixed = 10 + 11 + 3 + 8;
-    if (entries.size() > 255 || orders.size() > 255 ||
-        output.size() < fixed + 32 * entries.size() + 16 * orders.size()) return 0;
+    if (entries.size() > 255 || orders.size() > 255 || output.size() < fixed + 32 * entries.size() + 16 * orders.size())
+        return 0;
     const std::size_t size = fixed + 32 * entries.size() + 16 * orders.size();
     std::fill_n(output.data(), size, char{0});
     cme::store_le(output.data(), static_cast<std::uint16_t>(size));
@@ -141,7 +141,7 @@ struct Snapshot {
 }
 
 [[nodiscard]] inline std::size_t encode_snapshot(const Snapshot& snapshot, std::span<const SnapshotEntry> entries,
-                                                std::span<char> output) noexcept {
+                                                 std::span<char> output) noexcept {
     constexpr std::size_t fixed = 10 + 59 + 3;
     if (entries.size() > 255 || output.size() < fixed + 22 * entries.size()) return 0;
     const std::size_t size = fixed + 22 * entries.size();
@@ -188,7 +188,8 @@ struct IncrementalView {
 [[nodiscard]] inline Status decode_incremental(const cme::MessageView& message, IncrementalView& out) noexcept {
     const auto& header = message.header;
     if (header.schema_id != kSchemaId || header.version != kVersion ||
-        (header.template_id != 46 && header.template_id != 48)) return Status::invalid_type;
+        (header.template_id != 46 && header.template_id != 48))
+        return Status::invalid_type;
     if (header.block_length < 11 || message.body.size() < header.block_length) return Status::invalid_length;
     IncrementalView view;
     view.transact_time = cme::load_le<std::uint64_t>(message.body.data());
@@ -214,13 +215,14 @@ struct IncrementalView {
     if (header.block_length < 59 || message.body.size() < header.block_length) return Status::invalid_length;
     cme::GroupView group;
     if (cme::decode_group(message.trailing(), 22, group) != Status::ok ||
-        group.encoded_size != message.trailing().size()) return Status::invalid_length;
+        group.encoded_size != message.trailing().size())
+        return Status::invalid_length;
     const char* root = message.body.data();
-    out = {cme::load_le<std::uint32_t>(root), cme::load_le<std::uint32_t>(root + 4),
-           cme::load_le<std::int32_t>(root + 8), cme::load_le<std::uint32_t>(root + 12),
+    out = {cme::load_le<std::uint32_t>(root),      cme::load_le<std::uint32_t>(root + 4),
+           cme::load_le<std::int32_t>(root + 8),   cme::load_le<std::uint32_t>(root + 12),
            cme::load_le<std::uint64_t>(root + 16), cme::load_le<std::uint64_t>(root + 24),
            cme::load_le<std::uint16_t>(root + 32), static_cast<std::uint8_t>(root[34]),
-           cme::load_le<std::int64_t>(root + 35), cme::load_le<std::int64_t>(root + 43),
+           cme::load_le<std::int64_t>(root + 35),  cme::load_le<std::int64_t>(root + 43),
            cme::load_le<std::int64_t>(root + 51)};
     entries = group;
     return Status::ok;
@@ -242,8 +244,8 @@ struct IncrementalView {
 }
 
 [[nodiscard]] inline std::size_t encode_security_status(std::uint64_t timestamp, std::int32_t security_id,
-                                                       std::uint16_t trade_date, Phase phase,
-                                                       std::uint8_t indicator, std::span<char> output) noexcept {
+                                                        std::uint16_t trade_date, Phase phase, std::uint8_t indicator,
+                                                        std::span<char> output) noexcept {
     std::array<char, 30> root{};
     cme::store_le(root.data(), timestamp);
     std::memcpy(root.data() + 8, "EXSIM", 5);
@@ -256,7 +258,7 @@ struct IncrementalView {
 }
 
 [[nodiscard]] inline std::size_t encode_channel_reset(std::uint64_t timestamp, std::int16_t channel,
-                                                     std::span<char> output) noexcept {
+                                                      std::span<char> output) noexcept {
     std::array<char, 14> body{};
     cme::store_le(body.data(), timestamp);
     body[8] = static_cast<char>(kEndOfEvent);
@@ -287,7 +289,7 @@ struct FutureDefinition {
 };
 
 [[nodiscard]] inline std::size_t encode_future_definition(const FutureDefinition& definition,
-                                                         std::span<char> output) noexcept {
+                                                          std::span<char> output) noexcept {
     if (definition.symbol.empty() || definition.symbol.size() > 20 || definition.lot_size > INT32_MAX / 10000u)
         return 0;
     // Root plus NoEvents, NoMDFeedTypes, NoInstAttrib, NoLotTypeRules.

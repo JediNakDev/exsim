@@ -1,7 +1,9 @@
-# Matches the dominant style of lib/, src/ and test/. Reformat a file only
-# when it is being changed anyway or clearly differs from this style.
+# Every tracked C++ file is formatted with clang-format 18 (Ubuntu 24.04 apt package
+# clang-format-18), except generated files listed in .clang-format-ignore.
+# `make format` rewrites, `make format-check` is what CI runs.
+# Latest instead of c++23: clang-format 18 does not accept c++23.
 BasedOnStyle: Google
-Standard: c++20
+Standard: Latest
 IndentWidth: 4
 ColumnLimit: 120
 AccessModifierOffset: -4

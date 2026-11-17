@@ -27,24 +27,24 @@ struct NewOrderData {
 
 struct CancelOrderData {
     SessionId session = 0;
-    ClOrdId orig_cl_ord_id = 0;  // token of the live order to cancel
-    ClOrdId cl_ord_id = 0;       // token of this request (echoed back; may be 0)
-    Quantity reduce_to_total_qty = 0; // 0 full cancel; else clamp leaves to max(total-cum,0)
+    ClOrdId orig_cl_ord_id = 0;        // token of the live order to cancel
+    ClOrdId cl_ord_id = 0;             // token of this request (echoed back; may be 0)
+    Quantity reduce_to_total_qty = 0;  // 0 full cancel; else clamp leaves to max(total-cum,0)
 };
 
 struct ReplaceOrderData {
     SessionId session = 0;
-    ClOrdId orig_cl_ord_id = 0;  // token of the live order to replace
-    ClOrdId cl_ord_id = 0;       // new token for the order; 0 = keep orig
-    Price price = 0;             // new limit price
-    Quantity qty = 0;            // new TOTAL quantity (incl. already filled)
+    ClOrdId orig_cl_ord_id = 0;        // token of the live order to replace
+    ClOrdId cl_ord_id = 0;             // new token for the order; 0 = keep orig
+    Price price = 0;                   // new limit price
+    Quantity qty = 0;                  // new TOTAL quantity (incl. already filled)
     bool force_priority_loss = false;  // OUCH U always sets true
 };
 
 struct MassCancelData {
     SessionId session = 0;
-    InstrumentId instrument = 0;  // 0 = all instruments
-    ClOrdId cl_ord_id = 0;        // token of this request (echoed back)
+    InstrumentId instrument = 0;        // 0 = all instruments
+    ClOrdId cl_ord_id = 0;              // token of this request (echoed back)
     bool cancel_on_disconnect = false;  // selects CancelReason
 };
 
@@ -83,14 +83,18 @@ struct Command {
     };
 
     Command() noexcept : new_order() {}
-    Command(const NewOrder& c) noexcept : timestamp(c.ts), type(CommandType::NewOrder), new_order(static_cast<const NewOrderData&>(c)) {}
-    Command(const CancelOrder& c) noexcept : timestamp(c.ts), type(CommandType::Cancel), cancel(static_cast<const CancelOrderData&>(c)) {}
-    Command(const ReplaceOrder& c) noexcept : timestamp(c.ts), type(CommandType::Replace), replace(static_cast<const ReplaceOrderData&>(c)) {}
-    Command(const MassCancel& c) noexcept : timestamp(c.ts), type(CommandType::MassCancel), mass_cancel(static_cast<const MassCancelData&>(c)) {}
-    Command(const SetPhase& c) noexcept : timestamp(c.ts), type(CommandType::SetPhase), set_phase(static_cast<const SetPhaseData&>(c)) {}
+    Command(const NewOrder& c) noexcept
+        : timestamp(c.ts), type(CommandType::NewOrder), new_order(static_cast<const NewOrderData&>(c)) {}
+    Command(const CancelOrder& c) noexcept
+        : timestamp(c.ts), type(CommandType::Cancel), cancel(static_cast<const CancelOrderData&>(c)) {}
+    Command(const ReplaceOrder& c) noexcept
+        : timestamp(c.ts), type(CommandType::Replace), replace(static_cast<const ReplaceOrderData&>(c)) {}
+    Command(const MassCancel& c) noexcept
+        : timestamp(c.ts), type(CommandType::MassCancel), mass_cancel(static_cast<const MassCancelData&>(c)) {}
+    Command(const SetPhase& c) noexcept
+        : timestamp(c.ts), type(CommandType::SetPhase), set_phase(static_cast<const SetPhaseData&>(c)) {}
 
     [[nodiscard]] Timestamp ts() const noexcept { return timestamp; }
-
 };
 
 static_assert(std::is_trivially_copyable_v<Command>);

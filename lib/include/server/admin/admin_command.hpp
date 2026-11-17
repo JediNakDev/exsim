@@ -16,18 +16,18 @@ namespace exsim::server {
 enum class AdminOp : std::uint8_t {
     Help,
     Status,
-    Phase,             // symbol ("*" = all), phase
-    Book,              // symbol, count = levels
-    FaultMdDrop,       // count
-    FaultMdDup,        // count
-    FaultMdReorder,    // count, delay (packets)
-    FaultMdRate,       // rate
+    Phase,           // symbol ("*" = all), phase
+    Book,            // symbol, count = levels
+    FaultMdDrop,     // count
+    FaultMdDup,      // count
+    FaultMdReorder,  // count, delay (packets)
+    FaultMdRate,     // rate
     FaultMdOff,
-    FaultUserReject,     // user, count
-    FaultUserDelay,      // user, delay (microseconds)
-    FaultUserDropOut,    // user, count
-    FaultUserDisconnect, // user
-    FaultUserOff,        // user
+    FaultUserReject,      // user, count
+    FaultUserDelay,       // user, delay (microseconds)
+    FaultUserDropOut,     // user, count
+    FaultUserDisconnect,  // user
+    FaultUserOff,         // user
     Shutdown,
 };
 

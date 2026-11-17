@@ -73,8 +73,8 @@ TEST_CASE(active_bitmap, repeated_set_and_clear_change_nothing) {
 }
 
 TEST_CASE(active_bitmap, randomized_searches_match_a_linear_scan) {
-    for (const std::size_t size : {std::size_t{1}, std::size_t{63}, std::size_t{64}, std::size_t{65},
-                                   std::size_t{4096}, std::size_t{4097}, std::size_t{20000}}) {
+    for (const std::size_t size : {std::size_t{1}, std::size_t{63}, std::size_t{64}, std::size_t{65}, std::size_t{4096},
+                                   std::size_t{4097}, std::size_t{20000}}) {
         ActiveBitmap bitmap(size);
         std::vector<bool> reference(size, false);
         std::mt19937_64 random(size);

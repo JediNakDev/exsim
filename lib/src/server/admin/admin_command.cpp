@@ -43,12 +43,18 @@ bool to_uint(std::string_view v, T& out) noexcept {
 }
 
 bool to_phase(std::string_view v, Phase& p) noexcept {
-    if (iequals(v, "closed")) p = Phase::Closed;
-    else if (iequals(v, "pre_open")) p = Phase::PreOpen;
-    else if (iequals(v, "continuous")) p = Phase::Continuous;
-    else if (iequals(v, "halted")) p = Phase::Halted;
-    else if (iequals(v, "pre_close")) p = Phase::PreClose;
-    else return false;
+    if (iequals(v, "closed"))
+        p = Phase::Closed;
+    else if (iequals(v, "pre_open"))
+        p = Phase::PreOpen;
+    else if (iequals(v, "continuous"))
+        p = Phase::Continuous;
+    else if (iequals(v, "halted"))
+        p = Phase::Halted;
+    else if (iequals(v, "pre_close"))
+        p = Phase::PreClose;
+    else
+        return false;
     return true;
 }
 
@@ -129,24 +135,37 @@ bool parse_admin(std::string_view line, AdminCommand& out, std::string& error) {
                 std::array<bool, 5> supplied_keys{};
                 for (std::size_t i = 3; i < t.size(); ++i) {
                     const std::size_t eq = t[i].find('=');
-                    if (eq == std::string_view::npos) return fail("expected key=value, got '" + std::string(t[i]) + "'");
+                    if (eq == std::string_view::npos)
+                        return fail("expected key=value, got '" + std::string(t[i]) + "'");
                     const std::string_view k = t[i].substr(0, eq), v = t[i].substr(eq + 1);
                     std::size_t key_index = 0;
-                    if (iequals(k, "drop")) key_index = 0;
-                    else if (iequals(k, "dup")) key_index = 1;
-                    else if (iequals(k, "reorder")) key_index = 2;
-                    else if (iequals(k, "delay")) key_index = 3;
-                    else if (iequals(k, "seed")) key_index = 4;
-                    else return fail("unknown rate key '" + std::string(k) + "'");
+                    if (iequals(k, "drop"))
+                        key_index = 0;
+                    else if (iequals(k, "dup"))
+                        key_index = 1;
+                    else if (iequals(k, "reorder"))
+                        key_index = 2;
+                    else if (iequals(k, "delay"))
+                        key_index = 3;
+                    else if (iequals(k, "seed"))
+                        key_index = 4;
+                    else
+                        return fail("unknown rate key '" + std::string(k) + "'");
                     if (supplied_keys[key_index]) return fail("duplicate rate key '" + std::string(k) + "'");
                     supplied_keys[key_index] = true;
                     bool ok = false;
-                    if (iequals(k, "drop")) ok = to_uint(v, c.rate.drop_ppm) && c.rate.drop_ppm <= 1'000'000;
-                    else if (iequals(k, "dup")) ok = to_uint(v, c.rate.duplicate_ppm) && c.rate.duplicate_ppm <= 1'000'000;
-                    else if (iequals(k, "reorder")) ok = to_uint(v, c.rate.reorder_ppm) && c.rate.reorder_ppm <= 1'000'000;
-                    else if (iequals(k, "delay")) ok = to_uint(v, c.rate.reorder_delay) && c.rate.reorder_delay > 0;
-                    else if (iequals(k, "seed")) ok = to_uint(v, c.rate.seed);
-                    else return fail("unknown rate key '" + std::string(k) + "'");
+                    if (iequals(k, "drop"))
+                        ok = to_uint(v, c.rate.drop_ppm) && c.rate.drop_ppm <= 1'000'000;
+                    else if (iequals(k, "dup"))
+                        ok = to_uint(v, c.rate.duplicate_ppm) && c.rate.duplicate_ppm <= 1'000'000;
+                    else if (iequals(k, "reorder"))
+                        ok = to_uint(v, c.rate.reorder_ppm) && c.rate.reorder_ppm <= 1'000'000;
+                    else if (iequals(k, "delay"))
+                        ok = to_uint(v, c.rate.reorder_delay) && c.rate.reorder_delay > 0;
+                    else if (iequals(k, "seed"))
+                        ok = to_uint(v, c.rate.seed);
+                    else
+                        return fail("unknown rate key '" + std::string(k) + "'");
                     if (!ok) return fail("invalid value for '" + std::string(k) + "' (ppm must be 0..1000000)");
                 }
             } else {

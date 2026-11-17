@@ -34,7 +34,8 @@ public:
         const bool writer_done =
             state_->completion.wait_for(lock, std::chrono::milliseconds(100), [&] { return state_->done; });
         lock.unlock();
-        if (writer_done) worker_.join();
+        if (writer_done)
+            worker_.join();
         else {
             abort();
             // The worker captures the state; it never accesses the runtime.

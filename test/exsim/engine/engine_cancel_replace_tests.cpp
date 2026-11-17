@@ -37,9 +37,9 @@ void check_replace_rejection(const EngineFixture& fixture, const ReplaceOrder& c
 TEST_CASE(engine_cancel, unknown_order_rejection_fields) {
     EngineFixture fixture;
     fixture.apply(limit_order(kAliceSession, 1, Side::BUY, 100, 10));
-    for (const CancelOrder& command : {cancel_request(kAliceSession, 2, 55), cancel_request(kBobSession, 1, 56),
-                                       cancel_request(0, 1, 57), cancel_request(kAliceSession, 0, 58),
-                                       cancel_request(kAliceSession, kMaxClOrdId + 1, 59)}) {
+    for (const CancelOrder& command :
+         {cancel_request(kAliceSession, 2, 55), cancel_request(kBobSession, 1, 56), cancel_request(0, 1, 57),
+          cancel_request(kAliceSession, 0, 58), cancel_request(kAliceSession, kMaxClOrdId + 1, 59)}) {
         fixture.apply(command);
         const Event& event = fixture.only_event();
         REQUIRE_EQ(event.type, EventType::Rejected);
@@ -289,8 +289,8 @@ TEST_CASE(engine_replace, priority_lost_on_price_change_quantity_increase_or_for
         Quantity new_qty;
         bool force;
     };
-    for (const LossCase& loss : {LossCase{90, 10, false}, LossCase{100, 11, false}, LossCase{100, 10, true},
-                                 LossCase{100, 5, true}}) {
+    for (const LossCase& loss :
+         {LossCase{90, 10, false}, LossCase{100, 11, false}, LossCase{100, 10, true}, LossCase{100, 5, true}}) {
         EngineFixture fixture;
         fixture.apply(limit_order(kAliceSession, 1, Side::BUY, 100, 10));
         fixture.apply(limit_order(kBobSession, 1, Side::BUY, 100, 10));
@@ -324,8 +324,8 @@ TEST_CASE(engine_replace, priority_lost_on_price_change_quantity_increase_or_for
 TEST_CASE(engine_replace, priority_lost_order_matches_as_aggressor_in_continuous_only) {
     {
         EngineFixture fixture;
-        fixture.apply(with_owner(limit_order(kAliceSession, 1, Side::BUY, 100, 10), kAliceFirm,
-                                 StpMode::CancelResting));
+        fixture.apply(
+            with_owner(limit_order(kAliceSession, 1, Side::BUY, 100, 10), kAliceFirm, StpMode::CancelResting));
         fixture.apply(with_owner(limit_order(kAliceSession, 2, Side::SELL, 120, 3), kAliceFirm));
         fixture.apply(with_owner(limit_order(kBobSession, 1, Side::SELL, 120, 4), kBobFirm));
         fixture.apply(limit_order(kCarolSession, 1, Side::SELL, 100, 2));  // order 1: cum 2, leaves 8
@@ -387,8 +387,8 @@ TEST_CASE(engine_replace, amendment_chain_conserves_quantity) {
             if (event.type == EventType::Canceled && event.canceled.session == kAliceSession)
                 canceled += event.canceled.canceled_qty;
             if (event.type == EventType::Replaced) {
-                replacement_deltas += static_cast<std::int64_t>(event.replaced.qty) -
-                                      static_cast<std::int64_t>(previous_total);
+                replacement_deltas +=
+                    static_cast<std::int64_t>(event.replaced.qty) - static_cast<std::int64_t>(previous_total);
                 previous_total = event.replaced.qty;
             }
         }

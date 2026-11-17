@@ -21,8 +21,7 @@ void check_fill_leg(const FillLeg& leg, OrderId order_id, ClOrdId token, Session
 
 TEST_CASE(engine_matching, accepted_and_rested_echo_every_field) {
     EngineFixture fixture;
-    NewOrder command = with_owner(limit_order(kAliceSession, 42, Side::SELL, 130, 25), kAliceFirm,
-                                  StpMode::CancelBoth);
+    NewOrder command = with_owner(limit_order(kAliceSession, 42, Side::SELL, 130, 25), kAliceFirm, StpMode::CancelBoth);
     command.tif = TimeInForce::GTC;
     command.ts = 987654321;
     fixture.apply(command);
@@ -67,10 +66,10 @@ TEST_CASE(engine_matching, accepted_and_rested_echo_every_field) {
 
 TEST_CASE(engine_matching, buy_sweep_uses_price_then_time_priority) {
     EngineFixture fixture;
-    fixture.apply(with_owner(limit_order(kBobSession, 1, Side::SELL, 120, 10), kBobFirm));   // id 1
-    fixture.apply(with_owner(limit_order(kBobSession, 2, Side::SELL, 110, 4), kBobFirm));    // id 2
-    fixture.apply(with_owner(limit_order(kCarolSession, 3, Side::SELL, 110, 6), 0));         // id 3
-    fixture.apply(with_owner(limit_order(kBobSession, 4, Side::SELL, 140, 5), kBobFirm));    // id 4
+    fixture.apply(with_owner(limit_order(kBobSession, 1, Side::SELL, 120, 10), kBobFirm));  // id 1
+    fixture.apply(with_owner(limit_order(kBobSession, 2, Side::SELL, 110, 4), kBobFirm));   // id 2
+    fixture.apply(with_owner(limit_order(kCarolSession, 3, Side::SELL, 110, 6), 0));        // id 3
+    fixture.apply(with_owner(limit_order(kBobSession, 4, Side::SELL, 140, 5), kBobFirm));   // id 4
 
     NewOrder taker = with_owner(limit_order(kAliceSession, 9, Side::BUY, 130, 25), kAliceFirm);
     taker.ts = 5000;
@@ -264,8 +263,9 @@ TEST_CASE(engine_matching, fok_precheck_skips_or_stops_at_self_matches) {
         // CancelResting skips the own order: 10 other shares are available.
         EngineFixture fixture;
         build_book(fixture);
-        NewOrder fok = with_tif(with_owner(limit_order(kAliceSession, 9, Side::BUY, 110, 10), kAliceFirm,
-                                           StpMode::CancelResting), TimeInForce::FOK);
+        NewOrder fok =
+            with_tif(with_owner(limit_order(kAliceSession, 9, Side::BUY, 110, 10), kAliceFirm, StpMode::CancelResting),
+                     TimeInForce::FOK);
         fixture.apply(fok);
         REQUIRE_EQ(fixture.events.size(), std::size_t{4});
         CHECK_EQ(fixture.events[1].canceled.reason, CancelReason::SelfTradePrevention);
@@ -280,8 +280,8 @@ TEST_CASE(engine_matching, fok_precheck_skips_or_stops_at_self_matches) {
         // The walk stops at the own head order: nothing is available.
         EngineFixture fixture;
         build_book(fixture);
-        NewOrder fok = with_tif(with_owner(limit_order(kAliceSession, 9, Side::BUY, 110, 1), kAliceFirm,
-                                           stopping_mode), TimeInForce::FOK);
+        NewOrder fok = with_tif(with_owner(limit_order(kAliceSession, 9, Side::BUY, 110, 1), kAliceFirm, stopping_mode),
+                                TimeInForce::FOK);
         fixture.apply(fok);
         REQUIRE_EQ(fixture.events.size(), std::size_t{2});
         CHECK_EQ(fixture.events[1].canceled.reason, CancelReason::FillOrKill);
@@ -292,8 +292,9 @@ TEST_CASE(engine_matching, fok_precheck_skips_or_stops_at_self_matches) {
         EngineFixture fixture;
         fixture.apply(with_owner(limit_order(kBobSession, 1, Side::SELL, 100, 5), kBobFirm));
         fixture.apply(with_owner(limit_order(kAliceSession, 1, Side::SELL, 100, 5), kAliceFirm));
-        NewOrder fok = with_tif(with_owner(limit_order(kAliceSession, 9, Side::BUY, 110, 5), kAliceFirm,
-                                           StpMode::CancelAggressor), TimeInForce::FOK);
+        NewOrder fok =
+            with_tif(with_owner(limit_order(kAliceSession, 9, Side::BUY, 110, 5), kAliceFirm, StpMode::CancelAggressor),
+                     TimeInForce::FOK);
         fixture.apply(fok);
         REQUIRE_EQ(fixture.events.size(), std::size_t{2});
         CHECK_EQ(fixture.events[1].fill.qty, Quantity{5});
@@ -302,8 +303,8 @@ TEST_CASE(engine_matching, fok_precheck_skips_or_stops_at_self_matches) {
         // Without an owner there is no self-match, whatever the STP mode.
         EngineFixture fixture;
         build_book(fixture);
-        NewOrder fok = with_tif(with_owner(limit_order(kAliceSession, 9, Side::BUY, 110, 15), 0,
-                                           StpMode::CancelBoth), TimeInForce::FOK);
+        NewOrder fok = with_tif(with_owner(limit_order(kAliceSession, 9, Side::BUY, 110, 15), 0, StpMode::CancelBoth),
+                                TimeInForce::FOK);
         fixture.apply(fok);
         REQUIRE_EQ(fixture.events.size(), std::size_t{4});
         CHECK_EQ(fixture.events[1].fill.sell.order_id, OrderId{1});
@@ -320,8 +321,7 @@ TEST_CASE(engine_matching, stp_modes_follow_the_aggressor) {
     {
         EngineFixture fixture;
         book_with_own_head(fixture);
-        fixture.apply(with_owner(limit_order(kAliceSession, 9, Side::BUY, 110, 6), kAliceFirm,
-                                 StpMode::CancelResting));
+        fixture.apply(with_owner(limit_order(kAliceSession, 9, Side::BUY, 110, 6), kAliceFirm, StpMode::CancelResting));
         REQUIRE_EQ(fixture.events.size(), std::size_t{4});
         CHECK_EQ(fixture.events[1].fill.qty, Quantity{3});
         const Event& stp = fixture.events[2];
@@ -339,8 +339,8 @@ TEST_CASE(engine_matching, stp_modes_follow_the_aggressor) {
     {
         EngineFixture fixture;
         book_with_own_head(fixture);
-        fixture.apply(with_owner(limit_order(kAliceSession, 9, Side::BUY, 110, 6), kAliceFirm,
-                                 StpMode::CancelAggressor));
+        fixture.apply(
+            with_owner(limit_order(kAliceSession, 9, Side::BUY, 110, 6), kAliceFirm, StpMode::CancelAggressor));
         REQUIRE_EQ(fixture.events.size(), std::size_t{3});
         const Event& stp = fixture.events[2];
         CHECK_EQ(stp.canceled.order_id, OrderId{4});
@@ -354,8 +354,7 @@ TEST_CASE(engine_matching, stp_modes_follow_the_aggressor) {
     {
         EngineFixture fixture;
         book_with_own_head(fixture);
-        fixture.apply(with_owner(limit_order(kAliceSession, 9, Side::BUY, 110, 6), kAliceFirm,
-                                 StpMode::CancelBoth));
+        fixture.apply(with_owner(limit_order(kAliceSession, 9, Side::BUY, 110, 6), kAliceFirm, StpMode::CancelBoth));
         REQUIRE_EQ(fixture.events.size(), std::size_t{4});
         CHECK_EQ(fixture.events[2].canceled.order_id, OrderId{2});
         CHECK_EQ(fixture.events[2].canceled.was_resting, true);

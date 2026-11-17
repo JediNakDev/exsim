@@ -19,25 +19,25 @@ namespace exsim::itch_replay {
 class ReferenceBook {
 public:
     struct Order {
-        OrderId  id;
-        Price    price;
+        OrderId id;
+        Price price;
         Quantity quantity;
-        Side     side;
+        Side side;
     };
     struct Level {
-        Price    price;
+        Price price;
         std::uint64_t total_qty;
         std::size_t order_count;
     };
     struct Snapshot {
-        std::vector<Level> bids; // sorted high → low
-        std::vector<Level> asks; // sorted low  → high
+        std::vector<Level> bids;  // sorted high → low
+        std::vector<Level> asks;  // sorted low  → high
     };
 
     bool add(OrderId id, Side side, Price price, Quantity qty) {
         if (orders_.count(id)) return false;
         auto& ladder = (side == Side::BUY) ? bids_ : asks_;
-        auto& queue  = ladder[price];
+        auto& queue = ladder[price];
         queue.push_back({id, price, qty, side});
         auto it = std::prev(queue.end());
         orders_[id] = Loc{side, price, it};
@@ -95,8 +95,8 @@ public:
     }
 
     std::size_t live_orders() const noexcept { return orders_.size(); }
-    std::size_t bid_levels()  const noexcept { return bids_.size(); }
-    std::size_t ask_levels()  const noexcept { return asks_.size(); }
+    std::size_t bid_levels() const noexcept { return bids_.size(); }
+    std::size_t ask_levels() const noexcept { return asks_.size(); }
 
 private:
     struct Loc {
@@ -113,7 +113,7 @@ private:
 
     std::map<Price, std::list<Order>> bids_;
     std::map<Price, std::list<Order>> asks_;
-    std::unordered_map<OrderId, Loc>  orders_;
+    std::unordered_map<OrderId, Loc> orders_;
 };
 
 }  // namespace exsim::itch_replay

@@ -37,7 +37,7 @@ struct Symbol {
 // (max_price - min_price) / tick_size + 1 levels per side.
 struct InstrumentConfig {
     Symbol symbol;
-    Price tick_size = 100;              // $0.01
+    Price tick_size = 100;  // $0.01
     Quantity lot_size = 1;
     Quantity max_order_qty = 1'000'000;
     Price min_price = 100;              // inclusive, multiple of tick_size
@@ -46,19 +46,18 @@ struct InstrumentConfig {
     Phase initial_phase = Phase::Continuous;
     // CME identity is independent of the dense internal/ITCH instrument ID.
     std::int32_t cme_security_id = 0;
-    std::array<char, 20> cme_symbol{};  // NUL padded; empty uses symbol
+    std::array<char, 20> cme_symbol{};           // NUL padded; empty uses symbol
     std::uint32_t cme_maturity_date = 20991231;  // YYYYMMDD, synthetic future by default
     std::uint32_t cme_contract_size = 1;         // index points per contract
 };
 
 // Layout-independent validation; engines also check their allocation byte sizes.
 [[nodiscard]] inline bool valid_instrument_config(const InstrumentConfig& c) noexcept {
-    if (c.tick_size <= 0 || c.lot_size == 0 || c.max_order_qty < c.lot_size ||
-        c.min_price <= 0 || c.max_price < c.min_price ||
-        c.min_price % c.tick_size != 0 || c.max_price % c.tick_size != 0 ||
-        c.reference_price < c.min_price || c.reference_price > c.max_price ||
-        c.reference_price % c.tick_size != 0 ||
-        static_cast<unsigned>(c.initial_phase) > static_cast<unsigned>(Phase::PreClose)) return false;
+    if (c.tick_size <= 0 || c.lot_size == 0 || c.max_order_qty < c.lot_size || c.min_price <= 0 ||
+        c.max_price < c.min_price || c.min_price % c.tick_size != 0 || c.max_price % c.tick_size != 0 ||
+        c.reference_price < c.min_price || c.reference_price > c.max_price || c.reference_price % c.tick_size != 0 ||
+        static_cast<unsigned>(c.initial_phase) > static_cast<unsigned>(Phase::PreClose))
+        return false;
     return true;
 }
 

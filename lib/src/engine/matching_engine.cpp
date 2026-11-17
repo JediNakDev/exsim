@@ -33,9 +33,9 @@ using engine::FixedArray;
 using engine::InstrumentBook;
 using engine::kNilOrder;
 using engine::make_session_token;
-using engine::OrderMetadata;
 using engine::OrderIndex;
 using engine::OrderListEnds;
+using engine::OrderMetadata;
 using engine::session_of;
 using exsim::book::kNoAskTick;
 using exsim::book::kNoBidTick;
@@ -58,7 +58,8 @@ template <typename Enum>
 // Initialize mandatory active fields; padding is never compared or serialized.
 [[nodiscard]] inline Event blank_event(EventType type, InstrumentId instrument, Timestamp ts) noexcept {
     switch (type) {
-#define ACTIVE(tag, member) case EventType::tag: return Event{type, instrument, ts, {.member = {}}};
+#define ACTIVE(tag, member) \
+    case EventType::tag: return Event{type, instrument, ts, {.member = {}}};
         ACTIVE(Accepted, accepted)
         ACTIVE(Rejected, rejected)
         ACTIVE(Rested, rested)
@@ -83,7 +84,7 @@ template <typename Enum>
 }
 
 inline void append_event(EventBuffer& out, const Event& event) noexcept {
-    if (!out.push(event)) std::abort(); // preflight failure is an implementation defect
+    if (!out.push(event)) std::abort();  // preflight failure is an implementation defect
 }
 
 inline void set_fill_leg(FillLeg& leg, OrderId order_id, ClOrdId cl_ord_id, SessionId session, OwnerId owner,
@@ -131,12 +132,12 @@ struct MatchingEngine::Impl {
     exsim::book::OrderBookStorage order_storage;
     std::vector<InstrumentBook> books;  // books[id - 1]; reserved up front so pointers stay stable
     exsim::util::FlatHashMap<InstrumentId> instrument_by_symbol;  // key: symbol_key(symbol)
-    FixedArray<OrderMetadata> metadata;  // per order; slot 0 is unused
+    FixedArray<OrderMetadata> metadata;                           // per order; slot 0 is unused
     OrderIndex free_head = kNilOrder;
     std::uint32_t live_count = 0;
     exsim::util::FlatHashMap<std::uint32_t> order_by_session_token;
-    FixedArray<OrderListEnds> orders_by_session;         // per SessionId, ascending OrderId
-    FixedArray<OrderListEnds> orders_by_instrument;      // per InstrumentId, ascending OrderId
+    FixedArray<OrderListEnds> orders_by_session;     // per SessionId, ascending OrderId
+    FixedArray<OrderListEnds> orders_by_instrument;  // per InstrumentId, ascending OrderId
     OrderId next_order_id = 1;
     MatchId next_match_id = 1;
 
@@ -419,7 +420,8 @@ void MatchingEngine::Impl::rest(InstrumentBook& book, const IncomingOrder& order
 // Matching
 // ===========================================================================
 
-bool MatchingEngine::Impl::fill_or_kill_can_fill(const InstrumentBook& book, const IncomingOrder& order) const noexcept {
+bool MatchingEngine::Impl::fill_or_kill_can_fill(const InstrumentBook& book,
+                                                 const IncomingOrder& order) const noexcept {
     const Side resting_side = opposite(order.side);
     const bool stp_active = order.stp != StpMode::None && order.owner != 0;
     const std::uint64_t needed = order.leaves_qty;
@@ -448,8 +450,8 @@ bool MatchingEngine::Impl::fill_or_kill_can_fill(const InstrumentBook& book, con
             }
         }
         const std::optional<std::int32_t> next_tick = order.side == Side::BUY
-            ? book.order_book.next_tick(resting_side, tick + 1, true)
-            : book.order_book.next_tick(resting_side, tick - 1, false);
+                                                          ? book.order_book.next_tick(resting_side, tick + 1, true)
+                                                          : book.order_book.next_tick(resting_side, tick - 1, false);
         if (!next_tick) {
             return false;
         }
@@ -561,8 +563,7 @@ void MatchingEngine::Impl::on_new_order(const NewOrder& cmd, EventBuffer& out) {
     const bool is_market = cmd.type == OrdType::Market;
     const bool is_immediate = cmd.tif == TimeInForce::IOC || cmd.tif == TimeInForce::FOK;
     if (raw_value(cmd.side) > raw_value(Side::SELL) || raw_value(cmd.type) > raw_value(OrdType::Market) ||
-        raw_value(cmd.tif) > raw_value(TimeInForce::FOK) ||
-        raw_value(cmd.stp) > raw_value(StpMode::CancelBoth) ||
+        raw_value(cmd.tif) > raw_value(TimeInForce::FOK) || raw_value(cmd.stp) > raw_value(StpMode::CancelBoth) ||
         (cmd.post_only && (is_market || is_immediate))) [[unlikely]] {
         return reject_new_order(cmd, RejectReason::InvalidField, out);
     }
@@ -587,10 +588,8 @@ void MatchingEngine::Impl::on_new_order(const NewOrder& cmd, EventBuffer& out) {
                 return reject_new_order(cmd, RejectReason::NotAllowedInPhase, out);
             }
             break;
-        case Phase::Closed:
-            return reject_new_order(cmd, RejectReason::MarketClosed, out);
-        case Phase::Halted:
-            return reject_new_order(cmd, RejectReason::InstrumentHalted, out);
+        case Phase::Closed: return reject_new_order(cmd, RejectReason::MarketClosed, out);
+        case Phase::Halted: return reject_new_order(cmd, RejectReason::InstrumentHalted, out);
     }
     if (live_count >= max_orders) [[unlikely]] {
         return reject_new_order(cmd, RejectReason::CapacityExceeded, out);
@@ -631,8 +630,8 @@ void MatchingEngine::Impl::on_cancel(const CancelOrder& cmd, EventBuffer& out) {
         OrderMetadata& order_metadata = metadata[index];
         Order& resting = *order_metadata.order;
         const Quantity leaves_qty = resting.remaining_quantity;
-        const Quantity target = cmd.reduce_to_total_qty > order_metadata.cum_qty
-            ? cmd.reduce_to_total_qty - order_metadata.cum_qty : 0;
+        const Quantity target =
+            cmd.reduce_to_total_qty > order_metadata.cum_qty ? cmd.reduce_to_total_qty - order_metadata.cum_qty : 0;
         if (target >= leaves_qty) return;
         if (target != 0) {
             Event event = blank_event(EventType::Canceled, book.id, cmd.ts);
@@ -677,8 +676,8 @@ void MatchingEngine::Impl::on_replace(const ReplaceOrder& cmd, EventBuffer& out)
     }
     const ClOrdId new_cl_ord_id = cmd.cl_ord_id != 0 ? cmd.cl_ord_id : cmd.orig_cl_ord_id;
     const bool token_changes = new_cl_ord_id != cmd.orig_cl_ord_id;
-    if (token_changes &&
-        order_by_session_token.find(make_session_token(cmd.session, new_cl_ord_id)) != nullptr) [[unlikely]] {
+    if (token_changes && order_by_session_token.find(make_session_token(cmd.session, new_cl_ord_id)) != nullptr)
+        [[unlikely]] {
         return reject_replace(cmd, RejectReason::DuplicateClOrdId, old_order_id, instrument, out);
     }
     if (!book.is_valid_quantity(cmd.qty)) [[unlikely]] {
@@ -695,8 +694,8 @@ void MatchingEngine::Impl::on_replace(const ReplaceOrder& cmd, EventBuffer& out)
         return reject_replace(cmd, RejectReason::InstrumentHalted, old_order_id, instrument, out);
     }
     const Side side = resting.side;
-    if (order_metadata.post_only && book.phase == Phase::Continuous &&
-        book.crosses_opposite_best(side, new_tick)) [[unlikely]] {
+    if (order_metadata.post_only && book.phase == Phase::Continuous && book.crosses_opposite_best(side, new_tick))
+        [[unlikely]] {
         return reject_replace(cmd, RejectReason::PostOnlyWouldCross, old_order_id, instrument, out);
     }
 
@@ -818,8 +817,7 @@ UncrossPlan MatchingEngine::Impl::plan_uncross(const InstrumentBook& book) const
     };
     // Walk occupied prices through the book's bitmap hierarchy.
     std::uint64_t buy_qty_at_or_above = 0;
-    for (auto tick = order_book.next_tick(Side::BUY, low_tick, true);
-         tick && *tick <= high_tick;
+    for (auto tick = order_book.next_tick(Side::BUY, low_tick, true); tick && *tick <= high_tick;
          tick = order_book.next_tick(Side::BUY, *tick + 1, true)) {
         buy_qty_at_or_above += volume_at(Side::BUY, *tick);
     }
@@ -1039,24 +1037,29 @@ InstrumentId MatchingEngine::add_instrument(const InstrumentConfig& config) {
 // This avoids reserving max_orders worth of output for an empty book.
 HandleResult MatchingEngine::handle(const NewOrder& cmd, EventBuffer& out) {
     if (!out.can_append(std::size_t{impl_->live_count} + 3)) return HandleResult::InsufficientOutput;
-    impl_->on_new_order(cmd, out); return HandleResult::Applied;
+    impl_->on_new_order(cmd, out);
+    return HandleResult::Applied;
 }
 HandleResult MatchingEngine::handle(const CancelOrder& cmd, EventBuffer& out) {
     if (!out.can_append(1)) return HandleResult::InsufficientOutput;
-    impl_->on_cancel(cmd, out); return HandleResult::Applied;
+    impl_->on_cancel(cmd, out);
+    return HandleResult::Applied;
 }
 HandleResult MatchingEngine::handle(const ReplaceOrder& cmd, EventBuffer& out) {
     if (!out.can_append(std::size_t{impl_->live_count} + 3)) return HandleResult::InsufficientOutput;
-    impl_->on_replace(cmd, out); return HandleResult::Applied;
+    impl_->on_replace(cmd, out);
+    return HandleResult::Applied;
 }
 HandleResult MatchingEngine::handle(const MassCancel& cmd, EventBuffer& out) {
     if (!out.can_append(std::size_t{impl_->live_count} + 1)) return HandleResult::InsufficientOutput;
-    impl_->on_mass_cancel(cmd, out); return HandleResult::Applied;
+    impl_->on_mass_cancel(cmd, out);
+    return HandleResult::Applied;
 }
 HandleResult MatchingEngine::handle(const SetPhase& cmd, EventBuffer& out) {
     if (!out.can_append(2 * std::size_t{impl_->live_count} + 2 * impl_->books.size() + 1))
         return HandleResult::InsufficientOutput;
-    impl_->on_set_phase(cmd, out); return HandleResult::Applied;
+    impl_->on_set_phase(cmd, out);
+    return HandleResult::Applied;
 }
 HandleResult MatchingEngine::handle(const Command& cmd, EventBuffer& out) {
     switch (cmd.type) {
@@ -1127,8 +1130,8 @@ std::size_t MatchingEngine::depth(InstrumentId id, Side side, LevelInfo* out, st
         out[written].order_count = level.order_count;
         ++written;
         const std::optional<std::int32_t> next_tick = side == Side::BUY
-            ? book->order_book.next_tick(side, tick - 1, false)
-            : book->order_book.next_tick(side, tick + 1, true);
+                                                          ? book->order_book.next_tick(side, tick - 1, false)
+                                                          : book->order_book.next_tick(side, tick + 1, true);
         if (!next_tick) {
             break;
         }

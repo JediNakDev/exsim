@@ -160,9 +160,7 @@ public:
     exsim::InstrumentId find_instrument(const exsim::Symbol& symbol) const noexcept {
         return engine_.find_instrument(symbol);
     }
-    const exsim::InstrumentConfig* instrument(exsim::InstrumentId id) const noexcept {
-        return engine_.instrument(id);
-    }
+    const exsim::InstrumentConfig* instrument(exsim::InstrumentId id) const noexcept { return engine_.instrument(id); }
     void submit(const exsim::Command& command) noexcept {
         events_.clear();
         if (engine_.handle(command, events_) != exsim::HandleResult::Applied) {
@@ -207,8 +205,7 @@ public:
                     if (command.mass_cancel.session == session && !command.mass_cancel.cancel_on_disconnect)
                         result.push_back(command);
                     break;
-                default:
-                    break;
+                default: break;
             }
         }
         return result;
@@ -252,7 +249,10 @@ private:
     for (char& character : body) {
         if (character == '|') character = '\001';
     }
-    std::string frame = "8=FIX.4.4\001" "9=" + std::to_string(body.size()) + "\001" + body;
+    std::string frame =
+        "8=FIX.4.4\001"
+        "9=" +
+        std::to_string(body.size()) + "\001" + body;
     unsigned checksum = 0;
     for (char character : frame) checksum += static_cast<unsigned char>(character);
     char trailer[8];
@@ -319,9 +319,9 @@ struct ParsedFixMessage {
 [[nodiscard]] inline std::string client_message(std::string_view type, std::uint64_t sequence, std::string_view fields,
                                                 std::string_view sender = "CLIENT1",
                                                 std::string_view extra_header = {}) {
-    std::string text = "35=" + std::string(type) + "|49=" + std::string(sender) + "|56=EXSIM|34=" +
-                       std::to_string(sequence) + "|" + std::string(extra_header) + "52=" +
-                       std::string(kStartTimestamp) + "|" + std::string(fields);
+    std::string text = "35=" + std::string(type) + "|49=" + std::string(sender) +
+                       "|56=EXSIM|34=" + std::to_string(sequence) + "|" + std::string(extra_header) +
+                       "52=" + std::string(kStartTimestamp) + "|" + std::string(fields);
     return fix_frame(text);
 }
 
@@ -357,10 +357,11 @@ public:
     void send(std::string_view type, std::string_view fields) {
         feed(client_message(type, next_sequence++, fields, sender_));
     }
-    void send_at(std::string_view type, std::uint64_t sequence, std::string_view fields, bool possible_duplicate = false) {
-        feed(client_message(type, sequence, fields, sender_,
-                            possible_duplicate ? std::string_view("43=Y|122=20261103-09:29:59.000|")
-                                               : std::string_view{}));
+    void send_at(std::string_view type, std::uint64_t sequence, std::string_view fields,
+                 bool possible_duplicate = false) {
+        feed(client_message(
+            type, sequence, fields, sender_,
+            possible_duplicate ? std::string_view("43=Y|122=20261103-09:29:59.000|") : std::string_view{}));
     }
 
     std::vector<ParsedFixMessage> drain() {
@@ -422,7 +423,9 @@ public:
 
     FixClientWire(FixTestExchange& exchange, Handler& handler, const fix::FixClientSettings& client_settings,
                   const fix::FixSessionSettings& exchange_settings = {})
-        : exchange_(exchange), connection_(exchange.directory(), exchange_settings), client_(handler, client_settings) {}
+        : exchange_(exchange),
+          connection_(exchange.directory(), exchange_settings),
+          client_(handler, client_settings) {}
     // A bound FixConnection must be released before it is destroyed.
     ~FixClientWire() { connection_.on_disconnected(exchange_); }
     FixClientWire(const FixClientWire&) = delete;
@@ -446,7 +449,8 @@ public:
             }
             const std::string_view to_client = exchange_to_client_.bytes();
             if (!to_client.empty()) {
-                const std::size_t consumed = client_.on_data({to_client.data(), to_client.size()}, exchange_.fix_time());
+                const std::size_t consumed =
+                    client_.on_data({to_client.data(), to_client.size()}, exchange_.fix_time());
                 exchange_to_client_.consume(consumed);
                 delivered += consumed;
             }
@@ -517,8 +521,8 @@ private:
 }
 
 [[nodiscard]] inline fix44::OrderCancelRequest make_cancel_request(std::string_view original,
-                                                                   std::string_view client_order_id,
-                                                                   exsim::Side side, std::string_view symbol = "AAPL") {
+                                                                   std::string_view client_order_id, exsim::Side side,
+                                                                   std::string_view symbol = "AAPL") {
     fix44::OrderCancelRequest request;
     request.original_client_order_id.assign(original);
     request.client_order_id.assign(client_order_id);
@@ -574,8 +578,7 @@ private:
             case exsim::CommandType::MassCancel:
                 result.push_back("q:" + std::string(tokens.token(command.mass_cancel.cl_ord_id)));
                 break;
-            default:
-                break;
+            default: break;
         }
     }
     return result;
@@ -588,8 +591,8 @@ private:
 }
 
 // Expected exchange-to-client frame: header with SendingTime at the session start.
-[[nodiscard]] inline std::string exchange_message(std::string_view type, std::uint64_t sequence, std::string_view fields,
-                                                  std::string_view target = "CLIENT1") {
+[[nodiscard]] inline std::string exchange_message(std::string_view type, std::uint64_t sequence,
+                                                  std::string_view fields, std::string_view target = "CLIENT1") {
     return fix_frame("35=" + std::string(type) + "|49=EXSIM|56=" + std::string(target) + "|34=" +
                      std::to_string(sequence) + "|52=" + std::string(kStartTimestamp) + "|" + std::string(fields));
 }

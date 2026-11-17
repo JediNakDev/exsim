@@ -558,11 +558,11 @@ private:
 template <class Sink>
 class IlinkUsers {
 public:
-    explicit IlinkUsers(const server::ServerConfig& config)
-        : instrument_by_security_id_(config.instruments.size()) {
+    explicit IlinkUsers(const server::ServerConfig& config) : instrument_by_security_id_(config.instruments.size()) {
         for (std::size_t index = 0; index < config.instruments.size(); ++index) {
             const auto instrument = static_cast<InstrumentId>(index + 1);
-            (void)instrument_by_security_id_.insert(security_id_key(config.instruments[index].cme_security_id), instrument);
+            (void)instrument_by_security_id_.insert(security_id_key(config.instruments[index].cme_security_id),
+                                                    instrument);
         }
         for (const auto& user : config.users) {
             if (user.protocol != server::Protocol::Ilink3) continue;

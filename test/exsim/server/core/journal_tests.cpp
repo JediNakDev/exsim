@@ -162,8 +162,7 @@ TEST_CASE(server_core_journal, replay_reproduces_every_dispatched_event) {
 
 TEST_CASE(server_core_journal, refused_commands_are_not_journaled) {
     const TempFile journal{temp_journal_path("refused")};
-    RecordingHarness h(parse_test_config("[exchange]\ntrading_day_start = 00:00:02\n" +
-                                         journal_section(journal.path)));
+    RecordingHarness h(parse_test_config("[exchange]\ntrading_day_start = 00:00:02\n" + journal_section(journal.path)));
     h.clock.day = kSecond;
     CHECK_EQ(h.core.submit(limit_order(1, 1, kAapl, Side::BUY, 1'000'000, 10)), SubmitResult::OutsideTradingDay);
     h.clock.day = 3 * kSecond;

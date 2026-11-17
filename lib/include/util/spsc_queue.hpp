@@ -53,9 +53,7 @@ public:
     }
 
 private:
-    static constexpr std::size_t increment(std::size_t idx) noexcept {
-        return (idx + 1) & (Capacity - 1);
-    }
+    static constexpr std::size_t increment(std::size_t idx) noexcept { return (idx + 1) & (Capacity - 1); }
 
     // Consumer-owned line.
     alignas(std::hardware_destructive_interference_size) std::atomic<std::size_t> head_{0};

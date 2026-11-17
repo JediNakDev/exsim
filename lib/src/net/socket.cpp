@@ -9,9 +9,7 @@
 
 namespace exsim::net {
 namespace {
-ErrorCode system_call_error(int return_code) noexcept {
-    return return_code < 0 ? errno : 0;
-}
+ErrorCode system_call_error(int return_code) noexcept { return return_code < 0 ? errno : 0; }
 sockaddr_in socket_address_from_endpoint(Ipv4Endpoint endpoint_value) noexcept {
     sockaddr_in socket_address{};
     socket_address.sin_family = AF_INET;
@@ -29,9 +27,7 @@ ErrorCode set_socket_option(int fd, int level, int name, int value) noexcept {
 // Linux sets non-blocking and close-on-exec inside socket() and accept4(), and
 // has no SO_NOSIGPIPE (every send passes MSG_NOSIGNAL), so nothing is left to configure.
 constexpr int kSocketFlags = SOCK_NONBLOCK | SOCK_CLOEXEC;
-ErrorCode configure_socket(int) noexcept {
-    return 0;
-}
+ErrorCode configure_socket(int) noexcept { return 0; }
 #else
 constexpr int kSocketFlags = 0;
 ErrorCode configure_socket(int fd) noexcept {
@@ -88,12 +84,8 @@ std::size_t format_ipv4_endpoint(Ipv4Endpoint endpoint_value, std::span<char> ou
     *cursor = '\0';
     return static_cast<std::size_t>(cursor - output.data());
 }
-ErrorCode open_tcp_socket(Socket& output) noexcept {
-    return open_socket(SOCK_STREAM, output);
-}
-ErrorCode open_udp_socket(Socket& output) noexcept {
-    return open_socket(SOCK_DGRAM, output);
-}
+ErrorCode open_tcp_socket(Socket& output) noexcept { return open_socket(SOCK_STREAM, output); }
+ErrorCode open_udp_socket(Socket& output) noexcept { return open_socket(SOCK_DGRAM, output); }
 ErrorCode set_non_blocking(int fd) noexcept {
     const int flags = fcntl(fd, F_GETFL);
     return flags < 0 ? errno : system_call_error(fcntl(fd, F_SETFL, flags | O_NONBLOCK));

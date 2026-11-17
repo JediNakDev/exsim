@@ -82,12 +82,12 @@ struct UserConfig {
 struct ExchangeSection {
     std::string name = "EXSIM";  // FIX TargetCompID clients must use
     std::string bind_address = "127.0.0.1";
-    std::uint16_t ouch_port = 0;   // 0 = OS-assigned (logged at startup)
+    std::uint16_t ouch_port = 0;  // 0 = OS-assigned (logged at startup)
     std::uint16_t fix_port = 0;
     std::uint16_t ilink_port = 0;
     std::uint32_t max_connections = 64;
     std::uint32_t heartbeat_interval_ms = 1000;  // SoupBinTCP server heartbeat
-    std::string soup_session = "EXSIM";            // SoupBinTCP session (<= 10 chars)
+    std::string soup_session = "EXSIM";          // SoupBinTCP session (<= 10 chars)
     // Commands are accepted only while their stamped timestamp (ns since
     // local midnight) is in [trading_day_start_ns, trading_day_end_ns).
     Timestamp trading_day_start_ns = 0;
@@ -100,7 +100,7 @@ struct MarketDataSection {
     MarketDataProtocol protocol = MarketDataProtocol::Itch50;
     std::string address = "127.0.0.1";  // unicast destination or multicast group
     std::uint16_t port = 0;
-    std::string interface_address;      // multicast egress interface; empty = default
+    std::string interface_address;  // multicast egress interface; empty = default
     std::uint8_t ttl = 1;
     bool loopback = true;
     std::uint16_t retransmit_port = 0;  // MoldUDP64 request server
@@ -126,8 +126,8 @@ struct MarketDataSection {
 // for an iLink user (two stores). Raise them for long or busy trading days.
 struct EngineSection {
     EngineConfig engine{};
-    std::uint32_t max_tokens_per_session = 1u << 16;          // client order IDs per day
-    std::size_t store_messages_per_session = 1u << 16;        // outbound messages kept for replay
+    std::uint32_t max_tokens_per_session = 1u << 16;             // client order IDs per day
+    std::size_t store_messages_per_session = 1u << 16;           // outbound messages kept for replay
     std::size_t store_bytes_per_session = std::size_t{8} << 20;  // their bytes
 };
 
@@ -162,7 +162,6 @@ struct ServerConfig {
 // "150.25" -> 1'502'500. Accepts an optional leading '-', at most 4
 // decimals; rejects anything else, including overflow.
 [[nodiscard]] bool parse_price(std::string_view text, Price& out) noexcept;
-
 
 // "09:30", "09:30:15", "09:30:15.25" -> ns since midnight. Hours 0..23,
 // except exactly "24:00[:00]" (end of day); at most 9 fraction digits.
