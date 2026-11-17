@@ -22,6 +22,8 @@ Lookup, insertion, and deletion take expected constant time. Collisions can make
 
 Free-list pools store orders and price levels. The production engine reserves them before trading and disables growth. A free slot can be taken or returned in constant time without a heap allocation.
 
+`std::hive` would fit the same need (stable addresses, constant-time erase), but it is C++26 and this project builds as C++23. `ObjectPool` plus intrusive lists gives that with one reserved block and no per-order allocation, and the list links live inside the order so unlinking needs no lookup. Revisit when the toolchains ship `std::hive`; the pool is small enough to replace.
+
 The engine's instrument books share one order pool, one level pool, and one order ID map, each sized by the engine's order limit. Every live level holds at least one live order, so the order limit also bounds levels. Each book only sees and changes the orders resting on its own ladders.
 
 The standalone order book can allow growth for replay. That mode can allocate pools, rehash the map, and expand ladders while processing orders.
