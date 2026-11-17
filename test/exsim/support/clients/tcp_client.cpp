@@ -1,5 +1,30 @@
 #include "test/exsim/support/clients/tcp_client.hpp"
+
+#include <arpa/inet.h>
 namespace exsim::net {
+namespace {
+// Starts a non-blocking connect: 0 when it completed immediately, EINPROGRESS
+// when it completes later (wait for write readiness), otherwise the error.
+ErrorCode start_connect(int fd, Ipv4Endpoint remote) noexcept {
+    sockaddr_in address{};
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = htonl(remote.address);
+    address.sin_port = htons(remote.port);
+    return ::connect(fd, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) < 0 ? errno : 0;
+}
+// Outcome of an in-progress non-blocking connect: 0 = connected, EINPROGRESS
+// = not finished yet, otherwise the connect error (e.g. ECONNREFUSED).
+ErrorCode connect_result(int fd) noexcept {
+    int error = 0;
+    socklen_t length = sizeof(error);
+    if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &length) < 0) return errno;
+    if (error) return error;
+    sockaddr_in peer{};
+    length = sizeof(peer);
+    if (getpeername(fd, reinterpret_cast<sockaddr*>(&peer), &length) == 0) return 0;
+    return errno == ENOTCONN ? EINPROGRESS : errno;
+}
+}  // namespace
 ErrorCode TcpClient::connect(Ipv4Endpoint remote) noexcept {
     close();
     Socket socket;

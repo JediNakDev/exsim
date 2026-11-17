@@ -48,15 +48,14 @@ ErrorCode Poller::remove(int fd) noexcept {
 #else
 namespace {
 ErrorCode change(int poll_fd, int fd, std::uint64_t token, PollInterest interest) noexcept {
-    // Install both filters so modify only changes enablement and tokens.
-    for (int bit = 1; bit <= 2; ++bit) {
-        struct kevent event{};
-        EV_SET(&event, fd, bit == 1 ? EVFILT_READ : EVFILT_WRITE,
-               EV_ADD | ((static_cast<unsigned>(interest) & bit) ? EV_ENABLE : EV_DISABLE), 0, 0,
-               reinterpret_cast<void*>(static_cast<std::uintptr_t>(token)));
-        if (kevent(poll_fd, &event, 1, nullptr, 0, nullptr) < 0) return errno;
-    }
-    return 0;
+    // Install both filters so modify only changes enablement and tokens. One
+    // changelist, one system call.
+    const auto bits = static_cast<unsigned>(interest);
+    void* const user_data = reinterpret_cast<void*>(static_cast<std::uintptr_t>(token));
+    struct kevent changes[2];
+    EV_SET(&changes[0], fd, EVFILT_READ, EV_ADD | ((bits & 1) ? EV_ENABLE : EV_DISABLE), 0, 0, user_data);
+    EV_SET(&changes[1], fd, EVFILT_WRITE, EV_ADD | ((bits & 2) ? EV_ENABLE : EV_DISABLE), 0, 0, user_data);
+    return kevent(poll_fd, changes, 2, nullptr, 0, nullptr) < 0 ? errno : 0;
 }
 }  // namespace
 ErrorCode Poller::add(int fd, std::uint64_t token, PollInterest interest) noexcept {

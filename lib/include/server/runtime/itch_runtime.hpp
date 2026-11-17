@@ -35,6 +35,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <cstdio>
 #include <span>
 #include <string>
 
@@ -132,6 +133,8 @@ public:
         if (publisher_.state() == md::PublisherState::Stopped) {
             (void)publisher_.end_session(now);
         }
+        if (send_failure_count())
+            std::fprintf(stderr, "ITCH UDP send failures: %llu\n", static_cast<unsigned long long>(send_failure_count()));
     }
 
     // ---- retransmission ----------------------------------------------------------
@@ -149,7 +152,8 @@ public:
             (void)retransmission_server_.answer(
                 std::span<const char>(request_buffer_.data(), static_cast<std::size_t>(length)),
                 [this, requester](std::span<const char> response) {
-                    (void)retransmission_socket_.send_to(response, requester);
+                    if (retransmission_socket_.send_to(response, requester) != static_cast<ssize_t>(response.size()))
+                        ++send_failures_;
                 });
         }
     }
@@ -162,6 +166,7 @@ public:
     [[nodiscard]] bool stopped() const noexcept { return state() == md::PublisherState::Stopped; }
     [[nodiscard]] md::PublishStatus stop_reason() const noexcept { return publisher_.stop_reason(); }
     [[nodiscard]] md::PublisherState state() const noexcept { return publisher_.state(); }
+    [[nodiscard]] std::uint64_t send_failure_count() const noexcept { return send_failures_; }
     [[nodiscard]] net::Ipv4Endpoint feed_destination() const noexcept { return feed_destination_; }
     [[nodiscard]] net::Ipv4Endpoint retransmission_endpoint() const noexcept { return retransmission_endpoint_; }
 
@@ -193,9 +198,10 @@ private:
 
     void send_datagram(std::span<const char> packet) noexcept {
         if (feed_destination_.port == 0) return;  // feed disabled (no destination port configured)
-        (void)feed_sender_.send_to(packet, feed_destination_);
+        if (feed_sender_.send_to(packet, feed_destination_) != static_cast<ssize_t>(packet.size())) ++send_failures_;
     }
 
+    std::uint64_t send_failures_ = 0;
     MarketDataRuntimeSettings settings_;
     md::PacketFaultInjector packet_faults_;
     md::MarketDataPublisher<FeedPacketSink> publisher_;
