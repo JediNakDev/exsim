@@ -13,7 +13,6 @@
 // allocates and fails (returning false, store unchanged) when
 // either limit is reached, so the gateway can apply its overflow policy.
 
-#include "util/compiler.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -48,7 +47,7 @@ public:
     // Stores `msg` as sequence number next_seq(). False if full.
     [[nodiscard]] bool append(std::span<const char> msg, std::uint64_t meta = 0) noexcept {
         const std::uint64_t used = entries_[count_].end;
-        if (EXSIM_UNLIKELY(count_ == max_messages_ || msg.size() > max_bytes_ - used)) {
+        if (count_ == max_messages_ || msg.size() > max_bytes_ - used) [[unlikely]] {
             return false;
         }
         if (!msg.empty()) {
@@ -62,7 +61,7 @@ public:
 
     // Message with sequence number `seq` in [1, last_seq()].
     [[nodiscard]] Message get(std::uint64_t seq) const noexcept {
-        if (EXSIM_UNLIKELY(seq == 0 || seq > count_)) {
+        if (seq == 0 || seq > count_) [[unlikely]] {
             return {};
         }
         const std::uint64_t begin = entries_[seq - 1].end;

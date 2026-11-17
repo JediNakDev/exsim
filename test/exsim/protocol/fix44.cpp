@@ -98,9 +98,12 @@ TEST_CASE(proto_fix, malformed_and_streams) {
     duplicate.field(112, "B");
     n = duplicate.finish();
     CHECK_EQ(p.parse(b, n), Status::duplicate_field);
+    CHECK_EQ(p.duplicate_tag(), 112u);
     Builder missing(b);
     missing.header('1', h);
     n = missing.finish();
+    REQUIRE_EQ(p.parse(b, n), Status::ok);
+    CHECK_EQ(p.duplicate_tag(), 0u);
     TestRequest test;
     CHECK_EQ(decode(b, n, test), Status::missing_field);
     Builder early(b);

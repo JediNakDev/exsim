@@ -1,7 +1,6 @@
 #ifndef EXSIM_UTIL_FLAT_HASH_MAP_HPP
 #define EXSIM_UTIL_FLAT_HASH_MAP_HPP
 
-#include "util/compiler.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -19,8 +18,8 @@ namespace exsim::util {
  * - Linear probing over a power-of-two table, Fibonacci hashing.
  * - Backward-shift deletion: no tombstones, so probe lengths stay short under
  *   the insert/erase churn of an order-id workload (most orders are cancelled).
- * - All memory is allocated (and pre-faulted) by reserve(). insert() never
- *   allocates; when the map is full it fails instead.
+ * - All memory is allocated (and pre-faulted) by the constructor. insert()
+ *   never allocates; when the map is full it fails instead.
  */
 template <typename V>
 class FlatHashMap {
@@ -29,8 +28,28 @@ class FlatHashMap {
 public:
     using Key = std::uint64_t;
 
-    FlatHashMap() = default;
-    explicit FlatHashMap(std::size_t max_entries) { reserve(max_entries); }
+    // Sizes the table to hold at least `max_entries` keys at <= 50% load.
+    explicit FlatHashMap(std::size_t max_entries) {
+        if (max_entries == 0) {
+            return;
+        }
+        const auto limit = std::numeric_limits<std::size_t>::max();
+        if (max_entries > limit / 2) throw std::length_error("FlatHashMap capacity");
+        std::size_t capacity = 16;
+        while (capacity < max_entries * 2) {
+            if (capacity > limit / 2) throw std::length_error("FlatHashMap capacity");
+            capacity *= 2;
+        }
+        if (capacity > limit / sizeof(Slot)) throw std::length_error("FlatHashMap storage");
+        // Value-initialisation zero-fills every slot, which also pre-faults
+        // the pages so the hot path never takes a first-touch page fault.
+        slots_ = std::make_unique<Slot[]>(capacity);
+        mask_ = capacity - 1;
+        max_entries_ = capacity / 2;
+        for (std::size_t c = capacity; c > 1; c >>= 1) {
+            --shift_;
+        }
+    }
 
     FlatHashMap(const FlatHashMap&) = delete;
     FlatHashMap& operator=(const FlatHashMap&) = delete;
@@ -43,40 +62,14 @@ public:
         return *this;
     }
 
-    // Sizes the table to hold at least `max_entries` keys at <= 50% load.
-    // Existing entries are preserved. Never shrinks.
-    void reserve(std::size_t max_entries) {
-        if (max_entries <= max_entries_) {
-            return;
-        }
-        const auto limit = std::numeric_limits<std::size_t>::max();
-        if (max_entries > limit / 2) throw std::length_error("FlatHashMap reserve");
-        std::size_t capacity = 16;
-        while (capacity < max_entries * 2) {
-            if (capacity > limit / 2) throw std::length_error("FlatHashMap reserve");
-            capacity *= 2;
-        }
-        if (capacity > limit / sizeof(Slot)) throw std::length_error("FlatHashMap storage");
-        rehash(capacity);
-    }
-
     [[nodiscard]] V* find(Key key) noexcept {
-        if (EXSIM_UNLIKELY(mask_ == 0 || key == 0)) {
-            return nullptr;
-        }
-        for (std::size_t i = slot_of(key);; i = (i + 1) & mask_) {
-            Slot& slot = slots_[i];
-            if (slot.key == key) {
-                return &slot.value;
-            }
-            if (slot.key == 0) {
-                return nullptr;
-            }
-        }
+        const std::size_t index = slot_index_of(key);
+        return index == kNoSlot ? nullptr : &slots_[index].value;
     }
 
     [[nodiscard]] const V* find(Key key) const noexcept {
-        return const_cast<FlatHashMap*>(this)->find(key);
+        const std::size_t index = slot_index_of(key);
+        return index == kNoSlot ? nullptr : &slots_[index].value;
     }
 
     [[nodiscard]] bool contains(Key key) const noexcept { return find(key) != nullptr; }
@@ -84,10 +77,10 @@ public:
     // Inserts key -> value. Returns false if the key already exists, the key
     // is 0, or the map is full.
     [[nodiscard]] bool insert(Key key, const V& value) {
-        if (EXSIM_UNLIKELY(key == 0)) {
+        if (key == 0) [[unlikely]] {
             return false;
         }
-        if (EXSIM_UNLIKELY(size_ >= max_entries_)) {
+        if (size_ >= max_entries_) [[unlikely]] {
             return false;
         }
         for (std::size_t i = slot_of(key);; i = (i + 1) & mask_) {
@@ -106,15 +99,9 @@ public:
 
     // Removes `key`. Returns false if it was not present.
     bool erase(Key key) noexcept {
-        if (EXSIM_UNLIKELY(mask_ == 0 || key == 0)) {
+        std::size_t hole = slot_index_of(key);
+        if (hole == kNoSlot) {
             return false;
-        }
-        std::size_t hole = slot_of(key);
-        while (slots_[hole].key != key) {
-            if (slots_[hole].key == 0) {
-                return false;
-            }
-            hole = (hole + 1) & mask_;
         }
         // Backward-shift: pull later members of the probe run into the hole
         // whenever the hole lies on their probe path.
@@ -153,35 +140,23 @@ private:
         V value;
     };
 
+    static constexpr std::size_t kNoSlot = std::numeric_limits<std::size_t>::max();
+
     [[nodiscard]] std::size_t slot_of(Key key) const noexcept {
         return static_cast<std::size_t>((key * 0x9E3779B97F4A7C15ull) >> shift_);
     }
 
-    void rehash(std::size_t new_capacity) {
-        auto replacement = std::make_unique<Slot[]>(new_capacity);
-        std::unique_ptr<Slot[]> old = std::move(slots_);
-        const std::size_t old_capacity = capacity();
-
-        // Value-initialisation zero-fills every slot, which also pre-faults
-        // the pages so the hot path never takes a first-touch page fault.
-        slots_ = std::move(replacement);
-        mask_ = new_capacity - 1;
-        max_entries_ = new_capacity / 2;
-        shift_ = 64;
-        for (std::size_t c = new_capacity; c > 1; c >>= 1) {
-            --shift_;
+    // Index of the slot holding `key`, or kNoSlot when it is absent.
+    [[nodiscard]] std::size_t slot_index_of(Key key) const noexcept {
+        if (mask_ == 0 || key == 0) [[unlikely]] {
+            return kNoSlot;
         }
-        size_ = 0;
-
-        for (std::size_t i = 0; i < old_capacity; ++i) {
-            if (old[i].key != 0) {
-                for (std::size_t s = slot_of(old[i].key);; s = (s + 1) & mask_) {
-                    if (slots_[s].key == 0) {
-                        slots_[s] = old[i];
-                        ++size_;
-                        break;
-                    }
-                }
+        for (std::size_t i = slot_of(key);; i = (i + 1) & mask_) {
+            if (slots_[i].key == key) {
+                return i;
+            }
+            if (slots_[i].key == 0) {
+                return kNoSlot;
             }
         }
     }

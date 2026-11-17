@@ -72,8 +72,9 @@ struct FixSessionCounters {
     std::uint64_t heartbeats_sent = 0;
 };
 
-// A well-framed inbound message. parser is valid only when parse_status is ok;
-// otherwise sequence, message_type and possible_duplicate come from a raw scan.
+// A well-framed inbound message. parser fields are valid only when parse_status
+// is ok (on duplicate_field it still reports the repeated tag); otherwise
+// sequence, message_type and possible_duplicate come from a raw scan.
 struct FixInboundFrame {
     std::span<const char> bytes{};
     const FixParser* parser = nullptr;
@@ -575,7 +576,7 @@ private:
         if (frame.parse_status != Status::ok) {
             day_->set_expected_inbound_seq(frame.sequence + 1);
             if (frame.parse_status == Status::duplicate_field) {
-                send_session_reject(frame.sequence, find_duplicate_tag(frame.bytes), frame.message_type,
+                send_session_reject(frame.sequence, frame.parser->duplicate_tag(), frame.message_type,
                                     SessionRejectReason::TagAppearsMoreThanOnce, "tag appears more than once");
             } else if (frame.parse_status == Status::full) {
                 send_session_reject(frame.sequence, 0, frame.message_type, SessionRejectReason::Other,

@@ -1,8 +1,12 @@
 #ifndef EXSIM_SERVER_JOURNAL_JOURNAL_HPP
 #define EXSIM_SERVER_JOURNAL_JOURNAL_HPP
 #include <server/journal/canonical.hpp>
+#include <engine/command.hpp>
 #include <engine/instrument.hpp>
+#include <engine/matching_engine.hpp>
 #include <array>
+#include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
 namespace exsim::server::journal {

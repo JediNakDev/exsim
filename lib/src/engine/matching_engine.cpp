@@ -13,7 +13,6 @@
 #include "order_metadata.hpp"
 #include "instrument_book.hpp"
 
-#include <util/compiler.hpp>
 #include <util/flat_hash_map.hpp>
 
 #include <algorithm>
@@ -481,7 +480,7 @@ bool MatchingEngine::Impl::match(InstrumentBook& book, IncomingOrder& order, Tim
             const OrderIndex index = resting->context_index;
             OrderMetadata& resting_metadata = metadata[index];
 
-            if (EXSIM_UNLIKELY(stp_active && resting_metadata.owner == order.owner)) {
+            if (stp_active && resting_metadata.owner == order.owner) [[unlikely]] {
                 const StpMode mode = order.stp;
                 if (mode != StpMode::CancelAggressor) {
                     emit_resting_canceled(book, index, CancelReason::SelfTradePrevention, 0, ts, out);
@@ -549,42 +548,42 @@ void MatchingEngine::Impl::match_and_dispose(InstrumentBook& book, IncomingOrder
 
 void MatchingEngine::Impl::on_new_order(const NewOrder& cmd, EventBuffer& out) {
     InstrumentBook* const book_ptr = find_book(cmd.instrument);
-    if (EXSIM_UNLIKELY(book_ptr == nullptr)) {
+    if (book_ptr == nullptr) [[unlikely]] {
         return reject_new_order(cmd, RejectReason::UnknownInstrument, out);
     }
     InstrumentBook& book = *book_ptr;
-    if (EXSIM_UNLIKELY(cmd.session == 0 || cmd.cl_ord_id == 0 || cmd.cl_ord_id > kMaxClOrdId)) {
+    if (cmd.session == 0 || cmd.cl_ord_id == 0 || cmd.cl_ord_id > kMaxClOrdId) [[unlikely]] {
         return reject_new_order(cmd, RejectReason::InvalidClOrdId, out);
     }
-    if (EXSIM_UNLIKELY(order_by_session_token.find(make_session_token(cmd.session, cmd.cl_ord_id)) != nullptr)) {
+    if (order_by_session_token.find(make_session_token(cmd.session, cmd.cl_ord_id)) != nullptr) [[unlikely]] {
         return reject_new_order(cmd, RejectReason::DuplicateClOrdId, out);
     }
     const bool is_market = cmd.type == OrdType::Market;
     const bool is_immediate = cmd.tif == TimeInForce::IOC || cmd.tif == TimeInForce::FOK;
-    if (EXSIM_UNLIKELY(raw_value(cmd.side) > raw_value(Side::SELL) || raw_value(cmd.type) > raw_value(OrdType::Market) ||
-                     raw_value(cmd.tif) > raw_value(TimeInForce::FOK) ||
-                     raw_value(cmd.stp) > raw_value(StpMode::CancelBoth) ||
-                     (cmd.post_only && (is_market || is_immediate)))) {
+    if (raw_value(cmd.side) > raw_value(Side::SELL) || raw_value(cmd.type) > raw_value(OrdType::Market) ||
+        raw_value(cmd.tif) > raw_value(TimeInForce::FOK) ||
+        raw_value(cmd.stp) > raw_value(StpMode::CancelBoth) ||
+        (cmd.post_only && (is_market || is_immediate))) [[unlikely]] {
         return reject_new_order(cmd, RejectReason::InvalidField, out);
     }
-    if (EXSIM_UNLIKELY(!book.is_valid_quantity(cmd.qty))) {
+    if (!book.is_valid_quantity(cmd.qty)) [[unlikely]] {
         return reject_new_order(cmd, RejectReason::InvalidQuantity, out);
     }
     std::int32_t limit_tick = 0;
     if (is_market) {
         limit_tick = cmd.side == Side::BUY ? static_cast<std::int32_t>(book.tick_count - 1) : 0;
-    } else if (EXSIM_UNLIKELY(!book.tick_of(cmd.price, limit_tick))) {
+    } else if (!book.tick_of(cmd.price, limit_tick)) [[unlikely]] {
         return reject_new_order(cmd, RejectReason::InvalidPrice, out);
     }
     switch (book.phase) {
         case Phase::Continuous:
-            if (EXSIM_UNLIKELY(cmd.post_only && book.crosses_opposite_best(cmd.side, limit_tick))) {
+            if (cmd.post_only && book.crosses_opposite_best(cmd.side, limit_tick)) [[unlikely]] {
                 return reject_new_order(cmd, RejectReason::PostOnlyWouldCross, out);
             }
             break;
         case Phase::PreOpen:
         case Phase::PreClose:
-            if (EXSIM_UNLIKELY(is_market || is_immediate)) {
+            if (is_market || is_immediate) [[unlikely]] {
                 return reject_new_order(cmd, RejectReason::NotAllowedInPhase, out);
             }
             break;
@@ -593,7 +592,7 @@ void MatchingEngine::Impl::on_new_order(const NewOrder& cmd, EventBuffer& out) {
         case Phase::Halted:
             return reject_new_order(cmd, RejectReason::InstrumentHalted, out);
     }
-    if (EXSIM_UNLIKELY(live_count >= max_orders)) {
+    if (live_count >= max_orders) [[unlikely]] {
         return reject_new_order(cmd, RejectReason::CapacityExceeded, out);
     }
 
@@ -617,7 +616,7 @@ void MatchingEngine::Impl::on_new_order(const NewOrder& cmd, EventBuffer& out) {
 
 void MatchingEngine::Impl::on_cancel(const CancelOrder& cmd, EventBuffer& out) {
     const OrderIndex index = find_live_order(cmd.session, cmd.orig_cl_ord_id);
-    if (EXSIM_UNLIKELY(index == kNilOrder)) {
+    if (index == kNilOrder) [[unlikely]] {
         Event event = blank_event(EventType::Rejected, 0, cmd.ts);
         event.rejected.cmd = CommandType::Cancel;
         event.rejected.reason = RejectReason::UnknownOrder;
@@ -664,7 +663,7 @@ void MatchingEngine::Impl::on_cancel(const CancelOrder& cmd, EventBuffer& out) {
 
 void MatchingEngine::Impl::on_replace(const ReplaceOrder& cmd, EventBuffer& out) {
     const OrderIndex index = find_live_order(cmd.session, cmd.orig_cl_ord_id);
-    if (EXSIM_UNLIKELY(index == kNilOrder)) {
+    if (index == kNilOrder) [[unlikely]] {
         return reject_replace(cmd, RejectReason::UnknownOrder, 0, 0, out);
     }
     OrderMetadata& order_metadata = metadata[index];
@@ -673,31 +672,31 @@ void MatchingEngine::Impl::on_replace(const ReplaceOrder& cmd, EventBuffer& out)
     const OrderId old_order_id = resting.id;
     const InstrumentId instrument = order_metadata.instrument;
 
-    if (EXSIM_UNLIKELY(cmd.cl_ord_id > kMaxClOrdId)) {
+    if (cmd.cl_ord_id > kMaxClOrdId) [[unlikely]] {
         return reject_replace(cmd, RejectReason::InvalidClOrdId, old_order_id, instrument, out);
     }
     const ClOrdId new_cl_ord_id = cmd.cl_ord_id != 0 ? cmd.cl_ord_id : cmd.orig_cl_ord_id;
     const bool token_changes = new_cl_ord_id != cmd.orig_cl_ord_id;
-    if (EXSIM_UNLIKELY(token_changes &&
-                     order_by_session_token.find(make_session_token(cmd.session, new_cl_ord_id)) != nullptr)) {
+    if (token_changes &&
+        order_by_session_token.find(make_session_token(cmd.session, new_cl_ord_id)) != nullptr) [[unlikely]] {
         return reject_replace(cmd, RejectReason::DuplicateClOrdId, old_order_id, instrument, out);
     }
-    if (EXSIM_UNLIKELY(!book.is_valid_quantity(cmd.qty))) {
+    if (!book.is_valid_quantity(cmd.qty)) [[unlikely]] {
         return reject_replace(cmd, RejectReason::InvalidQuantity, old_order_id, instrument, out);
     }
     std::int32_t new_tick = 0;
-    if (EXSIM_UNLIKELY(!book.tick_of(cmd.price, new_tick))) {
+    if (!book.tick_of(cmd.price, new_tick)) [[unlikely]] {
         return reject_replace(cmd, RejectReason::InvalidPrice, old_order_id, instrument, out);
     }
-    if (EXSIM_UNLIKELY(book.phase == Phase::Closed)) {
+    if (book.phase == Phase::Closed) [[unlikely]] {
         return reject_replace(cmd, RejectReason::MarketClosed, old_order_id, instrument, out);
     }
-    if (EXSIM_UNLIKELY(book.phase == Phase::Halted)) {
+    if (book.phase == Phase::Halted) [[unlikely]] {
         return reject_replace(cmd, RejectReason::InstrumentHalted, old_order_id, instrument, out);
     }
     const Side side = resting.side;
-    if (EXSIM_UNLIKELY(order_metadata.post_only && book.phase == Phase::Continuous &&
-                     book.crosses_opposite_best(side, new_tick))) {
+    if (order_metadata.post_only && book.phase == Phase::Continuous &&
+        book.crosses_opposite_best(side, new_tick)) [[unlikely]] {
         return reject_replace(cmd, RejectReason::PostOnlyWouldCross, old_order_id, instrument, out);
     }
 
@@ -956,7 +955,7 @@ void MatchingEngine::Impl::on_set_phase(const SetPhase& cmd, EventBuffer& out) {
     } else if (raw_value(cmd.phase) > raw_value(Phase::PreClose)) {
         reason = RejectReason::InvalidField;
     }
-    if (EXSIM_UNLIKELY(reason != RejectReason::None)) {
+    if (reason != RejectReason::None) [[unlikely]] {
         Event event = blank_event(EventType::Rejected, cmd.instrument, cmd.ts);
         event.rejected.cmd = CommandType::SetPhase;
         event.rejected.reason = reason;
