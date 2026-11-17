@@ -263,6 +263,35 @@ class ExchangeApiTests(unittest.TestCase):
         self.assertEqual(tags[0], 0)  # NewOrder from the external client
         self.assertEqual(tags[-1], 4)  # SetPhase Closed at shutdown
 
+    def test_journal_name_with_nul_is_refused_and_other_config_is_unchanged(self):
+        victim = self.create()
+        victim_config = self.data / f"{victim['id']}.conf"
+        before = victim_config.read_bytes()
+        self.api("POST", "/v1/exchanges",
+                 {"config": config() + f"\n[journal]\npath = {victim_config.name}\x00.journal\n"}, 400)
+        self.assertEqual(victim_config.read_bytes(), before)
+
+    def test_symlinked_journal_is_refused_and_its_target_is_unchanged(self):
+        outside = Path(self.temporary.name) / "outside"
+        outside.write_text("sentinel")
+        (self.data / "linked.journal").symlink_to(outside)
+        exchange = self.create(config() + "\n[journal]\npath = linked.journal\n")
+        self.api("POST", f"/v1/exchanges/{exchange['id']}/start", expected=409)
+        self.assertEqual(outside.read_text(), "sentinel")
+
+    def test_shared_journal_allows_one_running_exchange_and_keeps_its_history(self):
+        journal = self.data / "shared.journal"
+        first = self.start(self.create(config() + "\n[journal]\npath = shared.journal\n"))
+        header = journal.read_bytes()
+        # A different engine size gives a different header, so a truncating second writer is visible.
+        # The first exchange may append a flush footer meanwhile, so compare the prefix.
+        second = self.create(config().replace("max_orders = 4096", "max_orders = 2048")
+                             + "\n[journal]\npath = shared.journal\n")
+        self.api("POST", f"/v1/exchanges/{second['id']}/start", expected=409)
+        self.assertTrue(journal.read_bytes().startswith(header))
+        self.api("POST", f"/v1/exchanges/{first['id']}/stop")
+        self.assertEqual(self.start(first)["state"], "running")
+
     def test_restart_is_empty_with_a_fresh_session(self):
         exchange = self.start(self.create())
         path = f"/v1/exchanges/{exchange['id']}"

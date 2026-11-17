@@ -22,6 +22,8 @@ std::string read_file(const std::filesystem::path& path) {
     return value;
 }
 server::ServerConfig validate(std::string_view text) {
+    // INI text has no use for NUL, and a NUL in a value would cut the path a child opens.
+    if (text.find('\0') != std::string_view::npos) throw std::invalid_argument("config must not contain NUL bytes");
     server::ServerConfig config;
     std::string error;
     if (!server::parse_config(text, config, error)) throw std::invalid_argument(error);

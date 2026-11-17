@@ -110,7 +110,7 @@ The data directory is locked to one API process. Config files retain full creden
 
 `ilink_account` is no longer a `[user <name>]` key and nothing replaces it; the simulator never used the value. A config that still has it fails to load with `<line>: unknown key 'ilink_account'`. Because the API validates every saved `.conf` in its data directory at startup, one old file stops it with `exsim_api: <line>: unknown key 'ilink_account'`. Remove the line from saved configs, including those in the data directory, before starting the manager.
 
-Exchanges can use optional `[journal]` settings: `path`, `on_failure`, and `flush_interval_ms`. A relative `path` is relative to the config file. Managed exchanges accept only a file name ending in `.journal`, written to the API data directory. The legacy Exsim `fixp_sbe` protocol and public admin listeners are rejected. CME iLink 3 has its own FIXP/SBE gateway.
+Exchanges can use optional `[journal]` settings: `path`, `on_failure`, and `flush_interval_ms`. A relative `path` is relative to the config file. Managed exchanges accept only a file name ending in `.journal`, written to the API data directory; a config containing a NUL byte is rejected. Every exchange refuses a journal path whose last component is a symlink, and takes an exclusive lock on the file before truncating it, so a second running exchange that names the same journal fails to start and leaves the first one's history intact. The legacy Exsim `fixp_sbe` protocol and public admin listeners are rejected. CME iLink 3 has its own FIXP/SBE gateway.
 
 To run an exchange directly:
 
@@ -134,4 +134,4 @@ A session that reaches a token or store limit gets rejects or is disconnected, d
 
 See [OpenAPI](openapi.json) for the HTTP contract and [architecture](architecture.md) for process boundaries.
 
-Journal flush writes to the OS page cache only, without `fsync` or `fdatasync`. The worker acknowledges completion through `drained()`; accepting a flush request is asynchronous. Journals are optional diagnostic logs, not automatic recovery. Use a distinct path per exchange; each start truncates that file.
+Journal flush writes to the OS page cache only, without `fsync` or `fdatasync`. The worker acknowledges completion through `drained()`; accepting a flush request is asynchronous. Journals are optional diagnostic logs, not automatic recovery. Each start truncates the file, so a stopped exchange that restarts begins a new journal.

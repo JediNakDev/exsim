@@ -10,10 +10,12 @@
 #include <cstdio>
 #include <iostream>
 #include <fstream>
+#include <iterator>
 #include <stdexcept>
 #include <string>
 #include <sys/resource.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #include <vector>
 
 using namespace exsim;
@@ -368,4 +370,46 @@ TEST_CASE(server_core_journal, variable_records_roundtrip_all_command_types_and_
         corrupt.write(invalid_length, 8);
     }
     CHECK(!journal_is_readable(file.path));
+}
+
+TEST_CASE(server_core_journal, symlinked_destination_is_refused_and_its_target_is_unchanged) {
+    const TempFile target{temp_journal_path("symlink-target")};
+    const TempFile link{temp_journal_path("symlink")};
+    std::ofstream(target.path) << "sentinel";
+    REQUIRE_EQ(::symlink(target.path.c_str(), link.path.c_str()), 0);
+    const auto config = parse_test_config();
+    bool refused = false;
+    try {
+        journal::JournalWriter writer(link.path, {config.engine.engine, config.instruments});
+    } catch (const std::exception&) {
+        refused = true;
+    }
+    CHECK(refused);
+    std::ifstream contents(target.path);
+    CHECK(std::string(std::istreambuf_iterator<char>(contents), {}) == "sentinel");
+}
+
+TEST_CASE(server_core_journal, second_writer_is_refused_without_truncating_and_a_restart_works) {
+    const TempFile file{temp_journal_path("shared")};
+    const auto config = parse_test_config();
+    {
+        journal::JournalWriter first(file.path, {config.engine.engine, config.instruments});
+        REQUIRE(first.append(Command{SetPhase{123, 1, Phase::Halted}}));
+        REQUIRE(first.flush());
+        const auto written = file_size(file.path);
+        bool refused = false;
+        try {
+            journal::JournalWriter second(file.path, {config.engine.engine, config.instruments});
+        } catch (const std::exception&) {
+            refused = true;
+        }
+        CHECK(refused);
+        CHECK_EQ(file_size(file.path), written);
+    }
+    // Once the first writer is gone, the same file can be truncated and reused.
+    journal::JournalWriter restarted(file.path, {config.engine.engine, config.instruments});
+    REQUIRE(restarted.flush());
+    testsupport::JournalReader reader(file.path);
+    Command command;
+    CHECK(!reader.next(command));
 }

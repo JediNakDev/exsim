@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <system_error>
 #include <stdexcept>
+#include <sys/file.h>
 #include <sys/stat.h>
 namespace exsim::server::journal {
 namespace {
@@ -48,14 +49,17 @@ JournalWriter::JournalWriter(const std::string& path, const JournalSetup& setup)
         add(header, i.cme_contract_size);
     }
     add(header, hash_bytes(header));
-    // Nonblocking open avoids waiting for a FIFO reader. Validate the
-    // actual descriptor before truncating so special files are never used.
-    fd_ = ::open(path.c_str(), O_WRONLY | O_CREAT | O_NONBLOCK | O_CLOEXEC, 0600);
+    // Nonblocking open avoids waiting for a FIFO reader. O_NOFOLLOW refuses a symlink as the
+    // file itself. Validate the descriptor and take an exclusive lock before truncating, so special
+    // files are never used and a second writer cannot erase a live journal.
+    fd_ = ::open(path.c_str(), O_WRONLY | O_CREAT | O_NONBLOCK | O_CLOEXEC | O_NOFOLLOW, 0600);
     if (fd_ < 0) throw std::system_error(errno, std::generic_category(), "journal open");
     try {
         struct stat info {};
         if (::fstat(fd_, &info) != 0) throw std::system_error(errno, std::generic_category(), "journal stat");
         if (!S_ISREG(info.st_mode)) throw std::invalid_argument("journal destination must be a regular file");
+        if (::flock(fd_, LOCK_EX | LOCK_NB) != 0)
+            throw std::system_error(errno, std::generic_category(), "journal is in use by another writer");
         if (::ftruncate(fd_, 0) != 0 || ::lseek(fd_, 0, SEEK_SET) < 0)
             throw std::system_error(errno, std::generic_category(), "journal truncate");
         if (!write_all(fd_, header.data(), header.size()))
