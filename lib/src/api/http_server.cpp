@@ -157,6 +157,9 @@ void HttpServer::serve_connection(int socket_descriptor) {
     std::size_t request_head_bytes = 0;
     std::size_t request_body_bytes = 0;
     std::size_t requests_served = 0;
+    // A started request must be complete by this time. Timing each read alone
+    // would let a client hold its slot by sending one byte per idle timeout.
+    std::chrono::steady_clock::time_point request_deadline;
     char chunk[16 * 1024];
     while (!stopping_.load()) {
         const std::string_view pending = std::string_view(received_bytes).substr(request_start);
@@ -191,6 +194,7 @@ void HttpServer::serve_connection(int socket_descriptor) {
                 !keep_alive)
                 return;
             request = HttpRequest{};
+            request_deadline = std::chrono::steady_clock::now() + options_.idle_timeout;  // for pipelined bytes
             continue;
         }
 
@@ -198,11 +202,17 @@ void HttpServer::serve_connection(int socket_descriptor) {
         request_start = 0;
         const ssize_t received = net::receive_some(socket_descriptor, chunk, sizeof(chunk));
         if (received > 0) {
+            if (received_bytes.empty()) request_deadline = std::chrono::steady_clock::now() + options_.idle_timeout;
             received_bytes.append(chunk, static_cast<std::size_t>(received));
             continue;
         }
         if (received < 0 && net::is_would_block(errno)) {
-            if (wait_until_ready(socket_descriptor, POLLIN, options_.idle_timeout)) continue;
+            // An idle connection waits the full timeout; a started request only what is left of its deadline.
+            const auto timeout = received_bytes.empty()
+                                     ? options_.idle_timeout
+                                     : std::chrono::duration_cast<std::chrono::milliseconds>(
+                                           request_deadline - std::chrono::steady_clock::now());
+            if (timeout.count() > 0 && wait_until_ready(socket_descriptor, POLLIN, timeout)) continue;
             if (!received_bytes.empty()) {
                 HttpResponse response = rejection_responder_(408, "invalid_request", "request incomplete before the idle timeout");
                 (void)send_all(socket_descriptor, serialize_http_response(response, false), options_.write_timeout);

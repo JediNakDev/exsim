@@ -137,6 +137,15 @@ private:
         return value;
     }
 
+    unsigned parse_hex4() {
+        if (position_ + 4 > text_.size()) error("short unicode escape");
+        unsigned code = 0;
+        const auto result = std::from_chars(text_.data() + position_, text_.data() + position_ + 4, code, 16);
+        if (result.ptr != text_.data() + position_ + 4) error("invalid unicode escape");
+        position_ += 4;
+        return code;
+    }
+
     std::string parse_string() {
         ++position_;  // opening quote
         std::string out;
@@ -161,18 +170,29 @@ private:
                 case 'r': out += '\r'; break;
                 case 't': out += '\t'; break;
                 case 'u': {
-                    if (position_ + 4 > text_.size()) error("short unicode escape");
-                    unsigned code = 0;
-                    const auto result = std::from_chars(text_.data() + position_, text_.data() + position_ + 4, code, 16);
-                    if (result.ptr != text_.data() + position_ + 4) error("invalid unicode escape");
-                    position_ += 4;
+                    unsigned code = parse_hex4();
+                    // A code point above U+FFFF is escaped as a UTF-16 surrogate pair.
+                    if (code >= 0xD800 && code <= 0xDBFF) {
+                        if (text_.substr(position_, 2) != "\\u") error("unpaired surrogate");
+                        position_ += 2;
+                        const unsigned low = parse_hex4();
+                        if (low < 0xDC00 || low > 0xDFFF) error("unpaired surrogate");
+                        code = 0x10000 + ((code - 0xD800) << 10) + (low - 0xDC00);
+                    } else if (code >= 0xDC00 && code <= 0xDFFF) {
+                        error("unpaired surrogate");
+                    }
                     if (code < 0x80) {
                         out += static_cast<char>(code);
                     } else if (code < 0x800) {
                         out += static_cast<char>(0xC0 | (code >> 6));
                         out += static_cast<char>(0x80 | (code & 0x3F));
-                    } else {
+                    } else if (code < 0x10000) {
                         out += static_cast<char>(0xE0 | (code >> 12));
+                        out += static_cast<char>(0x80 | ((code >> 6) & 0x3F));
+                        out += static_cast<char>(0x80 | (code & 0x3F));
+                    } else {
+                        out += static_cast<char>(0xF0 | (code >> 18));
+                        out += static_cast<char>(0x80 | ((code >> 12) & 0x3F));
                         out += static_cast<char>(0x80 | ((code >> 6) & 0x3F));
                         out += static_cast<char>(0x80 | (code & 0x3F));
                     }

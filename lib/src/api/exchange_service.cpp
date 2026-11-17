@@ -51,8 +51,9 @@ std::string redacted(std::string_view config) {
     std::string line, output;
     while (std::getline(input, line)) {
         auto key = line.substr(0, line.find('='));
-        key.erase(0, key.find_first_not_of(" \t"));
-        const auto last = key.find_last_not_of(" \t");
+        // The same characters the config parser trims, or a key it accepts slips past here.
+        key.erase(0, key.find_first_not_of(" \t\r"));
+        const auto last = key.find_last_not_of(" \t\r");
         if (last != std::string::npos) key.resize(last + 1);
         for (char& c : key) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
         if (key == "password" || key == "replay_password" || key == "ilink_secret_key") line = key + " = [REDACTED]";
