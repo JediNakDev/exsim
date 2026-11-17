@@ -7,6 +7,7 @@
 #include <cerrno>
 #include <csignal>
 #include <cstring>
+#include <filesystem>
 #include <iostream>
 #include <stdexcept>
 #include <pthread.h>
@@ -73,6 +74,9 @@ int main(int argc, char** argv) {
         std::string error;
         if (path.empty() || !exsim::server::load_config(path.c_str(), config, error))
             throw std::runtime_error("invalid exchange config: " + error);
+        // A relative journal path is relative to the config file, not the working directory.
+        if (!config.journal_path.empty() && config.journal_path.front() != '/')
+            config.journal_path = (std::filesystem::path(path).parent_path() / config.journal_path).string();
         if (control.is_open()) {
             (void)exsim::net::set_non_blocking(control.fd());
             (void)exsim::net::set_no_sigpipe(control.fd());

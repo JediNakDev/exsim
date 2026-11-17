@@ -122,12 +122,6 @@ template <typename T>
     return name == "?" ? std::string_view{} : name;
 }
 
-inline constexpr EventType kAllEventTypes[] = {
-    EventType::Accepted, EventType::Rejected,       EventType::Rested,
-    EventType::Fill,     EventType::Canceled,       EventType::Replaced,
-    EventType::MassCancelDone, EventType::PhaseChanged, EventType::AuctionSummary,
-};
-
 namespace detail {
 
 template <typename F>
