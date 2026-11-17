@@ -97,9 +97,9 @@ TEST_CASE(gateway_fix_sequence, gap_fill_not_above_its_sequence_is_rejected) {
     client.send_at("4", 2, "123=Y|36=2|");
     const auto messages = client.drain();
     REQUIRE_EQ(messages.size(), std::size_t{1});
-    CHECK_EQ(messages[0].pipes(),
-             with_pipes(exchange_message("3", 2, "45=2|371=36|372=4|373=5|58=NewSeqNo must exceed MsgSeqNum|",
-                                         "CLIENT2")));
+    CHECK_EQ(
+        messages[0].pipes(),
+        with_pipes(exchange_message("3", 2, "45=2|371=36|372=4|373=5|58=NewSeqNo must exceed MsgSeqNum|", "CLIENT2")));
     CHECK_EQ(expected_inbound(exchange), 3u);
     CHECK(!client.connection().wants_disconnect());
 }
@@ -128,8 +128,8 @@ TEST_CASE(gateway_fix_sequence, sequence_reset_reset_mode) {
     auto messages = client.drain();
     REQUIRE_EQ(messages.size(), std::size_t{1});
     CHECK_EQ(messages[0].pipes(),
-             with_pipes(exchange_message("3", 2, "45=99|371=36|372=4|373=5|58=attempt to lower sequence number|",
-                                         "CLIENT2")));
+             with_pipes(
+                 exchange_message("3", 2, "45=99|371=36|372=4|373=5|58=attempt to lower sequence number|", "CLIENT2")));
     CHECK_EQ(expected_inbound(exchange), 4u);
     // Equal: no effect. Increasing: advances without application delivery.
     client.send_at("4", 1, "123=N|36=4|");
@@ -284,8 +284,7 @@ TEST_CASE(gateway_fix_sequence, parseable_semantic_errors_consume_sequence_and_r
     client.send("2", "7=0|16=0|");
     client.send("2", "7=5|16=4|");
     // Bad SendingTime.
-    client.feed(fix_frame("35=0|49=CLIENT2|56=EXSIM|34=" + std::to_string(client.next_sequence++) +
-                          "|52=yesterday|"));
+    client.feed(fix_frame("35=0|49=CLIENT2|56=EXSIM|34=" + std::to_string(client.next_sequence++) + "|52=yesterday|"));
     // Empty value.
     client.send("D", "11=|55=AAPL|54=1|38=100|40=2|44=150|59=0|60=20261103-09:30:00.000|");
     const auto messages = client.drain();
@@ -302,8 +301,7 @@ TEST_CASE(gateway_fix_sequence, parseable_semantic_errors_consume_sequence_and_r
         "45=10|371=11|372=D|373=4|58=tag specified without a value|",
     };
     for (std::size_t index = 0; index < messages.size(); ++index) {
-        CHECK_EQ(messages[index].pipes(),
-                 with_pipes(exchange_message("3", 2 + index, expected[index], "CLIENT2")));
+        CHECK_EQ(messages[index].pipes(), with_pipes(exchange_message("3", 2 + index, expected[index], "CLIENT2")));
     }
     CHECK_EQ(expected_inbound(exchange), 11u);
     CHECK(engine_command_tokens(exchange, 2).empty());
@@ -324,14 +322,13 @@ TEST_CASE(gateway_fix_sequence, unexpected_logon_while_active_logs_out) {
 
 TEST_CASE(gateway_fix_sequence, sequence_reset_validates_timestamps_before_sequence_change) {
     for (const auto mode : {"Y", "N"}) {
-        for (const auto header : {"", "52=bad|", "52=20261103-09:30:00.000|43=Y|",
-                                  "52=20261103-09:30:00.000|43=Y|122=bad|",
-                                  "52=20261103-09:30:00.000|43=Y|122=20261103-09:31:00.000|"}) {
+        for (const auto header :
+             {"", "52=bad|", "52=20261103-09:30:00.000|43=Y|", "52=20261103-09:30:00.000|43=Y|122=bad|",
+              "52=20261103-09:30:00.000|43=Y|122=20261103-09:31:00.000|"}) {
             FixTestExchange exchange;
             FixTestConnection client(exchange, "CLIENT2");
             client.logon(30, false, {});
-            client.feed(fix_frame("35=4|49=CLIENT2|56=EXSIM|34=2|" + std::string(header) +
-                                  "123=" + mode + "|36=50|"));
+            client.feed(fix_frame("35=4|49=CLIENT2|56=EXSIM|34=2|" + std::string(header) + "123=" + mode + "|36=50|"));
             const auto messages = client.drain();
             REQUIRE(!messages.empty());
             CHECK_EQ(messages[0].type(), std::string("3"));

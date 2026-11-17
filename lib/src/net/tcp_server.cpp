@@ -13,9 +13,7 @@ TcpServer::TcpServer(const TcpServerConfig& config, Poller& poller, std::uint8_t
     }
     free_slot_count_ = config.max_connections;
 }
-TcpServer::~TcpServer() {
-    close();
-}
+TcpServer::~TcpServer() { close(); }
 ErrorCode TcpServer::open() noexcept {
     if (listener_.is_open()) return EALREADY;
     if (slots_.empty() || !config_.receive_buffer_capacity || !config_.send_buffer_capacity) return EINVAL;

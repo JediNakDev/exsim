@@ -1,4 +1,5 @@
-#pragma once
+#ifndef TEST_EXSIM_PROTOCOL_FIX44_DECODE_HPP
+#define TEST_EXSIM_PROTOCOL_FIX44_DECODE_HPP
 #include <protocol/fix44.hpp>
 
 namespace exsim::protocol::fix44 {
@@ -624,3 +625,5 @@ inline Status decode(const char* p, std::size_t n, BusinessMessageReject& m) noe
     return s == Status::ok ? decode(parser, m) : s;
 }
 }  // namespace exsim::protocol::fix44
+
+#endif  // TEST_EXSIM_PROTOCOL_FIX44_DECODE_HPP

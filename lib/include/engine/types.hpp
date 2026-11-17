@@ -18,14 +18,14 @@ enum class Side : std::uint8_t { BUY, SELL };
 using Price = std::int64_t;
 inline constexpr Price kPriceScale = 10'000;
 
-using Quantity = std::uint32_t;       // shares
-using Timestamp = std::uint64_t;      // nanoseconds; opaque to the engine
-using OrderId = std::uint64_t;        // exchange-assigned, starts at 1
-using ClOrdId = std::uint64_t;        // client token, unique per session among live orders
-using SessionId = std::uint16_t;      // 0 = system / invalid
-using InstrumentId = std::uint16_t;   // 1..N, doubles as ITCH stock locate; 0 = all/none
-using OwnerId = std::uint32_t;        // self-trade-prevention group; 0 = none
-using MatchId = std::uint64_t;        // starts at 1, one per Fill and AuctionSummary
+using Quantity = std::uint32_t;      // shares
+using Timestamp = std::uint64_t;     // nanoseconds; opaque to the engine
+using OrderId = std::uint64_t;       // exchange-assigned, starts at 1
+using ClOrdId = std::uint64_t;       // client token, unique per session among live orders
+using SessionId = std::uint16_t;     // 0 = system / invalid
+using InstrumentId = std::uint16_t;  // 1..N, doubles as ITCH stock locate; 0 = all/none
+using OwnerId = std::uint32_t;       // self-trade-prevention group; 0 = none
+using MatchId = std::uint64_t;       // starts at 1, one per Fill and AuctionSummary
 
 // Client tokens are packed with the session into one 64-bit map key.
 inline constexpr ClOrdId kMaxClOrdId = (ClOrdId{1} << 48) - 1;
@@ -76,21 +76,19 @@ enum class RejectReason : std::uint8_t {
 
 enum class CancelReason : std::uint8_t {
     UserRequested = 0,
-    ImmediateOrCancel = 1,    // unfilled remainder of IOC / market order
-    FillOrKill = 2,           // FOK could not be filled in full
+    ImmediateOrCancel = 1,  // unfilled remainder of IOC / market order
+    FillOrKill = 2,         // FOK could not be filled in full
     SelfTradePrevention = 3,
     MassCancel = 4,
     CancelOnDisconnect = 5,
-    EndOfDay = 6,             // DAY order expired on transition to Closed
+    EndOfDay = 6,  // DAY order expired on transition to Closed
 };
 
 // Which leg of a Fill was the incoming (liquidity-taking) order.
 // None for auction (uncross) executions.
 enum class Aggressor : std::uint8_t { None = 0, Buy = 1, Sell = 2 };
 
-[[nodiscard]] constexpr std::string_view to_string(Side s) noexcept {
-    return s == Side::BUY ? "BUY" : "SELL";
-}
+[[nodiscard]] constexpr std::string_view to_string(Side s) noexcept { return s == Side::BUY ? "BUY" : "SELL"; }
 
 [[nodiscard]] constexpr std::string_view to_string(OrdType t) noexcept {
     switch (t) {

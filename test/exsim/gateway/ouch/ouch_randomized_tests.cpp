@@ -77,7 +77,8 @@ public:
         if (post_only && (is_market || !day)) return reject(user, token, 'O', now);
         if (!valid_quantity(shares)) return reject(user, token, 'Z', now);
         if (!is_market && !valid_price(static_cast<Price>(price))) return reject(user, token, 'X', now);
-        if (post_only && would_cross(stock, engine_side, static_cast<Price>(price))) return reject(user, token, 'O', now);
+        if (post_only && would_cross(stock, engine_side, static_cast<Price>(price)))
+            return reject(user, token, 'O', now);
 
         ModelOrder order;
         order.user = user;
@@ -109,8 +110,8 @@ public:
         if (existing_instructions == used_tokens_[user].end()) return;
         const ModelTokenInstructions instructions = existing_instructions->second;
         const bool supported_time_in_force = time_in_force == 0 || time_in_force == 99998 || time_in_force == 99999;
-        if (!supported_time_in_force || (display != 'Y' && display != 'P') || (time_in_force != 0) != instructions.day ||
-            (display == 'P') != instructions.post_only) {
+        if (!supported_time_in_force || (display != 'Y' && display != 'P') ||
+            (time_in_force != 0) != instructions.day || (display == 'P') != instructions.post_only) {
             return reject(user, replacement, 'O', now);
         }
         used_tokens_[user][replacement] = instructions;
@@ -220,9 +221,8 @@ private:
             ModelOrder& aggressor = orders_[aggressor_index];
             ModelOrder* resting = best_opposite(aggressor.stock, aggressor.side);
             if (resting == nullptr) break;
-            const bool crosses = aggressor.is_market ||
-                                 (aggressor.side == 'B' ? aggressor.price >= resting->price
-                                                        : aggressor.price <= resting->price);
+            const bool crosses = aggressor.is_market || (aggressor.side == 'B' ? aggressor.price >= resting->price
+                                                                               : aggressor.price <= resting->price);
             if (!crosses) break;
             const Quantity quantity = std::min(aggressor.leaves, resting->leaves);
             const std::uint64_t match_number = ++last_match_number_;
@@ -315,7 +315,8 @@ void run_randomized_conversation(std::uint64_t seed, int steps) {
 
     SimulatedUser users[2] = {{"alice", "alicepw", 1, true, {}, nullptr, false, 0, {}},
                               {"bob", "bobpw", 2, false, {}, nullptr, false, 0, {}}};
-    for (SimulatedUser& user : users) user.link = std::make_unique<ClientLink<RecordingHandler>>(exchange, user.handler);
+    for (SimulatedUser& user : users)
+        user.link = std::make_unique<ClientLink<RecordingHandler>>(exchange, user.handler);
 
     auto connect = [&](int user_index) {
         SimulatedUser& user = users[user_index];
@@ -330,8 +331,8 @@ void run_randomized_conversation(std::uint64_t seed, int steps) {
     };
     auto random_price = [&]() -> std::uint32_t {
         if (chance(2)) return kMarketPrice;
-        if (chance(2)) return kHundredDollars + 50;     // off tick
-        if (chance(1)) return kMaximumPrice + kTick;   // out of range
+        if (chance(2)) return kHundredDollars + 50;   // off tick
+        if (chance(1)) return kMaximumPrice + kTick;  // out of range
         return static_cast<std::uint32_t>(kHundredDollars + (static_cast<Price>(pick(11)) - 5) * kTick);
     };
     auto random_quantity = [&]() -> Quantity { return chance(3) ? 0 : static_cast<Quantity>(1 + pick(300)); };
@@ -367,12 +368,10 @@ void run_randomized_conversation(std::uint64_t seed, int steps) {
             const std::string stock = chance(4) ? "ZZZZ" : (chance(70) ? "AAPL" : "MSFT");
             const std::uint32_t price = random_price();
             const Quantity shares = random_quantity();
-            const std::uint32_t time_in_force =
-                chance(2) ? 30 : (chance(20) ? 0 : (chance(15) ? 99998u : 99999u));
+            const std::uint32_t time_in_force = chance(2) ? 30 : (chance(20) ? 0 : (chance(15) ? 99998u : 99999u));
             const char display = chance(2) ? 'N' : (chance(10) ? 'P' : 'Y');
-            REQUIRE(client.enter_order(enter_order(token, side, shares, stock, static_cast<Price>(price), time_in_force,
-                                                   display),
-                                       now));
+            REQUIRE(client.enter_order(
+                enter_order(token, side, shares, stock, static_cast<Price>(price), time_in_force, display), now));
             model.enter_order(user_index, token, side, shares, stock, price, time_in_force, display, now);
         } else if (action < 65) {
             const std::string token = known_or_unknown_token(user);
@@ -466,8 +465,12 @@ void run_randomized_conversation(std::uint64_t seed, int steps) {
 
 }  // namespace
 
-TEST_CASE(gateway_ouch_randomized, conversation_matches_reference_model_seed_1) { run_randomized_conversation(1, 4000); }
-TEST_CASE(gateway_ouch_randomized, conversation_matches_reference_model_seed_2) { run_randomized_conversation(2, 4000); }
+TEST_CASE(gateway_ouch_randomized, conversation_matches_reference_model_seed_1) {
+    run_randomized_conversation(1, 4000);
+}
+TEST_CASE(gateway_ouch_randomized, conversation_matches_reference_model_seed_2) {
+    run_randomized_conversation(2, 4000);
+}
 TEST_CASE(gateway_ouch_randomized, conversation_matches_reference_model_seed_3) {
     run_randomized_conversation(20261103, 4000);
 }

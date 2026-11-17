@@ -212,7 +212,9 @@ public:
     }
 
     // Fault queries: each true consumes one count.
-    bool consume_injected_reject(SessionId session) noexcept { return consume_one(injected_rejects_by_session_[session]); }
+    bool consume_injected_reject(SessionId session) noexcept {
+        return consume_one(injected_rejects_by_session_[session]);
+    }
     bool consume_drop_out(SessionId session) noexcept { return consume_one(outbound_drops_by_session_[session]); }
     bool has_pending_drop_out(SessionId session) const noexcept { return outbound_drops_by_session_[session] != 0; }
 
@@ -255,9 +257,7 @@ public:
     }
 
 private:
-    static void stamp(Command& command, Timestamp now) noexcept {
-        command.timestamp = now;
-    }
+    static void stamp(Command& command, Timestamp now) noexcept { command.timestamp = now; }
 
     static bool consume_one(std::uint32_t& remaining) noexcept {
         if (remaining == 0) return false;
@@ -487,7 +487,9 @@ Message decode_ouch(const std::string& frame) {
     return message;
 }
 
-inline std::string_view token_text(const std::array<char, 14>& token) { return wire::alpha(token.data(), token.size()); }
+inline std::string_view token_text(const std::array<char, 14>& token) {
+    return wire::alpha(token.data(), token.size());
+}
 
 // ---------------------------------------------------------------------------
 // Raw server session: drive one connection with raw client bytes.
@@ -503,7 +505,9 @@ public:
     }
     ~RawSession() { disconnect(); }
 
-    void send(std::string_view bytes) { connection_->on_data(std::span<const char>(bytes.data(), bytes.size()), exchange_); }
+    void send(std::string_view bytes) {
+        connection_->on_data(std::span<const char>(bytes.data(), bytes.size()), exchange_);
+    }
     template <class Message>
     void send_message(const Message& message) {
         send(unsequenced_frame(message));
@@ -562,7 +566,9 @@ struct RecordingHandler {
     int server_timeouts = 0;
     int unknown_messages = 0;
 
-    void on_login_accepted(const soup::LoginAccepted& accepted) { login_accepted_sequences.push_back(accepted.sequence); }
+    void on_login_accepted(const soup::LoginAccepted& accepted) {
+        login_accepted_sequences.push_back(accepted.sequence);
+    }
     void on_login_rejected(char reason) { login_rejections.push_back(reason); }
     void on_sequence_mismatch(std::uint64_t requested, std::uint64_t server_next) {
         sequence_mismatches.emplace_back(requested, server_next);

@@ -49,9 +49,7 @@ TEST_CASE(flat_hash_map, matches_unordered_map_under_churn) {
                 if (got) ref[k] = k * 3;
                 break;
             }
-            case 1:
-                REQUIRE_EQ(map.erase(k), ref.erase(k) == 1);
-                break;
+            case 1: REQUIRE_EQ(map.erase(k), ref.erase(k) == 1); break;
             default: {
                 const auto* v = map.find(k);
                 const auto it = ref.find(k);

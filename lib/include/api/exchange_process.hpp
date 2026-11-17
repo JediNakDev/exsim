@@ -50,6 +50,7 @@ public:
     [[nodiscard]] pid_t pid() const noexcept { return pid_; }
     [[nodiscard]] const std::string& error() const noexcept { return error_; }
     [[nodiscard]] const std::string& snapshot() const noexcept { return snapshot_; }
+
 private:
     bool reap() noexcept;
     void stop_after_failure(std::string message) noexcept;
@@ -62,5 +63,5 @@ private:
     std::condition_variable exit_condition_;
     bool exited_ = false;
 };
-}
+}  // namespace exsim::api
 #endif

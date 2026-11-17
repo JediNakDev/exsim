@@ -48,7 +48,7 @@ TEST_CASE(gateway_ouch_review, drop_out_is_a_transport_cut_recovered_from_the_cl
     bob.pump();  // 2: A ASK1
     exchange.drop_next_outbound_messages(2, 2);
     REQUIRE(bob.client().enter_order(enter_order("ASK2", 'S', 10, "AAPL", kHundredDollars), exchange.now()));
-    bob.pump();  // 3: A ASK2, stored, not transmitted
+    bob.pump();                                                        // 3: A ASK2, stored, not transmitted
     CHECK(bob.connection().state() == OuchConnectionState::LoggedIn);  // one drop left
     REQUIRE(bob.client().enter_order(enter_order("ASK3", 'S', 10, "AAPL", kHundredDollars), exchange.now()));
     bob.pump();  // 4: A ASK3, stored, not transmitted; the link is cut
@@ -87,7 +87,7 @@ TEST_CASE(gateway_ouch_review, gateway_rejects_consume_the_store_reserve) {
     TestExchange exchange(config);
 
     RawSession bob(exchange);
-    REQUIRE(bob.login("bob", "bobpw"));                                        // 1: S
+    REQUIRE(bob.login("bob", "bobpw"));                                       // 1: S
     bob.send_message(enter_order("ASK", 'S', 100, "AAPL", kHundredDollars));  // 2: A, rests
     REQUIRE_EQ(bob.take_types(), "SA");
 

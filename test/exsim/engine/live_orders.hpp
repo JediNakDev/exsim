@@ -20,8 +20,8 @@ inline std::vector<OrderInfo> live_orders(const MatchingEngine& engine) {
     return orders;
 }
 
-inline std::size_t level_orders(const MatchingEngine& engine, InstrumentId instrument,
-                               Side side, Price price, OrderId* out, std::size_t capacity) {
+inline std::size_t level_orders(const MatchingEngine& engine, InstrumentId instrument, Side side, Price price,
+                                OrderId* out, std::size_t capacity) {
     std::size_t seen = 0, written = 0;
     for (OrderId id = 1; seen < engine.live_order_count() && written < capacity; ++id) {
         if (auto order = engine.find_order(id)) {
@@ -35,8 +35,8 @@ inline std::size_t level_orders(const MatchingEngine& engine, InstrumentId instr
 
 // The feed builder retains its own FIFO inspection for packet assertions.
 template <typename Book>
-std::size_t level_orders(const Book& book, InstrumentId instrument, Side side, Price price,
-                         OrderId* out, std::size_t capacity) {
+std::size_t level_orders(const Book& book, InstrumentId instrument, Side side, Price price, OrderId* out,
+                         std::size_t capacity) {
     return book.level_orders(instrument, side, price, out, capacity);
 }
 

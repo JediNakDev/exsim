@@ -63,7 +63,8 @@ template <typename T>
 
 [[nodiscard]] inline std::string format_command(const Command& command) {
     const std::string_view name = to_string(command.type);
-    std::string head = name == "?" ? "COMMAND?" + std::to_string(static_cast<unsigned>(command.type)) : std::string(name);
+    std::string head =
+        name == "?" ? "COMMAND?" + std::to_string(static_cast<unsigned>(command.type)) : std::string(name);
     const std::string body = format_fields(command);
     return body.empty() ? head : head + " " + body;
 }

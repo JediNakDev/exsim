@@ -45,13 +45,13 @@
 namespace exsim::md {
 
 struct PublisherConfig {
-    std::string_view session = "EXSIM";                 // MoldUDP64 session, <= 10 chars
-    std::size_t max_payload = 1400;                      // bytes per packet including the 20-byte header
-    std::size_t retransmit_buffer_messages = 1u << 16;   // ring capacity
-    std::size_t max_instruments = 64;                    // highest stock locate
-    Timestamp day_origin = 0;                            // ITCH timestamp = time - day_origin
-    std::uint64_t heartbeat_interval_ns = 1'000'000'000; // heartbeat after this much silence
-    std::uint64_t noii_interval_ns = 1'000'000'000;      // NOII cadence in call phases; 0 disables
+    std::string_view session = "EXSIM";                   // MoldUDP64 session, <= 10 chars
+    std::size_t max_payload = 1400;                       // bytes per packet including the 20-byte header
+    std::size_t retransmit_buffer_messages = 1u << 16;    // ring capacity
+    std::size_t max_instruments = 64;                     // highest stock locate
+    Timestamp day_origin = 0;                             // ITCH timestamp = time - day_origin
+    std::uint64_t heartbeat_interval_ns = 1'000'000'000;  // heartbeat after this much silence
+    std::uint64_t noii_interval_ns = 1'000'000'000;       // NOII cadence in call phases; 0 disables
 };
 
 enum class PublishStatus : std::uint8_t {
@@ -73,7 +73,7 @@ enum class PublisherState : std::uint8_t {
 };
 
 struct PublisherStats {
-    std::uint64_t packets_sent = 0;             // data, heartbeat and end-of-session packets
+    std::uint64_t packets_sent = 0;  // data, heartbeat and end-of-session packets
     std::uint64_t messages_sequenced = 0;
     std::uint64_t heartbeats_sent = 0;
     std::uint64_t end_of_session_packets_sent = 0;
@@ -297,8 +297,7 @@ public:
     }
 
     [[nodiscard]] PublishStatus poll_heartbeat(Timestamp now) {
-        if (state_ != PublisherState::Live && state_ != PublisherState::Ended)
-            return PublishStatus::NotAllowedInState;
+        if (state_ != PublisherState::Live && state_ != PublisherState::Ended) return PublishStatus::NotAllowedInState;
         flush();
         if (!interval_elapsed(last_packet_time_, now, config_.heartbeat_interval_ns)) return PublishStatus::Ok;
         current_time_ = now;

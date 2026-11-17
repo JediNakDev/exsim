@@ -27,22 +27,26 @@ server::ServerConfig validate(std::string_view text) {
     if (!server::parse_config(text, config, error)) throw std::invalid_argument(error);
     if (config.users.empty()) throw std::invalid_argument("configure at least one user");
     std::uint32_t address = 0;
-    if (!net::parse_ipv4_address(config.exchange.bind_address, address) || address == 0 || net::is_ipv4_multicast_address(address))
+    if (!net::parse_ipv4_address(config.exchange.bind_address, address) || address == 0 ||
+        net::is_ipv4_multicast_address(address))
         throw std::invalid_argument("bind_address must be a specific local unicast IPv4 address");
     if (!net::parse_ipv4_address(config.market_data.address, address) || !config.market_data.port)
         throw std::invalid_argument("market data requires an IPv4 destination and nonzero port");
-    if (!config.market_data.interface_address.empty() && !net::parse_ipv4_address(config.market_data.interface_address, address))
+    if (!config.market_data.interface_address.empty() &&
+        !net::parse_ipv4_address(config.market_data.interface_address, address))
         throw std::invalid_argument("invalid market data interface IPv4 address");
     // A managed journal stays in the data directory, so a request cannot truncate other files.
     if (!config.journal_path.empty() &&
         (config.journal_path.find('/') != std::string::npos || !config.journal_path.ends_with(".journal")))
         throw std::invalid_argument("managed journal path must be a file name ending in .journal");
-    if (text.find("[REDACTED]") != std::string_view::npos) throw std::invalid_argument("supply full credentials when replacing configuration");
+    if (text.find("[REDACTED]") != std::string_view::npos)
+        throw std::invalid_argument("supply full credentials when replacing configuration");
     return config;
 }
 std::string config_body(const HttpRequest& request) {
     const auto json = parse_json(request.body);
-    if (json.kind != JsonValue::Kind::Object || json.members.size() != 1 || !json.find("config") || json.find("config")->kind != JsonValue::Kind::String)
+    if (json.kind != JsonValue::Kind::Object || json.members.size() != 1 || !json.find("config") ||
+        json.find("config")->kind != JsonValue::Kind::String)
         throw std::invalid_argument("expected an object containing only a config string (INI format)");
     return json.find("config")->text;
 }
@@ -62,12 +66,15 @@ std::string redacted(std::string_view config) {
     return output;
 }
 HttpResponse response(int status, std::string body) {
-    HttpResponse result; result.status = status; result.body = std::move(body);
+    HttpResponse result;
+    result.status = status;
+    result.body = std::move(body);
     result.set_header("Content-Type", "application/json");
     return result;
 }
 std::array<std::uint16_t, 4> feed_ports(const server::MarketDataSection& md) {
-    if (md.protocol == server::MarketDataProtocol::Mdp3) return {md.port, md.backup_port, md.snapshot_port, md.instrument_port};
+    if (md.protocol == server::MarketDataProtocol::Mdp3)
+        return {md.port, md.backup_port, md.snapshot_port, md.instrument_port};
     return {md.port, 0, 0, 0};
 }
 bool feeds_overlap(const server::MarketDataSection& first, const server::MarketDataSection& second) {
@@ -77,10 +84,18 @@ bool feeds_overlap(const server::MarketDataSection& first, const server::MarketD
             if (port && port == other_port) return true;
     return false;
 }
-}
+}  // namespace
 HttpResponse exchange_error(int status, std::string_view code, std::string_view message) {
     ApiJsonWriter json;
-    json.begin_object().key("error").begin_object().key("code").string(code).key("message").string(message).end_object().end_object();
+    json.begin_object()
+        .key("error")
+        .begin_object()
+        .key("code")
+        .string(code)
+        .key("message")
+        .string(message)
+        .end_object()
+        .end_object();
     return response(status, json.take());
 }
 ExchangeService::ExchangeService(std::filesystem::path directory, std::filesystem::path executable)
@@ -88,7 +103,8 @@ ExchangeService::ExchangeService(std::filesystem::path directory, std::filesyste
     std::filesystem::create_directories(directory_);
     ::chmod(directory_.c_str(), 0700);
     lock_ = net::Socket(::open((directory_ / ".lock").c_str(), O_CREAT | O_RDWR | O_CLOEXEC, 0600));
-    if (!lock_.is_open() || ::flock(lock_.fd(), LOCK_EX | LOCK_NB) != 0) throw std::runtime_error("exchange directory is locked by another manager");
+    if (!lock_.is_open() || ::flock(lock_.fd(), LOCK_EX | LOCK_NB) != 0)
+        throw std::runtime_error("exchange directory is locked by another manager");
     for (const auto& entry : std::filesystem::directory_iterator(directory_)) {
         if (entry.path().extension() != ".conf") continue;
         auto exchange = std::make_shared<Exchange>();
@@ -101,8 +117,14 @@ ExchangeService::ExchangeService(std::filesystem::path directory, std::filesyste
 }
 ExchangeService::~ExchangeService() {
     // Let every child drain concurrently before waiting for individual exits.
-    for (auto& [id, exchange] : exchanges_) { (void)id; exchange->process.request_stop(); }
-    for (auto& [id, exchange] : exchanges_) { (void)id; exchange->process.stop(); }
+    for (auto& [id, exchange] : exchanges_) {
+        (void)id;
+        exchange->process.request_stop();
+    }
+    for (auto& [id, exchange] : exchanges_) {
+        (void)id;
+        exchange->process.stop();
+    }
 }
 void ExchangeService::save(const std::string& id, std::string_view config_text) {
     const auto final = directory_ / (id + ".conf");
@@ -119,17 +141,31 @@ void ExchangeService::save(const std::string& id, std::string_view config_text) 
         }
         if (::fsync(file.fd()) != 0) throw std::runtime_error("cannot flush config file");
         std::filesystem::rename(temporary, final);
-    } catch (...) { std::filesystem::remove(temporary); throw; }
+    } catch (...) {
+        std::filesystem::remove(temporary);
+        throw;
+    }
 }
 std::string ExchangeService::view(const Exchange& exchange) const {
     const auto& process = exchange.process;
     ApiJsonWriter json;
-    json.begin_object().key("id").string(exchange.id).key("name").string(exchange.config.exchange.name)
-        .key("state").string(to_string(process.state())).key("pid");
-    if (process.pid() > 0) json.integer_number(process.pid()); else json.null();
-    json.key("error").string(process.error()).key("config").string(redacted(exchange.config_text))
-        .key("runtime");
-    if (process.snapshot().empty()) json.null(); else json.raw(process.snapshot());
+    json.begin_object()
+        .key("id")
+        .string(exchange.id)
+        .key("name")
+        .string(exchange.config.exchange.name)
+        .key("state")
+        .string(to_string(process.state()))
+        .key("pid");
+    if (process.pid() > 0)
+        json.integer_number(process.pid());
+    else
+        json.null();
+    json.key("error").string(process.error()).key("config").string(redacted(exchange.config_text)).key("runtime");
+    if (process.snapshot().empty())
+        json.null();
+    else
+        json.raw(process.snapshot());
     return json.end_object().take();
 }
 void ExchangeService::release_feed_and_publish_view(Exchange& exchange) {
@@ -141,7 +177,9 @@ void ExchangeService::release_feed_and_publish_view(Exchange& exchange) {
 HttpResponse ExchangeService::handle(const HttpRequest& request) {
     try {
         if (request.path == "/v1/service" && request.method == "GET")
-            return response(200, R"({"product":"exsim","apiVersion":"v1","profile":"ouch42_soupbintcp_itch50_moldudp64","orderEntryProtocols":["ouch42_soupbintcp","fix44","ilink3"],"marketDataProtocols":["itch50_moldudp64","mdp3_sbe"]})");
+            return response(
+                200,
+                R"({"product":"exsim","apiVersion":"v1","profile":"ouch42_soupbintcp_itch50_moldudp64","orderEntryProtocols":["ouch42_soupbintcp","fix44","ilink3"],"marketDataProtocols":["itch50_moldudp64","mdp3_sbe"]})");
         const std::string root = "/v1/exchanges";
         if (request.path == root) {
             if (request.method == "GET") return list_exchanges();
@@ -172,15 +210,22 @@ HttpResponse ExchangeService::handle(const HttpRequest& request) {
         }
         release_feed_and_publish_view(*exchange);
         return result;
-    } catch (const JsonError& error) { return exchange_error(400, "invalid_json", error.what()); }
-      catch (const std::invalid_argument& error) { return exchange_error(400, "invalid_config", error.what()); }
-      catch (const std::exception&) { return exchange_error(500, "internal_error", "exchange management operation failed"); }
+    } catch (const JsonError& error) {
+        return exchange_error(400, "invalid_json", error.what());
+    } catch (const std::invalid_argument& error) {
+        return exchange_error(400, "invalid_config", error.what());
+    } catch (const std::exception&) {
+        return exchange_error(500, "internal_error", "exchange management operation failed");
+    }
 }
 HttpResponse ExchangeService::list_exchanges() {
     std::vector<std::shared_ptr<Exchange>> exchanges;
     {
         std::lock_guard guard(mutex_);
-        for (const auto& [id, exchange] : exchanges_) { (void)id; exchanges.push_back(exchange); }
+        for (const auto& [id, exchange] : exchanges_) {
+            (void)id;
+            exchanges.push_back(exchange);
+        }
     }
     ApiJsonWriter json;
     json.begin_array();
@@ -206,7 +251,8 @@ HttpResponse ExchangeService::create_exchange(const HttpRequest& request) {
     exchange->config = validate(exchange->config_text);
     std::random_device random;
     do {
-        std::ostringstream id; id << "exchange-" << std::hex << random() << random();
+        std::ostringstream id;
+        id << "exchange-" << std::hex << random() << random();
         exchange->id = id.str();
     } while (exchanges_.contains(exchange->id));
     save(exchange->id, exchange->config_text);
@@ -215,20 +261,22 @@ HttpResponse ExchangeService::create_exchange(const HttpRequest& request) {
     exchanges_.emplace(exchange->id, std::move(exchange));
     return response(201, std::move(body));
 }
-HttpResponse ExchangeService::handle_exchange_request(Exchange& exchange, const HttpRequest& request, const std::string& action) {
+HttpResponse ExchangeService::handle_exchange_request(Exchange& exchange, const HttpRequest& request,
+                                                      const std::string& action) {
     if (action.empty()) {
         if (request.method == "GET") return response(200, view(exchange));
-        if (request.method != "PUT" && request.method != "DELETE") return exchange_error(405, "method_not_allowed", "use GET, PUT or DELETE");
-        if (exchange.process.pid() > 0) return exchange_error(409, "exchange_running", "stop the exchange before updating or deleting it");
+        if (request.method != "PUT" && request.method != "DELETE")
+            return exchange_error(405, "method_not_allowed", "use GET, PUT or DELETE");
+        if (exchange.process.pid() > 0)
+            return exchange_error(409, "exchange_running", "stop the exchange before updating or deleting it");
         return request.method == "DELETE" ? delete_exchange(exchange) : replace_exchange(exchange, request);
     }
     if (action == "admin" && request.method == "POST") {
         const auto json = parse_json(request.body);
         const auto* command = json.find("command");
-        if (json.kind != JsonValue::Kind::Object || json.members.size() != 1 ||
-            !command || command->kind != JsonValue::Kind::String || command->text.empty() ||
-            command->text.size() > 4096 || command->text.find_first_of("\r\n") != std::string::npos ||
-            command->text.find('\0') != std::string::npos)
+        if (json.kind != JsonValue::Kind::Object || json.members.size() != 1 || !command ||
+            command->kind != JsonValue::Kind::String || command->text.empty() || command->text.size() > 4096 ||
+            command->text.find_first_of("\r\n") != std::string::npos || command->text.find('\0') != std::string::npos)
             throw std::invalid_argument("expected only a command string: one line, 1 to 4096 bytes");
         if (exchange.process.pid() <= 0) return exchange_error(409, "exchange_stopped", "start the exchange first");
         std::string reply;
@@ -244,7 +292,8 @@ HttpResponse ExchangeService::handle_exchange_request(Exchange& exchange, const 
         return response(200, view(exchange));
     }
     if (action == "start" && request.method == "POST") return start_exchange(exchange);
-    if ((action == "status" || action == "connections") && request.method == "GET") return read_exchange_status(exchange, action);
+    if ((action == "status" || action == "connections") && request.method == "GET")
+        return read_exchange_status(exchange, action);
     return exchange_error(404, "not_found", "unknown exchange route or method");
 }
 HttpResponse ExchangeService::replace_exchange(Exchange& exchange, const HttpRequest& request) {
@@ -271,7 +320,8 @@ HttpResponse ExchangeService::start_exchange(Exchange& exchange) {
             // An exited child keeps its claim until a request on it reaps it.
             if (other_id == exchange.id || exchanges_.find(other_id)->second->process.has_exited()) continue;
             if (feeds_overlap(exchange.config.market_data, other_feed))
-                return exchange_error(409, "feed_conflict", "another running exchange uses this market data destination");
+                return exchange_error(409, "feed_conflict",
+                                      "another running exchange uses this market data destination");
         }
         claimed_feeds_[exchange.id] = exchange.config.market_data;
     }
@@ -282,9 +332,11 @@ HttpResponse ExchangeService::start_exchange(Exchange& exchange) {
 }
 HttpResponse ExchangeService::read_exchange_status(Exchange& exchange, const std::string& action) {
     if (exchange.process.pid() <= 0)
-        return action == "status" ? response(200, view(exchange)) : exchange_error(409, "exchange_stopped", "start the exchange first");
+        return action == "status" ? response(200, view(exchange))
+                                  : exchange_error(409, "exchange_stopped", "start the exchange first");
     if (!exchange.process.read_status()) return exchange_error(503, "exchange_unavailable", exchange.process.error());
-    if (action == "connections") return response(200, serialize_json_value(*parse_json(exchange.process.snapshot()).find("connections")));
+    if (action == "connections")
+        return response(200, serialize_json_value(*parse_json(exchange.process.snapshot()).find("connections")));
     return response(200, view(exchange));
 }
-}
+}  // namespace exsim::api

@@ -152,7 +152,7 @@ TEST_CASE(server_core_dispatch, one_batch_reaches_each_gateway_user_with_exactly
     CHECK(same_events(carol.events, events_of_session(all_events, 3)));
     const std::span<const Event> sweep = recorder.batch(3);
     CHECK_EQ(bob.events.size(), sweep.size());  // Accepted, three Fills, Rested
-    CHECK_EQ(carol.events.size(), 3u);           // Accepted and Rested, then one Fill of the sweep
+    CHECK_EQ(carol.events.size(), 3u);          // Accepted and Rested, then one Fill of the sweep
     CHECK(carol.events.back().type == EventType::Fill);
     CHECK_EQ(core.counters().session_dispatches, 6u);
 }
@@ -194,8 +194,9 @@ TEST_CASE(server_core_dispatch, auction_uncross_dispatches_buy_then_sell_session
 TEST_CASE(server_core_dispatch, mass_cancel_dispatches_its_session_once) {
     RecordingHarness h(parse_test_config());
     for (ClOrdId token = 1; token <= 4; ++token) {
-        REQUIRE_EQ(h.core.submit(limit_order(1, token, kAapl, Side::BUY, 1'400'000 + static_cast<Price>(token) * 100, 10)),
-                   SubmitResult::Applied);
+        REQUIRE_EQ(
+            h.core.submit(limit_order(1, token, kAapl, Side::BUY, 1'400'000 + static_cast<Price>(token) * 100, 10)),
+            SubmitResult::Applied);
     }
     MassCancel cancel_all{};
     cancel_all.session = 1;
@@ -274,8 +275,8 @@ TEST_CASE(server_core_dispatch, output_capacity_failure_applies_nothing_and_core
         const auto journaled_before = h.core.counters().journal_records;
         const auto timestamp_before = h.core.last_command_timestamp();
         h.clock.day += kSecond;
-        const auto result = h.core.submit(limit_order(1, token, kAapl, Side::BUY,
-                                                    1'000'000 + static_cast<Price>(token) * 100, 1));
+        const auto result =
+            h.core.submit(limit_order(1, token, kAapl, Side::BUY, 1'000'000 + static_cast<Price>(token) * 100, 1));
         if (result == SubmitResult::Applied) continue;
         REQUIRE_EQ(result, SubmitResult::OutputCapacityExceeded);
         CHECK_EQ(h.core.engine().live_order_count(), live_before);
@@ -295,7 +296,8 @@ TEST_CASE(server_core_dispatch, output_capacity_failure_applies_nothing_and_core
     cancel.orig_cl_ord_id = refused_token - 1;
     REQUIRE_EQ(h.core.submit(Command{cancel}), SubmitResult::Applied);
     REQUIRE_EQ(h.core.submit(limit_order(1, refused_token, kAapl, Side::BUY,
-                                       1'000'000 + static_cast<Price>(refused_token) * 100, 1)), SubmitResult::Applied);
+                                         1'000'000 + static_cast<Price>(refused_token) * 100, 1)),
+               SubmitResult::Applied);
     const auto batch = h.recorder.batch(h.recorder.batch_count() - 1);
     REQUIRE(batch[0].type == EventType::Accepted);
     CHECK_EQ(batch[0].accepted.order_id, static_cast<OrderId>(refused_token));

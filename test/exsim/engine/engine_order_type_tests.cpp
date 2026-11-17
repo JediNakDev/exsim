@@ -135,8 +135,8 @@ TEST_CASE(engine_order_types, multi_level_sweep_stops_at_limit) {
     const OrderId a3 = h.rest(1, 3, Side::SELL, 1200, 10);
     const OrderId a4 = h.rest(1, 4, Side::SELL, 1300, 10);
     h.send(h.limit(2, 1, Side::BUY, 1200, 35));
-    REQUIRE_EQ(event_types(h.events()), (std::vector<EventType>{EventType::Accepted, EventType::Fill,
-                                                                EventType::Fill, EventType::Fill, EventType::Rested}));
+    REQUIRE_EQ(event_types(h.events()), (std::vector<EventType>{EventType::Accepted, EventType::Fill, EventType::Fill,
+                                                                EventType::Fill, EventType::Rested}));
     check_fill(h.event(1), 1000, 10, Aggressor::Buy, 5, 25, 10, a1, 0, 10);
     check_fill(h.event(2), 1100, 10, Aggressor::Buy, 5, 15, 20, a2, 0, 10);
     check_fill(h.event(3), 1200, 10, Aggressor::Buy, 5, 5, 30, a3, 0, 10);
@@ -156,8 +156,8 @@ TEST_CASE(engine_order_types, market_order_sweeps_and_cancels_remainder) {
     market.price = 777;
     market.tif = TimeInForce::GTC;  // TIF is ignored: a market order never rests
     h.send(market);
-    REQUIRE_EQ(event_types(h.events()), (std::vector<EventType>{EventType::Accepted, EventType::Fill,
-                                                                EventType::Fill, EventType::Canceled}));
+    REQUIRE_EQ(event_types(h.events()),
+               (std::vector<EventType>{EventType::Accepted, EventType::Fill, EventType::Fill, EventType::Canceled}));
     check_fill(h.event(1), 1000, 10, Aggressor::Sell, 1, 0, 10, 3, 15, 10);
     check_fill(h.event(2), 100, 10, Aggressor::Sell, 2, 0, 10, 3, 5, 20);
     check_canceled(h.event(3), 3, 9, 0, Side::SELL, 777, 5, 20, CancelReason::ImmediateOrCancel, false);
@@ -223,8 +223,7 @@ TEST_CASE(engine_order_types, fok_exact_liquidity_fills_completely) {
     NewOrder fok = h.limit(2, 1, Side::BUY, 1100, 20);
     fok.tif = TimeInForce::FOK;
     h.send(fok);
-    CHECK_EQ(event_types(h.events()),
-             (std::vector<EventType>{EventType::Accepted, EventType::Fill, EventType::Fill}));
+    CHECK_EQ(event_types(h.events()), (std::vector<EventType>{EventType::Accepted, EventType::Fill, EventType::Fill}));
     CHECK_EQ(h.engine().live_order_count(), std::size_t{0});
 }
 
@@ -241,8 +240,7 @@ TEST_CASE(engine_order_types, fok_market_order_uses_the_whole_opposite_side) {
     fok_market.cl_ord_id = 2;
     fok_market.qty = 20;
     h.send(fok_market);
-    CHECK_EQ(event_types(h.events()),
-             (std::vector<EventType>{EventType::Accepted, EventType::Fill, EventType::Fill}));
+    CHECK_EQ(event_types(h.events()), (std::vector<EventType>{EventType::Accepted, EventType::Fill, EventType::Fill}));
 }
 
 // FOK pre-check: CancelResting skips self-matches while counting.
@@ -303,8 +301,7 @@ TEST_CASE(engine_order_types, fok_without_self_match_conditions_counts_everythin
     fok.owner = 7;
     fok.tif = TimeInForce::FOK;
     h.send(fok);
-    CHECK_EQ(event_types(h.events()),
-             (std::vector<EventType>{EventType::Accepted, EventType::Fill, EventType::Fill}));
+    CHECK_EQ(event_types(h.events()), (std::vector<EventType>{EventType::Accepted, EventType::Fill, EventType::Fill}));
 
     // owner 0 never self-matches even with an STP mode.
     h.rest(1, 2, Side::SELL, 1000, 10, /*owner=*/0);
@@ -324,8 +321,8 @@ TEST_CASE(engine_order_types, stp_cancel_resting_continues_matching) {
     aggressor.owner = 7;
     aggressor.stp = StpMode::CancelResting;
     h.send(aggressor);
-    REQUIRE_EQ(event_types(h.events()), (std::vector<EventType>{EventType::Accepted, EventType::Fill,
-                                                                EventType::Canceled, EventType::Fill}));
+    REQUIRE_EQ(event_types(h.events()),
+               (std::vector<EventType>{EventType::Accepted, EventType::Fill, EventType::Canceled, EventType::Fill}));
     check_fill(h.event(1), 1000, 5, Aggressor::Buy, 4, 7, 5, other_first, 0, 5);
     check_canceled(h.event(2), own, 1, 0, Side::SELL, 1000, 10, 0, CancelReason::SelfTradePrevention, true);
     CHECK_EQ(h.event(2).canceled.session, SessionId{1});

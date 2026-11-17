@@ -30,7 +30,10 @@ namespace {
 
 std::vector<char> read_file(const std::string& path) {
     std::ifstream in(path, std::ios::binary | std::ios::ate);
-    if (!in) { std::cerr << "cannot open " << path << "\n"; std::exit(1); }
+    if (!in) {
+        std::cerr << "cannot open " << path << "\n";
+        std::exit(1);
+    }
     auto size = in.tellg();
     in.seekg(0);
     std::vector<char> buf(static_cast<std::size_t>(size));
@@ -45,8 +48,7 @@ std::vector<char> unframe(const std::vector<char>& in) {
     out.reserve(in.size());
     std::size_t i = 0;
     while (i + 2 <= in.size()) {
-        std::uint16_t len = (static_cast<std::uint8_t>(in[i]) << 8)
-                          |  static_cast<std::uint8_t>(in[i + 1]);
+        std::uint16_t len = (static_cast<std::uint8_t>(in[i]) << 8) | static_cast<std::uint8_t>(in[i + 1]);
         i += 2;
         if (i + len > in.size()) break;
         out.insert(out.end(), in.begin() + i, in.begin() + i + len);
@@ -66,10 +68,16 @@ int main(int argc, char** argv) {
 
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
-        if (a == "--synth" && i + 1 < argc) { synth = true; synth_n = std::stoull(argv[++i]); }
-        else if (a == "--framed")           { framed = true; }
-        else if (a == "--validate")         { validate = true; }
-        else                                { path = a; }
+        if (a == "--synth" && i + 1 < argc) {
+            synth = true;
+            synth_n = std::stoull(argv[++i]);
+        } else if (a == "--framed") {
+            framed = true;
+        } else if (a == "--validate") {
+            validate = true;
+        } else {
+            path = a;
+        }
     }
     if (!synth && path.empty()) {
         std::cerr << "usage: itch_replay <file.itch> [--framed] | --synth N [--validate]\n";
@@ -98,7 +106,11 @@ int main(int argc, char** argv) {
     auto t0 = std::chrono::steady_clock::now();
     while (offset < wire.size()) {
         const std::size_t sz = exsim::itch_replay::book_message_size(wire[offset]);
-        if (sz == 0) { ++skipped; ++offset; continue; }
+        if (sz == 0) {
+            ++skipped;
+            ++offset;
+            continue;
+        }
         if (offset + sz > wire.size()) break;
         if (replayer.apply({&wire[offset], sz})) {
             ++parsed;
@@ -117,27 +129,16 @@ int main(int argc, char** argv) {
     double secs = std::chrono::duration<double>(t1 - t0).count();
 
     auto const& s = replayer.stats();
-    std::cout << "file_bytes=" << wire.size()
-              << " parsed=" << parsed
-              << " skipped=" << skipped
-              << " elapsed_s=" << secs
-              << " msg_per_sec=" << (parsed / secs)
-              << "\n"
-              << "adds=" << s.adds
-              << " executes=" << s.executes
-              << " cancels=" << s.cancels
-              << " deletes=" << s.deletes
-              << " replaces=" << s.replaces
-              << " unknown_ref=" << s.unknown_ref
-              << " dropped_cross=" << s.dropped_cross
-              << " rejected=" << s.rejected
-              << "\n";
+    std::cout << "file_bytes=" << wire.size() << " parsed=" << parsed << " skipped=" << skipped << " elapsed_s=" << secs
+              << " msg_per_sec=" << (parsed / secs) << "\n"
+              << "adds=" << s.adds << " executes=" << s.executes << " cancels=" << s.cancels << " deletes=" << s.deletes
+              << " replaces=" << s.replaces << " unknown_ref=" << s.unknown_ref << " dropped_cross=" << s.dropped_cross
+              << " rejected=" << s.rejected << "\n";
     if (validate) std::cout << "validation_mismatches=" << mismatches << "\n";
 
     auto bid = engine.best_bid(replayer.instrument());
     auto ask = engine.best_ask(replayer.instrument());
-    std::cout << "best_bid=" << (bid ? std::to_string(*bid) : "-")
-              << " best_ask=" << (ask ? std::to_string(*ask) : "-")
+    std::cout << "best_bid=" << (bid ? std::to_string(*bid) : "-") << " best_ask=" << (ask ? std::to_string(*ask) : "-")
               << " live_orders=" << engine.live_order_count() << "\n";
     return (validate && mismatches > 0) ? 2 : 0;
 }

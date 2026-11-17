@@ -105,9 +105,9 @@ TEST_CASE(md_feed_scenario, halt_keeps_crossed_book_then_uncrosses_with_cross_ty
     scenario.order(1, 2, Side::SELL, 1'000'000, 20);
     scenario.run(SetPhase{0, 1, Phase::Halted});
     CHECK_EQ(builder.trading_state(1), 'H');
-    CHECK_GT(*builder.best_bid(1), *builder.best_ask(1));  // halted, still crossed
+    CHECK_GT(*builder.best_bid(1), *builder.best_ask(1));            // halted, still crossed
     scenario.run(limit_order(0, 1, 1, 3, Side::BUY, 1'000'000, 5));  // rejected while halted: no output
-    scenario.run(CancelOrder{0, 1, 1, 9, 25});                     // cancels are allowed: X 5
+    scenario.run(CancelOrder{0, 1, 1, 9, 25});                       // cancels are allowed: X 5
     scenario.run(SetPhase{0, 1, Phase::Continuous});
     CHECK_EQ(builder.trading_state(1), 'T');
     REQUIRE(builder.last_cross(1).has_value());

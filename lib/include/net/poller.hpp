@@ -42,9 +42,7 @@ constexpr std::uint64_t make_poll_token(std::uint8_t owner_tag, std::uint64_t va
 constexpr std::uint8_t poll_token_tag(std::uint64_t token) noexcept {
     return static_cast<std::uint8_t>(token >> kPollTokenTagShift);
 }
-constexpr std::uint64_t poll_token_value(std::uint64_t token) noexcept {
-    return token & kPollTokenValueMask;
-}
+constexpr std::uint64_t poll_token_value(std::uint64_t token) noexcept { return token & kPollTokenValueMask; }
 
 enum class PollInterest : std::uint8_t {
     Read = 1,
@@ -65,7 +63,7 @@ struct PollEvent {
 // With kqueue, read and write readiness of one fd arrive as two separate
 // events; with epoll as one event with both flags. Handle each flag on its own.
 class Poller {
-   public:
+public:
     static constexpr int kMaxEventsPerWait = 256;
 
     Poller() noexcept = default;
@@ -94,7 +92,7 @@ class Poller {
         return {ready_events_.data(), static_cast<std::size_t>(ready_event_count_)};
     }
 
-   private:
+private:
     int poll_fd_ = -1;
     int ready_event_count_ = 0;
 #if defined(EXSIM_NET_POLLER_EPOLL)

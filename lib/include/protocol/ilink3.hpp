@@ -7,45 +7,57 @@
 #include <type_traits>
 
 namespace exsim::protocol::ilink3 {
-template<class T> [[nodiscard]] T get(const cme::MessageView& message, Field<T> field) noexcept {
+template <class T>
+[[nodiscard]] T get(const cme::MessageView& message, Field<T> field) noexcept {
     return cme::load_le<T>(message.body.data() + field.offset);
 }
-template<std::size_t N> [[nodiscard]] std::string_view get(const cme::MessageView& message, TextField<N> field) noexcept {
+template <std::size_t N>
+[[nodiscard]] std::string_view get(const cme::MessageView& message, TextField<N> field) noexcept {
     const char* begin = message.body.data() + field.offset;
     std::size_t size = 0;
     while (size < N && begin[size]) ++size;
     return {begin, size};
 }
-template<std::size_t N> [[nodiscard]] bool valid_text(const cme::MessageView& message, TextField<N> field, bool required = true) noexcept {
+template <std::size_t N>
+[[nodiscard]] bool valid_text(const cme::MessageView& message, TextField<N> field, bool required = true) noexcept {
     const auto text = get(message, field);
     if (required && text.empty()) return false;
-    for (char ch : text) if (ch < 0x21 || ch > 0x7e) return false;
-    for (std::size_t i = text.size(); i < N; ++i) if (message.body[field.offset + i]) return false;
+    for (char ch : text)
+        if (ch < 0x21 || ch > 0x7e) return false;
+    for (std::size_t i = text.size(); i < N; ++i)
+        if (message.body[field.offset + i]) return false;
     return true;
 }
-template<class Message> [[nodiscard]] bool valid(const cme::MessageView& message) noexcept {
+template <class Message>
+[[nodiscard]] bool valid(const cme::MessageView& message) noexcept {
     return message.header.schema_id == schema::id && message.header.version == schema::version &&
            message.header.template_id == Message::id && message.header.block_length >= Message::block_length &&
            message.body.size() >= message.header.block_length;
 }
-template<class Message> struct Root {
+template <class Message>
+struct Root {
     std::array<char, Message::block_length> bytes = Message::defaults;
-    template<class T> void set(Field<T> field, std::type_identity_t<T> value) noexcept { cme::store_le(bytes.data() + field.offset, value); }
-    template<std::size_t N> bool set(TextField<N> field, std::string_view text) noexcept {
+    template <class T>
+    void set(Field<T> field, std::type_identity_t<T> value) noexcept {
+        cme::store_le(bytes.data() + field.offset, value);
+    }
+    template <std::size_t N>
+    bool set(TextField<N> field, std::string_view text) noexcept {
         if (text.size() > N) return false;
         std::fill_n(bytes.data() + field.offset, N, char{0});
         if (!text.empty()) std::memcpy(bytes.data() + field.offset, text.data(), text.size());
         return true;
     }
     // Writes root and tail at their final offsets after the framing header.
-    [[nodiscard]] std::size_t encode(std::span<char> output, std::span<const char> tail = Message::empty_tail) const noexcept {
+    [[nodiscard]] std::size_t encode(std::span<char> output,
+                                     std::span<const char> tail = Message::empty_tail) const noexcept {
         const std::size_t body_size = bytes.size() + tail.size();
         if (output.size() < cme::kIlinkHeaderSize + body_size) return 0;
         char* body = output.data() + cme::kIlinkHeaderSize;
         std::memcpy(body, bytes.data(), bytes.size());
         if (!tail.empty()) std::memcpy(body + bytes.size(), tail.data(), tail.size());
-        return cme::encode_ilink({Message::block_length, Message::id, schema::id, schema::version},
-                                 {body, body_size}, output);
+        return cme::encode_ilink({Message::block_length, Message::id, schema::id, schema::version}, {body, body_size},
+                                 output);
     }
 };
 
@@ -57,7 +69,10 @@ struct SigningText {
     bool good = true;
     void append(std::string_view value) noexcept {
         const std::size_t separator = used != 0;
-        if (used + separator + value.size() > bytes.size()) { good = false; return; }
+        if (used + separator + value.size() > bytes.size()) {
+            good = false;
+            return;
+        }
         if (separator) bytes[used++] = '\n';
         if (!value.empty()) std::memcpy(bytes.data() + used, value.data(), value.size());
         used += value.size();

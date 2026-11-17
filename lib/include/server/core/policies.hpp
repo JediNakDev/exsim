@@ -89,9 +89,8 @@ concept CoreSessions = requires(Sessions& sessions, SessionId session, const Ses
 // ---- optional hooks ------------------------------------------------------
 
 template <typename MarketData, typename Core>
-concept MarketDataTimerWithCore = requires(MarketData& market_data, Timestamp now, const Core& core) {
-    market_data.on_timer(now, core);
-};
+concept MarketDataTimerWithCore =
+    requires(MarketData& market_data, Timestamp now, const Core& core) { market_data.on_timer(now, core); };
 
 template <typename MarketData>
 concept MarketDataTimer = requires(MarketData& market_data, Timestamp now) { market_data.on_timer(now); };

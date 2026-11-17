@@ -19,7 +19,8 @@ using namespace exsim;
 constexpr Price kTick = 100;
 constexpr Price kReferencePrice = 1'000'000;
 
-inline InstrumentConfig standard_instrument_config(const char* symbol = "TEST", Phase initial_phase = Phase::Continuous) {
+inline InstrumentConfig standard_instrument_config(const char* symbol = "TEST",
+                                                   Phase initial_phase = Phase::Continuous) {
     InstrumentConfig config;
     config.symbol = Symbol(symbol);
     config.tick_size = kTick;

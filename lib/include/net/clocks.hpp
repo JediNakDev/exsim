@@ -19,7 +19,7 @@ inline std::uint64_t realtime_ns() noexcept {
 // Cache the UTC offset during setup (and refresh at session/day or timezone
 // changes). No libc timezone conversion, locks or lazy allocation per message.
 class LocalClock {
-   public:
+public:
     void refresh(std::time_t now = std::time(nullptr)) noexcept {
         std::tm local{};
         localtime_r(&now, &local);
@@ -31,7 +31,7 @@ class LocalClock {
         return static_cast<std::uint64_t>(seconds) * kNanosecondsPerSecond + unix_ns % kNanosecondsPerSecond;
     }
 
-   private:
+private:
     std::int64_t offset_seconds_ = 0;
 };
 }  // namespace exsim::net

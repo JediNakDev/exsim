@@ -373,10 +373,14 @@ TEST_CASE(engine_capacity, rejects_when_live_orders_reach_max_orders) {
 }
 
 TEST_CASE(engine_capacity, invalid_engine_configs_throw) {
-    for (auto config : {EngineConfig{1,0}, EngineConfig{0,1}, EngineConfig{65536,1},
-                        EngineConfig{1, std::size_t{UINT32_MAX}+1}}) {
+    for (auto config : {EngineConfig{1, 0}, EngineConfig{0, 1}, EngineConfig{65536, 1},
+                        EngineConfig{1, std::size_t{UINT32_MAX} + 1}}) {
         bool threw = false;
-        try { MatchingEngine engine(config); } catch (const std::invalid_argument&) { threw = true; }
+        try {
+            MatchingEngine engine(config);
+        } catch (const std::invalid_argument&) {
+            threw = true;
+        }
         CHECK(threw);
     }
 }

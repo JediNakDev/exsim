@@ -27,14 +27,14 @@ struct HttpLimits {
 };
 
 struct HttpHeader {
-    std::string name;  // lower-cased
+    std::string name;   // lower-cased
     std::string value;  // surrounding whitespace removed
 };
 
 struct HttpRequest {
     std::string method;
-    std::string target;       // raw request target, e.g. /v1/runs?limit=5
-    std::string path;         // percent-decoded path without the query
+    std::string target;                                      // raw request target, e.g. /v1/runs?limit=5
+    std::string path;                                        // percent-decoded path without the query
     std::vector<std::pair<std::string, std::string>> query;  // decoded, in order
     std::vector<HttpHeader> headers;
     std::string body;
@@ -47,22 +47,23 @@ struct HttpRequest {
 };
 
 enum class HttpParseStatus : std::uint8_t {
-    Complete = 0,          // a request was parsed; `consumed_bytes` belong to it
-    NeedMoreData = 1,      // the buffer holds a valid prefix of a request
-    BadRequest = 2,        // malformed; respond 400 and close
-    HeadersTooLarge = 3,   // respond 431 and close
-    BodyTooLarge = 4,      // respond 413 and close
-    NotImplemented = 5,    // e.g. Transfer-Encoding; respond 501 and close
+    Complete = 0,         // a request was parsed; `consumed_bytes` belong to it
+    NeedMoreData = 1,     // the buffer holds a valid prefix of a request
+    BadRequest = 2,       // malformed; respond 400 and close
+    HeadersTooLarge = 3,  // respond 431 and close
+    BodyTooLarge = 4,     // respond 413 and close
+    NotImplemented = 5,   // e.g. Transfer-Encoding; respond 501 and close
 };
 
 struct HttpParseResult {
     HttpParseStatus status = HttpParseStatus::NeedMoreData;
     std::size_t consumed_bytes = 0;
-    std::string error_message;  // for the rejection response
+    std::string error_message;   // for the rejection response
     std::size_t body_bytes = 0;  // declared Content-Length of a Complete result
 };
 
-[[nodiscard]] HttpParseResult parse_http_request(std::string_view buffer, const HttpLimits& limits, HttpRequest& request);
+[[nodiscard]] HttpParseResult parse_http_request(std::string_view buffer, const HttpLimits& limits,
+                                                 HttpRequest& request);
 
 // Parses only the request line and header section, with the same checks and
 // rejection order as parse_http_request(). On Complete, `consumed_bytes` ends
@@ -70,7 +71,8 @@ struct HttpParseResult {
 // checked against max_body_bytes) and `request.body` is empty. A reader that
 // receives the body in fragments calls this once per request instead of
 // re-parsing the headers on every read.
-[[nodiscard]] HttpParseResult parse_http_request_head(std::string_view buffer, const HttpLimits& limits, HttpRequest& request);
+[[nodiscard]] HttpParseResult parse_http_request_head(std::string_view buffer, const HttpLimits& limits,
+                                                      HttpRequest& request);
 
 // Percent-decodes a path or query component ('+' is a space only in queries).
 // Returns nullopt for a malformed escape or a decoded NUL byte.

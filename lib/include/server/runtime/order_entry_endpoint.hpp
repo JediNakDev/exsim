@@ -264,10 +264,10 @@ private:
     Core& core_;
     std::uint8_t poll_tag_;
     std::uint32_t slot_count_;
-    std::unique_ptr<Slot[]> slots_;                           // index = net slot
+    std::unique_ptr<Slot[]> slots_;                               // index = net slot
     std::unique_ptr<std::unique_ptr<Connection>[]> connections_;  // index = net slot, built at startup
-    std::unique_ptr<DelayMark[]> delay_marks_;                // kMaxDelayMarks ring per slot
-    std::unique_ptr<std::uint64_t[]> open_slot_words_;       // bit per slot: open
+    std::unique_ptr<DelayMark[]> delay_marks_;                    // kMaxDelayMarks ring per slot
+    std::unique_ptr<std::uint64_t[]> open_slot_words_;            // bit per slot: open
     std::uint32_t open_connections_ = 0;
     bool ending_day_ = false;
 };

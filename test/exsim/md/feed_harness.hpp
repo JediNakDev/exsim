@@ -37,7 +37,7 @@ struct FeedHarnessOptions {
     std::uint64_t noii_interval_ns = 20'000'000;
     std::uint64_t heartbeat_interval_ns = 1'000'000'000;
     std::uint64_t request_timeout_ns = 5'000'000;
-    md::PacketFaultConfig feed_faults{};    // all rates 0: clean feed
+    md::PacketFaultConfig feed_faults{};  // all rates 0: clean feed
     std::uint32_t response_drop_ppm = 0;
     std::uint64_t response_fault_seed = 7;
 };
@@ -87,9 +87,8 @@ struct BoundaryCheckingHandler {
                 ++boundaries_checked;
                 if (builder_digest() != boundary.engine_digest) {
                     ++boundary_mismatches;
-                    note_failure("builder differs from engine after command " +
-                                 std::to_string(boundary.command_index) + " (sequence " +
-                                 std::to_string(boundary.end_sequence) + ")");
+                    note_failure("builder differs from engine after command " + std::to_string(boundary.command_index) +
+                                 " (sequence " + std::to_string(boundary.end_sequence) + ")");
                 }
             }
             pending_boundaries->pop_front();
@@ -117,10 +116,11 @@ public:
           feed_injector(options.max_payload, 64),
           response_injector(options.max_payload, 64),
           publisher(publisher_config(setup, options), FeedSink{&feed_injector, &feed_queue}),
-          builder(md::BookBuilderConfig{setup.engine.max_instruments, setup.engine.max_orders,
-                                        setup.engine.max_orders}),
+          builder(
+              md::BookBuilderConfig{setup.engine.max_instruments, setup.engine.max_orders, setup.engine.max_orders}),
           handler{&builder, &pending_boundaries, setup.instruments.size(),
-                  std::vector<LevelInfo>(setup.engine.max_orders + 1), std::vector<OrderId>(setup.engine.max_orders + 1)},
+                  std::vector<LevelInfo>(setup.engine.max_orders + 1),
+                  std::vector<OrderId>(setup.engine.max_orders + 1)},
           receiver(receiver_config(options), handler, PacketQueueSink{&request_queue}),
           server(publisher.ring(), server_config(options)),
           max_orders_(setup.engine.max_orders),
@@ -248,7 +248,8 @@ public:
     md::RetransmissionServer server;
 
 private:
-    static md::PublisherConfig publisher_config(const server::journal::JournalSetup& setup, const FeedHarnessOptions& options) {
+    static md::PublisherConfig publisher_config(const server::journal::JournalSetup& setup,
+                                                const FeedHarnessOptions& options) {
         md::PublisherConfig config;
         config.session = "EXSIM";
         config.max_payload = options.max_payload;

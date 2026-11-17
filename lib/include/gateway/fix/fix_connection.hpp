@@ -36,18 +36,18 @@
 namespace exsim::gateway::fix {
 
 template <class Context>
-concept FixGatewayContext = requires(Context& context, const Context& const_context, std::string_view text,
-                                     SessionId session, server::ConnectionId connection, const Command& command,
-                                     const Symbol& symbol, InstrumentId instrument) {
-    { context.authenticate(text, text, server::Protocol::Fix44) } -> std::convertible_to<const server::UserConfig*>;
-    { context.bind(session, connection) } -> std::convertible_to<bool>;
-    context.unbind(session, connection);
-    { const_context.find_instrument(symbol) } -> std::convertible_to<InstrumentId>;
-    { const_context.instrument(instrument) } -> std::convertible_to<const InstrumentConfig*>;
-    context.submit(command);
-    { const_context.now() } -> std::convertible_to<Timestamp>;
-    { const_context.realtime_ns() } -> std::convertible_to<std::uint64_t>;
-};
+concept FixGatewayContext =
+    requires(Context& context, const Context& const_context, std::string_view text, SessionId session,
+             server::ConnectionId connection, const Command& command, const Symbol& symbol, InstrumentId instrument) {
+        { context.authenticate(text, text, server::Protocol::Fix44) } -> std::convertible_to<const server::UserConfig*>;
+        { context.bind(session, connection) } -> std::convertible_to<bool>;
+        context.unbind(session, connection);
+        { const_context.find_instrument(symbol) } -> std::convertible_to<InstrumentId>;
+        { const_context.instrument(instrument) } -> std::convertible_to<const InstrumentConfig*>;
+        context.submit(command);
+        { const_context.now() } -> std::convertible_to<Timestamp>;
+        { const_context.realtime_ns() } -> std::convertible_to<std::uint64_t>;
+    };
 
 template <FixGatewayContext Context, ByteSink Sink>
 class FixConnection : public FixSessionLayer<FixConnection<Context, Sink>, Sink> {
@@ -222,8 +222,7 @@ private:
         if (is_fix44_message_type(type)) {
             return send_unsupported_message_type_reject(frame);
         }
-        this->send_session_reject(frame.sequence, 35, type, SessionRejectReason::InvalidMsgType,
-                                  "invalid MsgType");
+        this->send_session_reject(frame.sequence, 35, type, SessionRejectReason::InvalidMsgType, "invalid MsgType");
     }
 
     // A valid FIX 4.4 application MsgType this gateway does not support:

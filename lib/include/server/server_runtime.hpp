@@ -58,7 +58,7 @@
 namespace exsim::server {
 
 struct ServerRuntimeOptions {
-    bool busy_poll = false;          // poller.wait(0): lowest latency, one core at 100%
+    bool busy_poll = false;  // poller.wait(0): lowest latency, one core at 100%
     // Timer resolution (delays and heartbeats): the longest idle wait, and
     // the interval between timer passes in both modes. 0 = every iteration.
     int idle_poll_timeout_ms = 1;
@@ -91,9 +91,7 @@ public:
           market_data_(config_, options_.market_data),
           sessions_(config_),
           core_(config_, sessions_, market_data_, clock_),
-          endpoints_(make_endpoint<Gateways>(gateway_index<Gateways>())...) {
-
-    }
+          endpoints_(make_endpoint<Gateways>(gateway_index<Gateways>())...) {}
 
     BasicServerRuntime(const BasicServerRuntime&) = delete;
     BasicServerRuntime& operator=(const BasicServerRuntime&) = delete;
@@ -148,9 +146,9 @@ public:
     // Replaces a previously watched fd. Returns 0 or an errno value.
     [[nodiscard]] net::ErrorCode watch_readable_fd(int fd, ReadableFdCallback on_readable, void* context) noexcept {
         unwatch_readable_fd();
-        if (net::ErrorCode error = poller_.add(fd, net::make_poll_token(kWatchedReadableFdPollTag,
-                                                                       static_cast<std::uint64_t>(fd)),
-                                               net::PollInterest::Read);
+        if (net::ErrorCode error =
+                poller_.add(fd, net::make_poll_token(kWatchedReadableFdPollTag, static_cast<std::uint64_t>(fd)),
+                            net::PollInterest::Read);
             error != 0) {
             return error;
         }
@@ -233,7 +231,8 @@ private:
     template <class Gateway>
     void open_endpoint(std::string& failure) {
         if (!failure.empty()) return;
-        if constexpr (requires { Gateway::enabled(config_); }) if (!Gateway::enabled(config_)) return;
+        if constexpr (requires { Gateway::enabled(config_); })
+            if (!Gateway::enabled(config_)) return;
         if (net::ErrorCode error = endpoint<Gateway>().open(); error != 0) {
             failure = std::string(Gateway::name) + " listener on " + config_.exchange.bind_address + ":" +
                       std::to_string(Gateway::configured_port(config_)) + ": " + std::strerror(error);

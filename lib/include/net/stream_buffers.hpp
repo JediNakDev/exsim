@@ -45,7 +45,7 @@ struct ReceiveResult {
 };
 
 class ReceiveBuffer {
-   public:
+public:
     explicit ReceiveBuffer(std::size_t capacity) : storage_(new char[capacity]), capacity_(capacity) {}
 
     // Bytes received and not yet consumed.
@@ -92,7 +92,7 @@ class ReceiveBuffer {
     // would be indistinguishable from EOF): returns BufferFull instead.
     ReceiveResult receive_from(int fd) noexcept;
 
-   private:
+private:
     std::unique_ptr<char[]> storage_;
     std::size_t capacity_;
     std::size_t read_offset_ = 0;
@@ -112,7 +112,7 @@ struct FlushResult {
 };
 
 class SendBuffer {
-   public:
+public:
     explicit SendBuffer(std::size_t capacity) : storage_(new char[capacity]), capacity_(capacity) {}
 
     // Zero-copy append: returns exactly `max_bytes` of contiguous space at the
@@ -173,7 +173,7 @@ class SendBuffer {
         overflowed_ = false;
     }
 
-   private:
+private:
     void compact() noexcept {
         if (read_offset_ == 0) {
             return;

@@ -105,8 +105,8 @@ TEST_CASE(engine_validation, invalid_enum_fields_and_post_only_combinations) {
     post_only_ioc.post_only = true;
     NewOrder post_only_fok = with_tif(limit_order(kAliceSession, 7, Side::BUY, 100, 10), TimeInForce::FOK);
     post_only_fok.post_only = true;
-    for (const NewOrder& command : {bad_side, bad_type, bad_tif, bad_stp, post_only_market, post_only_ioc,
-                                    post_only_fok}) {
+    for (const NewOrder& command :
+         {bad_side, bad_type, bad_tif, bad_stp, post_only_market, post_only_ioc, post_only_fok}) {
         fixture.apply(command);
         check_new_order_rejection(fixture, command, RejectReason::InvalidField);
     }
@@ -125,8 +125,8 @@ TEST_CASE(engine_validation, quantity_rules_with_lot_size) {
     const InstrumentId lots_id = fixture.engine.add_instrument(lots);
     REQUIRE_EQ(lots_id, InstrumentId{2});
     ClOrdId token = 1;
-    for (Quantity invalid_qty : {Quantity{0}, Quantity{3}, Quantity{51}, Quantity{55},
-                                 std::numeric_limits<Quantity>::max()}) {
+    for (Quantity invalid_qty :
+         {Quantity{0}, Quantity{3}, Quantity{51}, Quantity{55}, std::numeric_limits<Quantity>::max()}) {
         NewOrder command = limit_order(kAliceSession, token++, Side::BUY, 100, invalid_qty, lots_id);
         fixture.apply(command);
         check_new_order_rejection(fixture, command, RejectReason::InvalidQuantity);
@@ -170,8 +170,8 @@ TEST_CASE(engine_validation, phase_table_for_new_orders) {
     const PhaseCase cases[] = {
         {Phase::Closed, RejectReason::MarketClosed, RejectReason::MarketClosed, RejectReason::MarketClosed,
          RejectReason::MarketClosed},
-        {Phase::Halted, RejectReason::InstrumentHalted, RejectReason::InstrumentHalted,
-         RejectReason::InstrumentHalted, RejectReason::InstrumentHalted},
+        {Phase::Halted, RejectReason::InstrumentHalted, RejectReason::InstrumentHalted, RejectReason::InstrumentHalted,
+         RejectReason::InstrumentHalted},
         {Phase::PreOpen, RejectReason::None, RejectReason::NotAllowedInPhase, RejectReason::NotAllowedInPhase,
          RejectReason::NotAllowedInPhase},
         {Phase::PreClose, RejectReason::None, RejectReason::NotAllowedInPhase, RejectReason::NotAllowedInPhase,
@@ -275,11 +275,11 @@ TEST_CASE(engine_validation, capacity_counts_live_orders_and_needs_a_slot_even_t
 TEST_CASE(engine_validation, rejections_consume_no_order_or_match_ids) {
     EngineFixture fixture;
     fixture.apply(limit_order(kAliceSession, 1, Side::SELL, 100, 10));
-    fixture.apply(limit_order(kAliceSession, 1, Side::SELL, 100, 10));       // duplicate
-    fixture.apply(limit_order(kAliceSession, 2, Side::SELL, 105, 10));       // off grid
-    fixture.apply(CancelOrder{1, kAliceSession, 77, 0, 0});                  // unknown
-    fixture.apply(ReplaceOrder{1, kAliceSession, 1, 0, 105, 10, false});     // off grid
-    fixture.apply(SetPhase{1, 9, Phase::Closed});                            // unknown instrument
+    fixture.apply(limit_order(kAliceSession, 1, Side::SELL, 100, 10));    // duplicate
+    fixture.apply(limit_order(kAliceSession, 2, Side::SELL, 105, 10));    // off grid
+    fixture.apply(CancelOrder{1, kAliceSession, 77, 0, 0});               // unknown
+    fixture.apply(ReplaceOrder{1, kAliceSession, 1, 0, 105, 10, false});  // off grid
+    fixture.apply(SetPhase{1, 9, Phase::Closed});                         // unknown instrument
     fixture.apply(limit_order(kBobSession, 1, Side::BUY, 100, 4));
     REQUIRE_EQ(fixture.events.size(), std::size_t{2});
     CHECK_EQ(fixture.events[0].accepted.order_id, OrderId{2});
@@ -300,11 +300,17 @@ TEST_CASE(engine_instruments, add_instrument_rejects_each_invalid_rule) {
         variant([](InstrumentConfig& c) { c.tick_size = -10; }),
         variant([](InstrumentConfig& c) { c.lot_size = 0; }),
         variant([](InstrumentConfig& c) { c.max_order_qty = 0; }),
-        variant([](InstrumentConfig& c) { c.lot_size = 10; c.max_order_qty = 9; }),
+        variant([](InstrumentConfig& c) {
+            c.lot_size = 10;
+            c.max_order_qty = 9;
+        }),
         variant([](InstrumentConfig& c) { c.min_price = 0; }),
         variant([](InstrumentConfig& c) { c.min_price = -10; }),
         variant([](InstrumentConfig& c) { c.max_price = 0; }),
-        variant([](InstrumentConfig& c) { c.min_price = 200; c.max_price = 100; }),
+        variant([](InstrumentConfig& c) {
+            c.min_price = 200;
+            c.max_price = 100;
+        }),
         variant([](InstrumentConfig& c) { c.min_price = 15; }),
         variant([](InstrumentConfig& c) { c.max_price = 205; }),
         variant([](InstrumentConfig& c) { c.reference_price = 0; }),
@@ -312,8 +318,12 @@ TEST_CASE(engine_instruments, add_instrument_rejects_each_invalid_rule) {
         variant([](InstrumentConfig& c) { c.reference_price = 105; }),
         variant([](InstrumentConfig& c) { c.initial_phase = static_cast<Phase>(5); }),
         // Price ladders are capped at 2^24 ticks per side.
-        variant([](InstrumentConfig& c) { c.tick_size = 1; c.min_price = 1; c.max_price = (1 << 24) + 1;
-                                          c.reference_price = 1; }),
+        variant([](InstrumentConfig& c) {
+            c.tick_size = 1;
+            c.min_price = 1;
+            c.max_price = (1 << 24) + 1;
+            c.reference_price = 1;
+        }),
     };
     for (const InstrumentConfig& config : invalid_configs) {
         CHECK_EQ(engine.add_instrument(config), InstrumentId{0});
