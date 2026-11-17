@@ -7,54 +7,33 @@
 #include <new>
 #include <type_traits>
 #include <utility>
-#include <vector>
 
 namespace exsim::util {
 
-// Free-list pool. reserve() allocates exactly the requested node count in one
-// contiguous block; when growth is allowed, an empty free list adds a further
-// block of BlockSize nodes. Live objects are released with their blocks, so T
-// must not need its destructor run.
-template <typename T, std::size_t BlockSize = 4096>
+// Fixed-capacity free-list pool. The constructor allocates every node in one
+// contiguous block, so create() and destroy() never allocate. Live objects
+// are released with the block, so T must not need its destructor run.
+template <typename T>
 class ObjectPool {
-    static_assert(BlockSize > 0, "pool growth block must contain a node");
-    static_assert(std::is_trivially_destructible_v<T>, "pool blocks are freed without running destructors");
+    static_assert(std::is_trivially_destructible_v<T>, "the pool block is freed without running destructors");
 
 public:
-    ObjectPool() = default;
-    ~ObjectPool() = default;
+    explicit ObjectPool(std::size_t capacity) : nodes_(new Node[capacity]) {
+        // Linked back to front so create() hands nodes out in address order.
+        for (std::size_t i = capacity; i-- > 0;) {
+            nodes_[i].next = free_list_;
+            free_list_ = &nodes_[i];
+        }
+    }
 
     ObjectPool(const ObjectPool&) = delete;
     ObjectPool& operator=(const ObjectPool&) = delete;
-    ObjectPool(ObjectPool&&) = delete;
-    ObjectPool& operator=(ObjectPool&&) = delete;
 
-    // Ensures at least `object_count` nodes exist in total (live or free).
-    void reserve(std::size_t object_count) {
-        if (object_count > node_count_) {
-            allocate_block(object_count - node_count_);
-        }
-    }
-
-    void set_allow_growth(bool allow_growth) noexcept {
-        allow_growth_ = allow_growth;
-    }
-
-    // Adds a block if no node is free, so the next create() cannot allocate.
-    void ensure_free_node() {
-        if (!free_list_) {
-            allocate_block(BlockSize);
-        }
-    }
-
-    // Returns nullptr when the pool is empty and growth is disabled.
+    // Returns nullptr when every node is in use.
     template <typename... Args>
     T* create(Args&&... args) {
         if (EXSIM_UNLIKELY(!free_list_)) {
-            if (EXSIM_UNLIKELY(!allow_growth_)) {
-                return nullptr;
-            }
-            allocate_block(BlockSize);
+            return nullptr;
         }
 
         Node* node = free_list_;
@@ -85,24 +64,8 @@ private:
         Node* next;
     };
 
-    void allocate_block(std::size_t node_count) {
-        // Owned before blocks_ can throw while growing, so a failure leaks nothing.
-        std::unique_ptr<Node[]> block(new Node[node_count]);
-        blocks_.push_back(std::move(block));
-        Node* nodes = blocks_.back().get();
-
-        for (std::size_t i = 0; i + 1 < node_count; ++i) {
-            nodes[i].next = &nodes[i + 1];
-        }
-        nodes[node_count - 1].next = free_list_;
-        free_list_ = nodes;
-        node_count_ += node_count;
-    }
-
-    std::vector<std::unique_ptr<Node[]>> blocks_;
+    std::unique_ptr<Node[]> nodes_;
     Node* free_list_ = nullptr;
-    std::size_t node_count_ = 0;
-    bool allow_growth_ = true;
 };
 
 }  // namespace exsim::util

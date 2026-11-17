@@ -21,7 +21,7 @@ TEST_CASE(flat_hash_map, insert_find_erase) {
     CHECK_EQ(*map.find(2), 20);
 }
 
-TEST_CASE(flat_hash_map, full_without_growth_rejects) {
+TEST_CASE(flat_hash_map, full_map_rejects_and_keeps_its_capacity) {
     FlatHashMap<int> map(4);
     const std::size_t cap = map.capacity() / 2;  // at most 50% load
     for (std::size_t i = 1; i <= cap; ++i) {
@@ -31,10 +31,10 @@ TEST_CASE(flat_hash_map, full_without_growth_rejects) {
     CHECK_EQ(map.capacity(), cap * 2);
 }
 
-TEST_CASE(flat_hash_map, growth_preserves_entries) {
+TEST_CASE(flat_hash_map, reserve_preserves_entries) {
     FlatHashMap<std::uint64_t> map(4);
-    map.set_allow_growth(true);
     for (std::uint64_t i = 1; i <= 10'000; ++i) {
+        if (map.size() == map.capacity() / 2) map.reserve(map.size() + 1);
         REQUIRE(map.insert(i * 7919, i));
     }
     for (std::uint64_t i = 1; i <= 10'000; ++i) {

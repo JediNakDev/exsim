@@ -3,16 +3,13 @@
 
 // Per-instrument engine state around one exsim::book::OrderBook. The book
 // stores prices as ticks (0 .. tick_count - 1) and owns price levels,
-// occupancy bitmaps and FIFO links; orders, levels and IDs come from the
-// engine's shared OrderBookStorage.
+// occupancy bitmaps, best ticks and FIFO links; orders, levels and IDs come
+// from the engine's OrderBookStorage.
 
 #include <engine/instrument.hpp>
 #include <engine/types.hpp>
 
 #include <cstdint>
-#include <limits>
-#include <memory>
-#include <utility>
 
 #include <book/order_book.hpp>
 
@@ -21,11 +18,6 @@ namespace exsim::engine {
 // Retain the public engine limit of 2^24 ticks per instrument side.
 inline constexpr std::uint64_t kMaxLadderTicks = std::uint64_t{1} << 24;
 
-// Sentinels chosen so that "does tick t cross the opposite best" is a single
-// signed comparison even when that side is empty.
-inline constexpr std::int32_t kNoBidTick = -1;
-inline constexpr std::int32_t kNoAskTick = std::numeric_limits<std::int32_t>::max();
-
 struct InstrumentBook {
     InstrumentConfig config;
     std::uint32_t tick_count = 0;
@@ -33,23 +25,15 @@ struct InstrumentBook {
     Phase phase = Phase::Closed;
     bool has_last_trade_price = false;
     Price last_trade_price = 0;
-    std::int32_t best_bid_tick = kNoBidTick;
-    std::int32_t best_ask_tick = kNoAskTick;
-    std::unique_ptr<exsim::book::OrderBook> order_book;
+    exsim::book::OrderBook order_book;
 
     InstrumentBook(const InstrumentConfig& instrument_config, InstrumentId instrument_id, std::uint32_t ticks,
-                   std::shared_ptr<exsim::book::OrderBookStorage> shared_order_storage)
+                   exsim::book::OrderBookStorage& order_storage)
         : config(instrument_config),
           tick_count(ticks),
           id(instrument_id),
-          phase(instrument_config.initial_phase) {
-        exsim::book::OrderBookConfig book_config;
-        book_config.min_price = 0;
-        book_config.max_price = static_cast<exsim::book::Price>(ticks - 1);
-        book_config.max_fills_per_add_order = 1;  // the engine never calls add_order
-        book_config.allow_growth = false;
-        order_book = std::make_unique<exsim::book::OrderBook>(book_config, std::move(shared_order_storage));
-    }
+          phase(instrument_config.initial_phase),
+          order_book(ticks, order_storage) {}
 
     [[nodiscard]] Price price_of(std::int32_t tick) const noexcept {
         return config.min_price + static_cast<Price>(tick) * config.tick_size;
@@ -75,11 +59,13 @@ struct InstrumentBook {
         return qty != 0 && qty <= config.max_order_qty && (config.lot_size == 1 || qty % config.lot_size == 0);
     }
 
-    [[nodiscard]] bool is_crossed() const noexcept { return best_bid_tick >= best_ask_tick; }
+    [[nodiscard]] bool is_crossed() const noexcept {
+        return order_book.best_bid_tick() >= order_book.best_ask_tick();
+    }
 
     // Would a `side` order at `tick` cross the opposite best?
     [[nodiscard]] bool crosses_opposite_best(Side side, std::int32_t tick) const noexcept {
-        return side == Side::BUY ? tick >= best_ask_tick : tick <= best_bid_tick;
+        return side == Side::BUY ? tick >= order_book.best_ask_tick() : tick <= order_book.best_bid_tick();
     }
 
 };

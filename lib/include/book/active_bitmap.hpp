@@ -25,8 +25,6 @@ public:
     }
 
     void set(std::size_t index) noexcept {
-        if (test(index)) return;
-        ++count_;
         for (auto& words : layers_) {
             std::uint64_t& word = words[index / 64];
             const bool was_empty = word == 0;
@@ -37,18 +35,12 @@ public:
     }
 
     void clear(std::size_t index) noexcept {
-        if (!test(index)) return;
-        --count_;
         for (auto& words : layers_) {
             std::uint64_t& word = words[index / 64];
             word &= ~(std::uint64_t{1} << (index % 64));
             if (word != 0) break;
             index /= 64;
         }
-    }
-
-    [[nodiscard]] bool test(std::size_t index) const noexcept {
-        return (layers_[0][index / 64] >> (index % 64)) & 1;
     }
 
     // Lowest set index >= from, or nullopt.
@@ -60,11 +52,6 @@ public:
     [[nodiscard]] std::optional<std::size_t> find_at_or_below(std::size_t from) const noexcept {
         return from < size_ ? find_in_layer(0, from, false) : std::nullopt;
     }
-
-    [[nodiscard]] std::size_t size() const noexcept { return size_; }
-    [[nodiscard]] std::size_t count() const noexcept { return count_; }
-    [[nodiscard]] std::size_t word_count() const noexcept { return layers_.empty() ? 0 : layers_[0].size(); }
-    [[nodiscard]] std::uint64_t word(std::size_t index) const noexcept { return layers_[0][index]; }
 
 private:
     [[nodiscard]] std::optional<std::size_t> find_in_layer(std::size_t layer, std::size_t from,
@@ -92,7 +79,6 @@ private:
 
     std::vector<std::vector<std::uint64_t>> layers_;
     std::size_t size_ = 0;
-    std::size_t count_ = 0;
 };
 
 }  // namespace exsim::book
