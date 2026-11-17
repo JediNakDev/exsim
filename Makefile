@@ -23,7 +23,7 @@ LDLIBS := -lpthread
 ifeq ($(shell uname -s),Linux)
 LDLIBS += -lcrypto
 endif
-TEST_LIB_SRCS := test/exsim/support/clients/itch_book_builder.cpp test/exsim/support/clients/tcp_client.cpp lib/src/server/admin/admin_command.cpp lib/src/server/admin/admin_text.cpp
+TEST_LIB_SRCS := test/exsim/support/clients/itch_book_builder.cpp test/exsim/support/clients/tcp_client.cpp
 LIB_SRCS := $(filter-out $(TEST_LIB_SRCS),$(shell find lib/src -name '*.cpp' | sort))
 obj = $(patsubst %.cpp,$(BUILD)/obj/%.o,$(1))
 LIB_OBJS := $(call obj,$(LIB_SRCS))

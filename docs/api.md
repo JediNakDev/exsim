@@ -49,6 +49,7 @@ Paths below are relative to `/v1`.
 | PUT | `/exchanges/{id}` | Replace a stopped definition |
 | DELETE | `/exchanges/{id}` | Delete a stopped definition, `204` |
 | POST | `/exchanges/{id}/start` | Start and wait for readiness |
+| POST | `/exchanges/{id}/admin` | Execute one runtime admin command |
 | POST | `/exchanges/{id}/stop` | Stop and wait for exit |
 | GET | `/exchanges/{id}/status` | State and live status when running |
 | GET | `/exchanges/{id}/connections` | Live endpoint details |
@@ -60,6 +61,34 @@ Responses redact passwords, MDP replay passwords, and iLink HMAC secrets. Keep t
 Running definitions cannot be replaced or deleted (`409`). Repeated start or stop returns the existing state. Connections requires a running process (`409` otherwise). Invalid configs return `400`; unknown IDs return `404`.
 
 Startup readiness or port conflicts return `409`. Failure to launch the executable returns `503`. The definition remains available for correction and retry. The API currently allows at most 32 definitions.
+
+## Runtime commands
+
+`POST /v1/exchanges/{id}/admin` takes only a `command` string: one line,
+1 to 4096 UTF-8 bytes, without CR, LF or NUL. The exchange must be running
+(`409` otherwise). Commands run on its reactor thread.
+
+```sh
+curl -sS -H 'Content-Type: application/json' \
+  -d '{"command":"phase AAPL continuous"}' \
+  http://127.0.0.1:7600/v1/exchanges/EXCHANGE_ID/admin
+curl -sS -H 'Content-Type: application/json' \
+  -d '{"command":"fault user ALICE reject 1"}' \
+  http://127.0.0.1:7600/v1/exchanges/EXCHANGE_ID/admin
+```
+
+The response is `{"reply":"...\nOK\n"}`. Admin failures return `400` with
+`{"reply":"ERR <message>\n"}`; invalid JSON or request shape uses the usual
+error object. A control socket failure returns `503` and stops the child.
+An invalid admin command leaves the exchange running.
+
+Send `help` for the full syntax. Commands include `status`, `book AAPL [levels]`,
+`phase <SYMBOL|*> <closed|pre_open|continuous|halted|pre_close>`,
+`fault user <USER> <reject|delay|drop_out|disconnect|off> [n]`, and
+`fault md <drop|dup|reorder|rate|off> ...`. `shutdown` closes all instruments
+and drains the process; use the lifecycle `stop` route to wait for exit.
+Phase changes can enter auctions and uncross them on transition to continuous.
+Faults and phases are runtime state and reset on restart.
 
 ## Trading connections
 

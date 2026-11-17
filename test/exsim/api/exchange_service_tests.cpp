@@ -111,3 +111,14 @@ TEST_CASE(api_exchange_service, other_exchange_requests_do_not_wait_for_start_or
     CHECK_EQ(stopped_view.find("state")->text, "stopped");
     CHECK_EQ(stopped_view.find("pid")->kind, api::JsonValue::Kind::Null);
 }
+
+TEST_CASE(api_exchange_service, admin_validates_command_and_requires_running_exchange) {
+    TemporaryDirectory directory;
+    api::ExchangeService service(directory.path, "/unused/exsim_exchanged");
+    const auto path = create_exchange(service, "ADMIN", 16000) + "/admin";
+    for (const auto* body : {"{}", "[]", "{\"command\":1}", "{\"command\":\"\"}",
+                             "{\"command\":\"help\\nshutdown\"}", "{\"command\":\"help\\u0000\"}"}) {
+        CHECK_EQ(api_request(service, "POST", path, body).status, 400);
+    }
+    CHECK_EQ(api_request(service, "POST", path, R"({"command":"help"})").status, 409);
+}
