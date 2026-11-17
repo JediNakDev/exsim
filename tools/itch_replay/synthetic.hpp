@@ -8,7 +8,7 @@
 // executes, 5% replaces. All adds are non-marketable by construction
 // (buys below current best ask, sells above current best bid).
 
-#include <engine/types.hpp>
+#include <common/types.hpp>
 #include <cstdint>
 #include <cstring>
 #include <random>

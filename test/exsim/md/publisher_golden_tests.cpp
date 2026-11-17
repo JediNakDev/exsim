@@ -3,7 +3,7 @@
 // Expected bytes are literal hex, independent of the codec encoders.
 
 #include <engine/matching_engine.hpp>
-#include <md/publisher.hpp>
+#include <md/itch_publisher.hpp>
 #include <test/exsim/md/md_test_support.hpp>
 #include <test/framework/test.hpp>
 

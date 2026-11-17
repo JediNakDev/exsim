@@ -3,6 +3,7 @@
 
 // CME framing, not the six-byte standard FIX SOFH. Template-specific
 // decoders must validate schema/version and their required root/group sizes.
+#include "common/types.hpp"
 #include "protocol/wire.hpp"
 
 #include <bit>

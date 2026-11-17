@@ -1,7 +1,7 @@
 #include "server/admin/admin_text.hpp"
 
 #include "server/config.hpp"
-#include "engine/price_text.hpp"
+#include "common/price_text.hpp"
 
 #include <algorithm>
 #include <vector>

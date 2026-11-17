@@ -1,7 +1,7 @@
 #include "api/json.hpp"
 #include "ipc/exchange_control.hpp"
 #include "ipc/runtime_snapshot.hpp"
-#include "server/server_runtime.hpp"
+#include "server/runtime/server_runtime.hpp"
 #include "test/framework/test.hpp"
 
 #include <cstdlib>
@@ -69,8 +69,8 @@ struct TestControlHandler {
 };
 
 void poll_until_command_handled(server::ServerRuntime& runtime, TestControlHandler& handler, unsigned expected) {
-    const auto deadline = net::monotonic_ns() + 2'000'000'000;
-    while (handler.commands_handled < expected && net::monotonic_ns() < deadline) runtime.poll_once();
+    const auto deadline = common::monotonic_ns() + 2'000'000'000;
+    while (handler.commands_handled < expected && common::monotonic_ns() < deadline) runtime.poll_once();
     REQUIRE_EQ(handler.commands_handled, expected);
 }
 
@@ -99,8 +99,8 @@ void check_status_then_stop(bool busy_poll) {
     ipc::send_control(control.api_end.fd(), "stop");
     poll_until_command_handled(runtime, handler, 2);
     CHECK(api::parse_json(ipc::receive_control(control.api_end.fd())).find("liveOrders") != nullptr);
-    const auto deadline = net::monotonic_ns() + 4'000'000'000;
-    while (!runtime.finished() && net::monotonic_ns() < deadline) runtime.poll_once();
+    const auto deadline = common::monotonic_ns() + 4'000'000'000;
+    while (!runtime.finished() && common::monotonic_ns() < deadline) runtime.poll_once();
     CHECK(runtime.finished());
 }
 
@@ -162,8 +162,8 @@ struct ExchangeChild {
     }
     // Exit status, or -1 if the child did not exit before the deadline.
     int wait_for_exit(std::uint64_t timeout_ns) {
-        const auto deadline = net::monotonic_ns() + timeout_ns;
-        while (net::monotonic_ns() < deadline) {
+        const auto deadline = common::monotonic_ns() + timeout_ns;
+        while (common::monotonic_ns() < deadline) {
             int status = 0;
             const pid_t done = ::waitpid(pid, &status, WNOHANG);
             if (done == pid) {
@@ -213,9 +213,9 @@ TEST_CASE(control_fd_runtime, readable_control_fd_wakes_a_long_idle_wait) {
     // With a 10 s idle timeout, one poll_once returns promptly only because
     // the readable control fd ends the wait.
     ipc::send_control(control.api_end.fd(), "status");
-    const auto started = net::monotonic_ns();
+    const auto started = common::monotonic_ns();
     runtime.poll_once();
-    CHECK_LT(net::monotonic_ns() - started, 2'000'000'000u);
+    CHECK_LT(common::monotonic_ns() - started, 2'000'000'000u);
     REQUIRE_EQ(handler.commands_handled, 1u);
     CHECK(api::parse_json(ipc::receive_control(control.api_end.fd())).find("liveOrders") != nullptr);
 }
@@ -238,8 +238,8 @@ TEST_CASE(control_fd_runtime, unwatched_fd_no_longer_calls_the_owner) {
     poll_until_command_handled(runtime, handler, 1);
     (void)ipc::receive_control(control.api_end.fd());
     ipc::send_control(control.api_end.fd(), "bogus");
-    const auto deadline = net::monotonic_ns() + 4'000'000'000;
-    while (!runtime.finished() && net::monotonic_ns() < deadline) runtime.poll_once();
+    const auto deadline = common::monotonic_ns() + 4'000'000'000;
+    while (!runtime.finished() && common::monotonic_ns() < deadline) runtime.poll_once();
     CHECK(runtime.finished());
     CHECK_EQ(handler.readable_callbacks, 2u);
 }

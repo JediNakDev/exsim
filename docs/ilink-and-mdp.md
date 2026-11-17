@@ -131,7 +131,7 @@ CME anonymous FTP under `/SBEFix/Production/Templates/` and
 Regenerate fixed-block descriptors and null defaults:
 
 ```sh
-c++ -std=c++23 src/utils/cme_codegen/main.cpp -o output/cme_codegen
+c++ -std=c++23 tools/cme_codegen/main.cpp -o output/cme_codegen
 output/cme_codegen spec/cme/ilinkbinary.xml > lib/include/protocol/ilink3_schema.hpp
 ```
 

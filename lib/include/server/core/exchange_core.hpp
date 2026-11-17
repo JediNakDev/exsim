@@ -1,5 +1,5 @@
-#ifndef EXSIM_SERVER_EXCHANGE_CORE_HPP
-#define EXSIM_SERVER_EXCHANGE_CORE_HPP
+#ifndef EXSIM_SERVER_CORE_EXCHANGE_CORE_HPP
+#define EXSIM_SERVER_CORE_EXCHANGE_CORE_HPP
 
 // Protocol-independent exchange core of the exsim server. It owns the
 // matching engine, the startup-sized EventBuffer, the configured users and
@@ -111,7 +111,7 @@ public:
           journal_flush_interval_ns_(Timestamp{config.journal_flush_interval_ms} * 1'000'000) {
         static_assert(CoreSessions<Sessions, ExchangeCore>,
                       "Sessions needs on_events(SessionId, const SessionEvents&, Core&)");
-        if (day_start_ >= day_end_ || day_end_ > net::kNanosecondsPerDay) {
+        if (day_start_ >= day_end_ || day_end_ > common::kNanosecondsPerDay) {
             throw std::invalid_argument("trading day range");
         }
         for (std::size_t i = 0; i < config_.instruments.size(); ++i) {

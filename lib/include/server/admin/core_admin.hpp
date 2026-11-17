@@ -10,15 +10,15 @@
 //
 // Replies are '\n'-terminated lines ending with "OK" or "ERR <message>".
 
-#include "md/publisher.hpp"
+#include "md/itch_publisher.hpp"
 #include "server/admin/admin_command.hpp"
 #include "server/config.hpp"
 #include "server/admin/admin_text.hpp"
 #include "server/core/policies.hpp"
 #include "server/core/user_faults.hpp"
-#include "server/exchange_core.hpp"
+#include "server/core/exchange_core.hpp"
 #include "md/packet_faults.hpp"
-#include "engine/price_text.hpp"
+#include "common/price_text.hpp"
 
 #include <concepts>
 #include <cstddef>

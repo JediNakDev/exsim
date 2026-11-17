@@ -33,7 +33,7 @@
 // CoreAdmin, so the core does not depend on the md/ layer.
 
 #include "engine/event.hpp"
-#include "engine/types.hpp"
+#include "common/types.hpp"
 #include "server/core/session_dispatch_set.hpp"
 
 #include <concepts>

@@ -9,14 +9,14 @@
 //
 // This is the harness that backs the "book reconstruction validated
 // against a reference oracle" claim. Real NASDAQ ITCH files can be
-// dropped through src/utils/itch_replay (same dispatch) with the same
+// dropped through tools/itch_replay (same dispatch) with the same
 // invariant checks toggled on.
 
 #include "test/framework/test.hpp"
-#include "src/utils/itch_replay/diff.hpp"
-#include "src/utils/itch_replay/itch_replayer.hpp"
-#include "src/utils/itch_replay/reference_book.hpp"
-#include "src/utils/itch_replay/synthetic.hpp"
+#include "tools/itch_replay/diff.hpp"
+#include "tools/itch_replay/itch_replayer.hpp"
+#include "tools/itch_replay/reference_book.hpp"
+#include "tools/itch_replay/synthetic.hpp"
 
 #include <iostream>
 

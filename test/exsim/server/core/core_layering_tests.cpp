@@ -1,7 +1,7 @@
 // Layering checks over the include graph. Run from the repository root,
 // like the fixture tests.
 // * The exchange core depends on the engine, not on the market data layer:
-//   no header reachable from server/exchange_core.hpp or server/core/
+//   no header reachable from server/core/ (exchange_core.hpp included)
 //   includes an md/ header.
 // * The management service (api/) never reaches the server runtime; the
 //   daemon's runtime snapshot lives with the control socket in ipc/.
@@ -42,7 +42,7 @@ void collect_project_includes(const std::string& header, std::set<std::string>& 
 }  // namespace
 
 TEST_CASE(server_core_layering, core_headers_do_not_reach_market_data_headers) {
-    std::vector<std::string> roots{"server/exchange_core.hpp"};
+    std::vector<std::string> roots;
     for (const auto& entry : std::filesystem::directory_iterator("lib/include/server/core")) {
         roots.push_back("server/core/" + entry.path().filename().string());
     }
@@ -50,7 +50,7 @@ TEST_CASE(server_core_layering, core_headers_do_not_reach_market_data_headers) {
     for (const std::string& root : roots) {
         std::set<std::string> reachable;
         collect_project_includes(root, reachable);
-        if (root == "server/exchange_core.hpp") REQUIRE(reachable.contains("server/core/policies.hpp"));
+        if (root == "server/core/exchange_core.hpp") REQUIRE(reachable.contains("server/core/policies.hpp"));
         for (const std::string& header : reachable) {
             if (header.starts_with("md/")) FAIL(root + " reaches " + header);
         }
@@ -69,8 +69,7 @@ TEST_CASE(server_core_layering, management_api_does_not_reach_the_server_runtime
     REQUIRE(files > 1);
     REQUIRE(reachable.contains("api/json.hpp"));
     for (const std::string& header : reachable) {
-        if (header.starts_with("server/runtime/") || header == "server/server_runtime.hpp" ||
-            header == "server/exchange_core.hpp")
+        if (header.starts_with("server/runtime/") || header == "server/core/exchange_core.hpp")
             FAIL("api/ reaches " + header);
     }
 }
