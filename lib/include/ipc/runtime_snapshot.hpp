@@ -1,6 +1,6 @@
 #ifndef EXSIM_IPC_RUNTIME_SNAPSHOT_HPP
 #define EXSIM_IPC_RUNTIME_SNAPSHOT_HPP
-#include "server/server_runtime.hpp"
+#include "server/runtime/server_runtime.hpp"
 #include <string>
 namespace exsim::ipc {
 // The JSON object a managed exchange reports over its control socket and the

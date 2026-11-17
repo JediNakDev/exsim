@@ -9,8 +9,8 @@
 // monotonic clock. A server that runs past midnight sees day times beyond
 // 24:00, which the core treats as after the trading day (it shuts down).
 
-#include "net/clocks.hpp"
-#include "engine/types.hpp"
+#include "common/clocks.hpp"
+#include "common/types.hpp"
 
 #include <cstdint>
 #include <optional>
@@ -22,21 +22,21 @@ public:
     // day_time_at_start: ns since local midnight to report right now;
     // nullopt reads the local wall clock.
     explicit ServerClock(std::optional<Timestamp> day_time_at_start = std::nullopt) noexcept
-        : monotonic_at_start_ns_(net::monotonic_ns()), realtime_at_start_ns_(net::realtime_ns()) {
+        : monotonic_at_start_ns_(common::monotonic_ns()), realtime_at_start_ns_(common::realtime_ns()) {
         if (day_time_at_start) {
             day_time_at_start_ns_ = *day_time_at_start;
         } else {
-            net::LocalClock local_clock;
+            common::LocalClock local_clock;
             local_clock.refresh();
             day_time_at_start_ns_ = local_clock.midnight_ns(realtime_at_start_ns_);
         }
     }
 
     [[nodiscard]] Timestamp day_ns() const noexcept {
-        return day_time_at_start_ns_ + (net::monotonic_ns() - monotonic_at_start_ns_);
+        return day_time_at_start_ns_ + (common::monotonic_ns() - monotonic_at_start_ns_);
     }
-    [[nodiscard]] std::uint64_t realtime_ns() const noexcept { return net::realtime_ns(); }
-    [[nodiscard]] std::uint64_t monotonic_ns() const noexcept { return net::monotonic_ns(); }
+    [[nodiscard]] std::uint64_t realtime_ns() const noexcept { return common::realtime_ns(); }
+    [[nodiscard]] std::uint64_t monotonic_ns() const noexcept { return common::monotonic_ns(); }
     [[nodiscard]] std::uint64_t epoch_ns(Timestamp day_time) const noexcept {
         return realtime_at_start_ns_ - day_time_at_start_ns_ + day_time;
     }

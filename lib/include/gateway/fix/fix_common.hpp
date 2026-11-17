@@ -14,7 +14,7 @@
 
 #include "protocol/fix44.hpp"
 #include "gateway/byte_sink.hpp"
-#include "engine/types.hpp"
+#include "common/types.hpp"
 
 #include <algorithm>
 #include <array>

@@ -2,8 +2,8 @@
 #define EXSIM_MD_MDP_PUBLISHER_HPP
 
 #include "engine/matching_engine.hpp"
-#include "md/publisher.hpp"
-#include "net/clocks.hpp"
+#include "md/itch_publisher.hpp"
+#include "common/clocks.hpp"
 #include "protocol/mdp3.hpp"
 #include "server/config.hpp"
 
@@ -303,7 +303,7 @@ private:
         return reason_ = reason;
     }
     std::uint16_t trade_date(Timestamp now) const noexcept {
-        const auto days = (epoch_origin_ + now) / net::kNanosecondsPerDay;
+        const auto days = (epoch_origin_ + now) / common::kNanosecondsPerDay;
         return days < UINT16_MAX ? static_cast<std::uint16_t>(days) : UINT16_MAX;
     }
     void emit(std::size_t size, Timestamp now, MdpStream stream) noexcept {

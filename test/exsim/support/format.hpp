@@ -16,7 +16,7 @@
 #include <engine/event.hpp>
 #include <engine/matching_engine.hpp>
 #include <server/journal/fields.hpp>
-#include <engine/price_text.hpp>
+#include <common/price_text.hpp>
 
 #include <cstdint>
 #include <string>

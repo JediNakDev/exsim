@@ -7,7 +7,7 @@
 // ITCH 5.0 feed: both are driven by the same message stream and their
 // depth compared after every message.
 
-#include <engine/types.hpp>
+#include <common/types.hpp>
 #include <cstdint>
 #include <list>
 #include <map>

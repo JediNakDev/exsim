@@ -6,7 +6,7 @@
 // for SPSC queues. Journals require explicit versioned field encoding, never
 // raw object storage (padding, ABI and endianness are not canonical).
 
-#include "engine/types.hpp"
+#include "common/types.hpp"
 #include <type_traits>
 
 namespace exsim {

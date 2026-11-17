@@ -3,7 +3,7 @@
 
 #include "md/mdp_publisher.hpp"
 #include "md/mdp_replay_session.hpp"
-#include "net/clocks.hpp"
+#include "common/clocks.hpp"
 #include "net/tcp_server.hpp"
 #include "net/udp.hpp"
 #include "server/config.hpp"
@@ -90,7 +90,7 @@ public:
     void on_timer(Timestamp now, const Core&) noexcept {
         publisher_.poll(now, settings_.heartbeat_interval_ns);
         if (!replay_) return;
-        const auto monotonic = net::monotonic_ns(), epoch = net::realtime_ns();
+        const auto monotonic = common::monotonic_ns(), epoch = common::realtime_ns();
         for (auto& slot : slots_) {
             if (!slot->open) continue;
             slot->session.on_timer(monotonic, epoch);
@@ -104,7 +104,7 @@ public:
         if (!replay_) return;
         for (auto& slot : slots_) {
             if (!slot->open) continue;
-            slot->session.shutdown(net::monotonic_ns(), net::realtime_ns());
+            slot->session.shutdown(common::monotonic_ns(), common::realtime_ns());
             finish_if_requested(*slot);
         }
         replay_->flush_pending(*this);
@@ -114,15 +114,15 @@ public:
         auto& slot = *slots_[id.slot];
         slot.id = id;
         slot.open = true;
-        slot.session.open(TcpSendSink{replay_.get(), id}, net::monotonic_ns());
+        slot.session.open(TcpSendSink{replay_.get(), id}, common::monotonic_ns());
         if (publisher_.state() != md::PublisherState::Live) {
-            slot.session.shutdown(net::monotonic_ns(), net::realtime_ns());
+            slot.session.shutdown(common::monotonic_ns(), common::realtime_ns());
             finish_if_requested(slot);
         }
     }
     void on_connection_data(net::ConnectionId id, net::ReceiveBuffer& received) noexcept {
         auto& slot = *slots_[id.slot];
-        received.consume(slot.session.on_data(received.readable(), net::monotonic_ns(), net::realtime_ns()));
+        received.consume(slot.session.on_data(received.readable(), common::monotonic_ns(), common::realtime_ns()));
         finish_if_requested(slot);
     }
     void on_connection_closed(net::ConnectionId id, net::CloseReason, net::ErrorCode) noexcept {
