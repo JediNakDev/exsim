@@ -122,7 +122,10 @@ public:
     [[nodiscard]] std::uint32_t size() const noexcept { return size_; }
     [[nodiscard]] std::uint32_t max_tokens() const noexcept { return max_tokens_; }
 
-    // Start of day: forget every token (O(capacity)).
+    // Start of day: forget every token. One memset of the slot array (16 bytes
+    // per token of capacity, 1 MiB at the default 65536), once per trading
+    // day. An O(size) clear would rehash every interned token in reverse id
+    // order to keep probe runs intact; not worth it for a once-a-day reset.
     void clear() noexcept {
         std::memset(slots_.get(), 0, (mask_ + 1) * sizeof(std::uint64_t));
         size_ = 0;

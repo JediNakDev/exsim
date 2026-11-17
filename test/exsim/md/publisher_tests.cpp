@@ -87,9 +87,9 @@ TEST_CASE(md_publisher, config_validation) {
     config.heartbeat_interval_ns = 0;
     CHECK(md::validate_publisher_config(config) == md::PublishStatus::InvalidConfig);
     config = {};
-    config.day_origin = std::numeric_limits<Timestamp>::max() - md::kNanosecondsPerTradingDay + 1;
+    config.day_origin = std::numeric_limits<Timestamp>::max() - net::kNanosecondsPerDay + 1;
     CHECK(md::validate_publisher_config(config) == md::PublishStatus::InvalidConfig);
-    config.day_origin = std::numeric_limits<Timestamp>::max() - md::kNanosecondsPerTradingDay;
+    config.day_origin = std::numeric_limits<Timestamp>::max() - net::kNanosecondsPerDay;
     CHECK(md::validate_publisher_config(config) == md::PublishStatus::Ok);
 
     std::deque<Bytes> packets;
@@ -144,7 +144,7 @@ TEST_CASE(md_publisher, start_before_day_origin_stays_in_setup) {
     PublisherFixture fixture(config);
     CHECK(fixture.publisher.start_session(999) == md::PublishStatus::TimestampOutsideDay);
     CHECK(fixture.publisher.state() == md::PublisherState::Setup);
-    CHECK(fixture.publisher.start_session(1'000 + md::kNanosecondsPerTradingDay) ==
+    CHECK(fixture.publisher.start_session(1'000 + net::kNanosecondsPerDay) ==
           md::PublishStatus::TimestampOutsideDay);
     CHECK(fixture.packets.empty());
     CHECK(fixture.publisher.start_session(1'000) == md::PublishStatus::Ok);
@@ -160,7 +160,7 @@ TEST_CASE(md_publisher, out_of_day_batch_stops_session_without_output) {
     // The first event is fine, the second is past the end of the day: the
     // whole batch is withheld.
     const Event batch[] = {rested_event(10, 1, 1, 1'000'000, 5),
-                           rested_event(md::kNanosecondsPerTradingDay, 1, 2, 1'000'000, 5)};
+                           rested_event(net::kNanosecondsPerDay, 1, 2, 1'000'000, 5)};
     CHECK(fixture.publisher.on_events(batch) == md::PublishStatus::TimestampOutsideDay);
     CHECK(fixture.packets.empty());
     CHECK_EQ(fixture.publisher.next_sequence(), next_before);
@@ -168,7 +168,7 @@ TEST_CASE(md_publisher, out_of_day_batch_stops_session_without_output) {
     CHECK(fixture.publisher.stop_reason() == md::PublishStatus::TimestampOutsideDay);
 
     CHECK(fixture.publisher.on_events(std::span<const Event>(batch, 1)) == md::PublishStatus::NotAllowedInState);
-    CHECK(fixture.publisher.poll(md::kNanosecondsPerTradingDay - 1, fixture.engine) ==
+    CHECK(fixture.publisher.poll(net::kNanosecondsPerDay - 1, fixture.engine) ==
           md::PublishStatus::NotAllowedInState);  // no heartbeats from a stopped session
     CHECK(fixture.publisher.end_of_day(20) == md::PublishStatus::NotAllowedInState);
     CHECK(fixture.packets.empty());
@@ -208,7 +208,7 @@ TEST_CASE(md_publisher, unregistered_instrument_or_unrepresentable_price_stops_s
         Event rejected{};
         rejected.type = EventType::Rejected;
         rejected.instrument = 9;
-        rejected.ts = md::kNanosecondsPerTradingDay * 2;
+        rejected.ts = net::kNanosecondsPerDay * 2;
         CHECK(fixture.publisher.on_events(std::span<const Event>(&rejected, 1)) == md::PublishStatus::Ok);
         CHECK(fixture.publisher.state() == md::PublisherState::Live);
     }
@@ -344,6 +344,28 @@ TEST_CASE(md_publisher, imbalance_timer_covers_every_call_phase_instrument) {
     quiet.packets.clear();
     CHECK(quiet.publisher.publish_imbalances(5'000'000'000, quiet.engine) == md::PublishStatus::Ok);
     CHECK(quiet.packets.empty());
+}
+
+// The imbalance timer stops the session on an out-of-day time only when a
+// call-phase instrument would be published with it.
+TEST_CASE(md_publisher, out_of_day_imbalance_timer_stops_only_with_a_call_phase_instrument) {
+    md::PublisherConfig config = small_config();
+    config.noii_interval_ns = 500;
+    PublisherFixture fixture(config, 3);
+    REQUIRE(fixture.publisher.start_session(0) == md::PublishStatus::Ok);
+    fixture.packets.clear();
+    const Timestamp past_day_end = net::kNanosecondsPerDay;
+    CHECK(fixture.publisher.publish_imbalances(past_day_end, fixture.engine) == md::PublishStatus::Ok);
+    CHECK(fixture.publisher.state() == md::PublisherState::Live);
+    CHECK(fixture.packets.empty());
+
+    REQUIRE(fixture.submit(SetPhase{600, 3, Phase::PreClose}) == md::PublishStatus::Ok);
+    fixture.packets.clear();
+    CHECK(fixture.publisher.publish_imbalances(past_day_end + 500, fixture.engine) ==
+          md::PublishStatus::TimestampOutsideDay);
+    CHECK(fixture.publisher.state() == md::PublisherState::Stopped);
+    CHECK(fixture.packets.empty());
+    CHECK_EQ(fixture.publisher.stats().imbalance_messages_sent, 0u);
 }
 
 TEST_CASE(md_publisher, ring_holds_exactly_the_published_bytes) {

@@ -5,10 +5,13 @@
 // dispatched (for example the cancel-on-disconnect MassCancel of a
 // connection the server drops from inside a gateway callback). The core
 // applies them in order once the current batch has reached every consumer,
-// so a nested submit never overwrites the batch being dispatched.
+// so a nested submit never overwrites the batch being dispatched. The
+// capacity is rounded up to a power of two so positions wrap with a mask.
 
 #include "engine/command.hpp"
 
+#include <algorithm>
+#include <bit>
 #include <cstddef>
 #include <memory>
 
@@ -17,13 +20,13 @@ namespace exsim::server {
 class DeferredCommandQueue {
 public:
     explicit DeferredCommandQueue(std::size_t capacity)
-        : capacity_(capacity == 0 ? 1 : capacity), slots_(std::make_unique<Command[]>(capacity_)) {}
+        : capacity_(std::bit_ceil(std::max<std::size_t>(capacity, 1))), slots_(std::make_unique<Command[]>(capacity_)) {}
 
     [[nodiscard]] bool push(const Command& command) noexcept {
         if (size_ == capacity_) {
             return false;
         }
-        slots_[(head_ + size_) % capacity_] = command;
+        slots_[(head_ + size_) & (capacity_ - 1)] = command;
         ++size_;
         return true;
     }
@@ -33,7 +36,7 @@ public:
             return false;
         }
         command = slots_[head_];
-        head_ = (head_ + 1) % capacity_;
+        head_ = (head_ + 1) & (capacity_ - 1);
         --size_;
         return true;
     }

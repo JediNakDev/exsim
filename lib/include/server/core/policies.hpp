@@ -11,7 +11,11 @@
 //                                 increase of command timestamps itself)
 //               c.realtime_ns()   ns since the Unix epoch (FIX SendingTime)
 //   MarketData  md.on_events(std::span<const Event>)   one call per batch
-//               md.flush()                            emit the open packet
+//               md.flush()                            send pending output: after
+//                                 each batch and each poll iteration.
+//                                 ITCH: the open MoldUDP64 packet. MDP:
+//                                 queued replay TCP bytes (its UDP packets
+//                                 are sent as they are built).
 //   Sessions    s.on_events(SessionId, const SessionEvents&, Core&)
 //                                 once per distinct session of a batch,
 //                                 first-appearance order, with that
@@ -21,22 +25,16 @@
 //   md.on_timer(Timestamp, const Core&) or md.on_timer(Timestamp)
 //                                 heartbeat / NOII, called from core.timer()
 //   md.next_sequence()            MoldUDP64 next sequence, shown by `status`
-//   md.packet_faults()            md::PacketFaultInjector&, target of
-//                                 `fault md ...`
-//   md.reset_packet_faults()      used by `fault md off` when present
 //   md.on_shutdown(Timestamp)     ITCH end of system hours / end of session
 //   s.on_shutdown(Timestamp, Core&)  OUCH/FIX end-of-day messages
-//   md.on_events / on_timer / on_shutdown may return md::PublishStatus
-//                                 instead of void: the core counts and keeps
-//                                 failures (CoreCounters, `status`)
-//   md.state(), md.stop_reason()  md::PublisherState and md::PublishStatus,
-//                                 shown by `status`
+// The core ignores what the market data hooks return; a feed that stops
+// reports itself through md.state() and md.stop_reason() (admin `status`).
+// The admin hooks (packet faults, publisher state) are declared with
+// CoreAdmin, so the core does not depend on the md/ layer.
 
 #include "engine/event.hpp"
-#include "md/publisher.hpp"
-#include "server/core/session_dispatch_set.hpp"
-#include "md/packet_faults.hpp"
 #include "engine/types.hpp"
+#include "server/core/session_dispatch_set.hpp"
 
 #include <concepts>
 #include <cstdint>
@@ -104,21 +102,7 @@ concept MarketDataSequence = requires(const MarketData& market_data) {
 };
 
 template <typename MarketData>
-concept MarketDataPacketFaults = requires(MarketData& market_data) {
-    { market_data.packet_faults() } -> std::same_as<md::PacketFaultInjector&>;
-};
-
-template <typename MarketData>
-concept MarketDataPacketFaultReset = requires(MarketData& market_data) { market_data.reset_packet_faults(); };
-
-template <typename MarketData>
 concept MarketDataShutdown = requires(MarketData& market_data, Timestamp now) { market_data.on_shutdown(now); };
-
-template <typename MarketData>
-concept MarketDataPublisherState = requires(const MarketData& market_data) {
-    { market_data.state() } -> std::same_as<md::PublisherState>;
-    { market_data.stop_reason() } -> std::same_as<md::PublishStatus>;
-};
 
 template <typename Sessions, typename Core>
 concept SessionsShutdown = requires(Sessions& sessions, Timestamp now, Core& core) { sessions.on_shutdown(now, core); };

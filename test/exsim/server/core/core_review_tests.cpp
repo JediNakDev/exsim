@@ -22,7 +22,7 @@ struct DiscardingPacketSink {
 };
 
 // The real ITCH publisher as MarketData: on_events and on_timer return its
-// md::PublishStatus, and state()/stop_reason() are exposed.
+// md::PublishStatus (the core ignores it), and state()/stop_reason() are exposed.
 struct PublisherMarketData {
     explicit PublisherMarketData(Recorder&) : publisher(md::PublisherConfig{}, DiscardingPacketSink{}) {}
 
@@ -130,9 +130,8 @@ TEST_CASE(server_core_review, stale_unbind_keeps_the_newer_binding_and_its_order
     CHECK_EQ(h.core.engine().live_order_count(), 0u);
 }
 
-// F5 (fixed). The core observes the publisher's md::PublishStatus: failed
-// batches are counted, the last failure is kept, and `status` shows the
-// publisher state.
+// F5 (fixed). A publisher failure stops the feed, and `status` shows the
+// publisher state and the reason it stopped.
 TEST_CASE(server_core_review, market_data_publisher_failures_are_visible) {
     HarnessWith<PublisherMarketData> h(parse_test_config());
     md::MarketDataPublisher<DiscardingPacketSink>& publisher = h.market_data.publisher;
@@ -140,33 +139,23 @@ TEST_CASE(server_core_review, market_data_publisher_failures_are_visible) {
     REQUIRE(publisher.start_session(h.clock.day) == md::PublishStatus::Ok);
 
     REQUIRE_EQ(h.core.submit(limit_order(1, 1, kAapl, Side::BUY, 1'000'000, 10)), SubmitResult::Applied);
-    CHECK_EQ(h.core.counters().market_data_failed_batches, 0u);
     std::string reply = h.admin("status");
-    CHECK(contains(reply, "md state=live stop_reason=none failed_batches=0 last_failure=none\n"));
+    CHECK(contains(reply, "md state=live stop_reason=none\n"));
 
     // An event for an instrument the publisher does not know stops the feed.
     REQUIRE_EQ(h.core.submit(limit_order(1, 2, kMsft, Side::BUY, 1'000'000, 10)), SubmitResult::Applied);
     CHECK(publisher.state() == md::PublisherState::Stopped);
-    CHECK_EQ(h.core.counters().market_data_failed_batches, 1u);
-    CHECK(h.core.counters().market_data_last_failure == md::PublishStatus::UnknownInstrument);
 
-    // Matching goes on; every later batch is counted as not published.
+    // Matching goes on; the stop reason stays the first failure.
     REQUIRE_EQ(h.core.submit(limit_order(1, 3, kAapl, Side::BUY, 1'000'000, 10)), SubmitResult::Applied);
-    CHECK_EQ(h.core.counters().market_data_failed_batches, 2u);
-    CHECK(h.core.counters().market_data_last_failure == md::PublishStatus::NotAllowedInState);
-    reply = h.admin("status");
-    CHECK(contains(reply, "md state=stopped stop_reason=unknown_instrument failed_batches=2 "
-                          "last_failure=not_allowed_in_state\n"));
-
-    // Timer results are observed too, without counting as failed batches.
     h.clock.day += kSecond;
     h.core.timer(h.clock.day);
-    CHECK_EQ(h.core.counters().market_data_failed_batches, 2u);
-    CHECK(h.core.counters().market_data_last_failure == md::PublishStatus::NotAllowedInState);
+    reply = h.admin("status");
+    CHECK(contains(reply, "md state=stopped stop_reason=unknown_instrument\n"));
 }
 
 TEST_CASE(server_core_review, market_data_state_unavailable_without_hooks) {
     HarnessWith<MinimalMarketData> h(parse_test_config());
     const std::string reply = h.admin("status");
-    CHECK(contains(reply, "md state=unavailable failed_batches=0 last_failure=none\n"));
+    CHECK(contains(reply, "md state=unavailable\n"));
 }

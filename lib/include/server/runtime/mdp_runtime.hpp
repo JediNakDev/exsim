@@ -67,6 +67,8 @@ public:
         return publisher_.start(now, epoch, engine);
     }
     void on_events(std::span<const Event> events) noexcept { (void)publisher_.on_events(events); }
+    // Pending output is queued replay TCP bytes; incremental and snapshot
+    // packets never wait (see CoreMarketData).
     void flush() noexcept { if (replay_) replay_->flush_pending(*this); }
     template <class Core>
     void on_timer(Timestamp now, const Core&) noexcept {

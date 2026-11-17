@@ -131,7 +131,7 @@ std::string config_json(const std::string& text) {
 std::string ilink_user_text() {
     return "\n[user ILINK]\nprotocol=ilink3\nsession_id=3\nowner=3\ncancel_on_disconnect=true\n"
            "ilink_access_key=ACCESS-1\nilink_secret_key=" + std::string(43, 'A') + "=\n"
-           "ilink_session=AAA\nilink_firm=EXSIM\nilink_party_id=1001\nilink_account=SIM-ACCOUNT\n";
+           "ilink_session=AAA\nilink_firm=EXSIM\nilink_party_id=1001\n";
 }
 ilink_test::Frame ilink_packet(int fd, const Pump& pump) {
     auto bytes = read_exact(fd, 4, pump);

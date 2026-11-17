@@ -96,6 +96,21 @@ TEST_CASE(server_config_ilink, current_schema_fixture_and_missing_credentials) {
     CHECK(error.find("iLink user requires") != std::string::npos);
 }
 
+// Finding 106: no gateway or report reads an iLink account, so the key is gone.
+TEST_CASE(server_config_ilink, account_is_not_a_config_key) {
+    ServerConfig config;
+    std::string error;
+    std::string text(kMinimal);
+    const auto instrument = text.find("[instrument AAPL]\n") + std::string_view("[instrument AAPL]\n").size();
+    text.insert(instrument, "cme_security_id=800001\n");
+    text += "\n[user ILINK]\nprotocol=ilink3\nsession_id=2\nilink_access_key=ACCESS-1\nilink_secret_key=" +
+            std::string(43, 'A') + "=\nilink_session=AAA\nilink_firm=EXSIM\nilink_party_id=1001\n";
+    REQUIRE(parse_config(text, config, error));
+    text += "ilink_account=SIM-ACCOUNT\n";
+    CHECK(!parse_config(text, config, error));
+    CHECK(error.find("ilink_account") != std::string::npos);
+}
+
 TEST_CASE(server_config, prices) {
     Price p = 0;
     CHECK(parse_price("150.25", p));
@@ -160,8 +175,20 @@ TEST_CASE(server_config, minimal_uses_defaults) {
     CHECK(cfg.users[0].protocol == Protocol::Ouch42);
     CHECK(cfg.users[0].cancel_on_disconnect);
     CHECK(cfg.exchange.name == "EXSIM");
-    CHECK(cfg.find_user("ALICE") != nullptr);
-    CHECK(cfg.find_user("BOB") == nullptr);
+    CHECK(cfg.users[0].username == "ALICE");
+}
+
+// Large capacity is an explicit config choice: the defaults stay small
+// (documented in docs/api.md).
+TEST_CASE(server_config, defaults_are_small) {
+    ServerConfig cfg;
+    std::string err;
+    REQUIRE(parse_config(kMinimal, cfg, err));
+    CHECK_EQ(cfg.engine.engine.max_orders, std::size_t{1} << 16);
+    CHECK_EQ(cfg.engine.max_tokens_per_session, 1u << 16);
+    CHECK_EQ(cfg.engine.store_messages_per_session, std::size_t{1} << 16);
+    CHECK_EQ(cfg.engine.store_bytes_per_session, std::size_t{8} << 20);
+    CHECK_EQ(cfg.market_data.retransmit_buffer, 1u << 16);
 }
 
 TEST_CASE(server_config, example_file_parses) {
@@ -278,9 +305,9 @@ TEST_CASE(server_config, day_times_parse_and_format) {
     CHECK(parse_day_time("09:30:15", ns));
     CHECK_EQ(ns, (9 * 3600 + 30 * 60 + 15) * 1'000'000'000ull);
     CHECK(parse_day_time("23:59:59.999999999", ns));
-    CHECK_EQ(ns, kNanosecondsPerDay - 1);
+    CHECK_EQ(ns, net::kNanosecondsPerDay - 1);
     CHECK(parse_day_time("24:00", ns));
-    CHECK_EQ(ns, kNanosecondsPerDay);
+    CHECK_EQ(ns, net::kNanosecondsPerDay);
     CHECK(!parse_day_time("24:00:01", ns));
     CHECK(!parse_day_time("12:60", ns));
     CHECK(!parse_day_time("12:00:60", ns));
@@ -288,9 +315,9 @@ TEST_CASE(server_config, day_times_parse_and_format) {
     CHECK(!parse_day_time("9:30", ns));
     CHECK(!parse_day_time("", ns));
     CHECK(format_day_time(0) == "00:00:00");
-    CHECK(format_day_time(kNanosecondsPerDay) == "24:00:00");
+    CHECK(format_day_time(net::kNanosecondsPerDay) == "24:00:00");
     CHECK(format_day_time((9 * 3600 + 30 * 60) * 1'000'000'000ull + 250'000'000ull) == "09:30:00.25");
-    CHECK(format_day_time(kNanosecondsPerDay - 1) == "23:59:59.999999999");
+    CHECK(format_day_time(net::kNanosecondsPerDay - 1) == "23:59:59.999999999");
 }
 
 TEST_CASE(server_config, rejects_legacy_listeners_and_protocols) {

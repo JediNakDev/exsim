@@ -36,9 +36,9 @@ namespace exsim::gateway::fix {
 __extension__ typedef unsigned __int128 FixFillNotional;
 
 struct FixUserLimits {
-    std::uint32_t max_tokens = 1u << 16;          // ClOrdIDs per day (orders, cancels, replaces, mass cancels)
-    std::size_t store_max_messages = 1u << 16;    // outbound MsgSeqNums kept for resend
-    std::size_t store_max_bytes = 16u << 20;
+    std::uint32_t max_tokens = server::EngineSection{}.max_tokens_per_session;  // ClOrdIDs per day (all requests)
+    std::size_t store_max_messages = server::EngineSection{}.store_messages_per_session;  // MsgSeqNums kept for resend
+    std::size_t store_max_bytes = server::EngineSection{}.store_bytes_per_session;
 };
 
 // Indexed by the ClOrdID token id. A replace copies the record to the new
