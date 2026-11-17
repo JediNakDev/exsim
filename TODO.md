@@ -14,8 +14,8 @@ Memory figures are computed from the code, not measured.
 
 ## Architecture
 
-- [ ] **7.** **Journal is half-integrated.** Managed exchanges reject it ([exchange_service.cpp:36](./lib/src/api/exchange_service.cpp#L36)), so it works only with standalone `exsim_exchanged --config`. There is no `fsync`, so "flush" reaches the page cache only. `decode_command` has only test callers, so the product cannot replay its own journal.
-- [ ] **8.** **Journal record format is wasteful.** Every command is a fixed 280-byte record, so a 3-field `SetPhase` costs the same as a 12-field `NewOrder`. `flush()` writes a 24-byte footer that the next `append` seeks back over.
+- [x] **7.** **Journal is half-integrated.** Managed exchanges reject it ([exchange_service.cpp:36](./lib/src/api/exchange_service.cpp#L36)), so it works only with standalone `exsim_exchanged --config`. There is no `fsync`, so "flush" reaches the page cache only. `decode_command` has only test callers, so the product cannot replay its own journal. Fixed in #13: managed exchanges accept `[journal]` with a file name in the data directory; `flush()` is documented as page cache only.
+- [x] **8.** **Journal record format is wasteful.** Every command is a fixed 280-byte record, so a 3-field `SetPhase` costs the same as a 12-field `NewOrder`. `flush()` writes a 24-byte footer that the next `append` seeks back over. Fixed in #13: schema 2 records are 56 to 128 bytes. The 24-byte flush footer stays.
 - [ ] **9.** **Core depends on the market data layer.** `server/core/policies.hpp` includes `md/publisher.hpp` and `md/packet_faults.hpp` for a few types.
 - [ ] **10.** **Codec layer depends on the engine.** `protocol/wire.hpp` includes `engine/instrument.hpp`.
 - [ ] **11.** **`InstrumentConfig` carries CME identity fields** (`cme_security_id`, `cme_symbol[20]`, maturity, contract size) inside the core config. They belong in a per-protocol mapping.
@@ -49,11 +49,11 @@ Memory figures are computed from the code, not measured.
 
 ## Unused, test-only, single-use, duplicated
 
-- [ ] **32.** **No users at all:** `kAllEventTypes` (`journal/fields.hpp:125`), `book::Timestamp`, `cycle_timer.hpp`, and `BenchmarkRunner::set_samples`, `add_counter`, `latencies`, `state`.
+- [ ] **32.** **No users at all:** ~~`kAllEventTypes`~~ (removed in #13), `book::Timestamp`, `cycle_timer.hpp`, and `BenchmarkRunner::set_samples`, `add_counter`, `latencies`, `state`.
 - [ ] **33.** **Test-only code in `lib/`:**
     - ~~`fix44::FrameReader` and the typed `fix44::decode` functions~~ (moved to `test/` in #14)
     - ~~`moldudp64::PacketReader`~~ (moved to `test/` in #14)
-    - journal `decode_command` and `hash_event`
+    - ~~journal `decode_command` and `hash_event`~~ (moved to `test/` in #13)
     - `ServerConfig::find_user`, `utc_midnight_ns`
     - `FlatHashMap::for_each` and `max_entries`
     - socket helpers `start_connect`, `connect_result`, `peer_endpoint`, `get_send_buffer_size`, `get_receive_buffer_size`
@@ -93,7 +93,7 @@ Memory figures are computed from the code, not measured.
 - [ ] **57.** The FIX `Parser` detects duplicates with a linear scan per field (O(n²), n at most 64) and `get(tag)` scans per lookup. `find_duplicate_tag` scans a 256-entry array.
 - [ ] **58.** `fix44::Builder::finish` memmoves the body because 14 header bytes are reserved but the BodyLength digit count varies ([fix44.hpp:263](./lib/include/protocol/fix44.hpp#L263)). Measure before changing.
 - [ ] **59.** `RetransmissionRing` and `DeferredCommandQueue` index with `% capacity_`. A power-of-two capacity with a mask avoids the division, as `SPSCQueue` already does.
-- [ ] **60.** `JournalWorker` polls and sleeps 1 ms when empty, so there is up to 1 ms of added latency and no wake mechanism (eventfd, futex or condition variable). Its destructor waits 100 ms and then detaches a stuck writer.
+- [x] **60.** `JournalWorker` polls and sleeps 1 ms when empty, so there is up to 1 ms of added latency and no wake mechanism (eventfd, futex or condition variable). Its destructor waits 100 ms and then detaches a stuck writer. Fixed in #13: atomic wait and notify. The 100 ms bounded shutdown stays.
 - [ ] **61.** `publish_imbalances` loops all `max_instruments` once per interval, and a second time when any instrument is in a call phase. `rested_replacement` forward-scans per priority-losing replace.
 - [ ] **62.** `FlatHashMap::clear` and `TokenTable::clear` cost O(capacity), not O(size).
 - [ ] **64.** Latency stats keep a `vector<double>` and sort it. A histogram gives fixed memory and O(1) recording.
@@ -142,7 +142,7 @@ Memory figures are computed from the code, not measured.
 
 ## Added after verification
 
-- [ ] **97.** The journal header omits CME identity. [journal.cpp:28](./lib/src/server/journal/journal.cpp#L28) writes each instrument only up to `initial_phase`, so `cme_security_id`, `cme_symbol`, maturity and contract size cannot be reconstructed from a journal.
+- [x] **97.** The journal header omits CME identity. [journal.cpp:28](./lib/src/server/journal/journal.cpp#L28) writes each instrument only up to `initial_phase`, so `cme_security_id`, `cme_symbol`, maturity and contract size cannot be reconstructed from a journal. Fixed in #13.
 
 ## Second pass: files the first review skipped
 

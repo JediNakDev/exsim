@@ -61,7 +61,7 @@ See [data structures and algorithms](dsa.md) for storage and matching costs.
 
 The manager locks its config directory so only one API process can use it. Config writes use atomic replacement and owner-only file permissions. Responses redact passwords; replacement requests need the full original credentials.
 
-Standalone exchanges can write journals. Managed journaling is currently rejected. Journals do not provide automatic crash recovery, and abrupt termination can lose buffered records.
+Standalone and managed exchanges can write optional journals. Journals do not provide automatic crash recovery, and abrupt termination can lose buffered records.
 
 Books, session state, and feed history disappear when an exchange exits. Recovery covers retained in-memory history. MDP subscribers can join using periodic snapshots and instrument definitions; ITCH subscribers still need earlier feed history.
 
@@ -74,3 +74,5 @@ Protocol support is a subset of each specification. iLink uses the pinned versio
 Run native processes on macOS or Linux. Active checks cover unit and integration tests. The benchmark suite measures order-book operations and a benchmark-only sharding harness, not the complete exchange service.
 
 See [API specs](api.md), [OpenAPI](openapi.json), [tests](../test/README.md), and [benchmarks](../benchmark/README.md).
+
+Journal flush reaches the OS page cache only, without `fsync` or `fdatasync`. Worker flush requests are asynchronous; `drained()` acknowledges completion. Each start truncates the configured file.
