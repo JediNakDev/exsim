@@ -1,5 +1,4 @@
-// Independent QA review reproducer (review of e2cdd11). Expected to FAIL until
-// fixed. See /tmp/exsim-review-proto/REPORT.md, finding F3.
+// Guard publisher payload limits and FIX credential field sizes.
 
 #include "md/itch_publisher.hpp"
 #include "server/config.hpp"

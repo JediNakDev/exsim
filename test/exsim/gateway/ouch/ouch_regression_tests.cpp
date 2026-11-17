@@ -1,6 +1,4 @@
-// Independent QA review reproducers for the OUCH 4.2 / SoupBinTCP gateway
-// (review of e2cdd11), updated to assert the fixed behaviour. See
-// /tmp/exsim-review-proto/REPORT.md, findings F1 and F2.
+// Guard transport-cut recovery counts and the OUCH reject-store reserve.
 
 #include "ouch_test_harness.hpp"
 
