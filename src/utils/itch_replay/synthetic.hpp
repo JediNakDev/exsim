@@ -8,7 +8,7 @@
 // executes, 5% replaces. All adds are non-marketable by construction
 // (buys below current best ask, sells above current best bid).
 
-#include <book/types.hpp>
+#include <engine/types.hpp>
 #include <cstdint>
 #include <cstring>
 #include <random>
@@ -16,9 +16,6 @@
 #include <vector>
 
 namespace exsim::itch_replay {
-
-using book::Price;
-using book::Side;
 
 class SyntheticItchStream {
 public:

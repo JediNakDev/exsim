@@ -58,5 +58,5 @@ make -j4 itch-replay
 ./build/perf/itch_replay --synth 100000 --validate
 ```
 
-Replay remains a separate standalone order-book tool, not part of this suite.
+Replay is a separate tool that drives the same engine. It is not part of this suite.
 See [profiling](profiling/README.md) and [current results](../results/README.md).

@@ -1,5 +1,5 @@
-// itch_replay: replay a NASDAQ ITCH 5.0 binary file through the
-// production OrderBook and report throughput + final book state.
+// itch_replay: replay a NASDAQ ITCH 5.0 binary file through the matching
+// engine and report throughput + final book state.
 //
 // Usage:
 //   itch_replay <file.itch>           # replay real ITCH file
@@ -15,8 +15,6 @@
 #include "itch_replayer.hpp"
 #include "reference_book.hpp"
 #include "synthetic.hpp"
-
-#include <book/order_book.hpp>
 
 #include <chrono>
 #include <cstdint>
@@ -87,9 +85,10 @@ int main(int argc, char** argv) {
         wire = framed ? unframe(raw) : std::move(raw);
     }
 
-    exsim::book::OrderBook book;
     exsim::itch_replay::ReferenceBook ref;
-    exsim::itch_replay::ItchReplayer replayer(book, validate ? &ref : nullptr);
+    exsim::itch_replay::ItchReplayer replayer(exsim::itch_replay::max_live_orders_for(wire.size()),
+                                              validate ? &ref : nullptr);
+    const exsim::MatchingEngine& engine = replayer.engine();
 
     std::size_t offset = 0;
     std::size_t parsed = 0;
@@ -104,7 +103,7 @@ int main(int argc, char** argv) {
         if (replayer.apply({&wire[offset], sz})) {
             ++parsed;
             if (validate) {
-                auto d = exsim::itch_replay::diff_books(book, ref, 10);
+                auto d = exsim::itch_replay::diff_books(engine, replayer.instrument(), ref, 10);
                 if (!d.ok) {
                     if (++mismatches <= 3) {
                         std::cerr << "DIVERGENCE @msg " << parsed << ": " << d.detail << "\n";
@@ -131,13 +130,14 @@ int main(int argc, char** argv) {
               << " replaces=" << s.replaces
               << " unknown_ref=" << s.unknown_ref
               << " dropped_cross=" << s.dropped_cross
+              << " rejected=" << s.rejected
               << "\n";
     if (validate) std::cout << "validation_mismatches=" << mismatches << "\n";
 
-    auto bid = book.get_best_bid();
-    auto ask = book.get_best_ask();
+    auto bid = engine.best_bid(replayer.instrument());
+    auto ask = engine.best_ask(replayer.instrument());
     std::cout << "best_bid=" << (bid ? std::to_string(*bid) : "-")
               << " best_ask=" << (ask ? std::to_string(*ask) : "-")
-              << " live_orders=" << book.get_total_orders() << "\n";
+              << " live_orders=" << engine.live_order_count() << "\n";
     return (validate && mismatches > 0) ? 2 : 0;
 }
