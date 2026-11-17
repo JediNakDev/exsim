@@ -8,7 +8,7 @@
 #include "../../../framework/alloc_counter.hpp"
 #include "server/config.hpp"
 #include "server/admin/core_admin.hpp"
-#include "server/exchange_core.hpp"
+#include "server/core/exchange_core.hpp"
 
 using namespace exsim;
 using namespace exsim::gateway::ouch;

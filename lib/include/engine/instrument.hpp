@@ -1,7 +1,7 @@
 #ifndef EXSIM_ENGINE_INSTRUMENT_HPP
 #define EXSIM_ENGINE_INSTRUMENT_HPP
 
-#include "engine/types.hpp"
+#include "common/types.hpp"
 #include <array>
 #include <cstring>
 #include <string_view>

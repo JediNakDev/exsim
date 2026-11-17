@@ -12,7 +12,7 @@
 // gets right; the runtimes themselves contain no protocol branches.
 
 #include "engine/event.hpp"
-#include "md/publisher.hpp"
+#include "md/itch_publisher.hpp"
 #include "net/poller.hpp"
 #include "server/config.hpp"
 #include "server/runtime/itch_runtime.hpp"

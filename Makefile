@@ -82,7 +82,7 @@ BENCH_LDFLAGS := -L$(BENCHMARK_PREFIX)/lib
 endif
 
 .PHONY: bench bench-build itch-replay
-$(BUILD)/itch_replay: $(call obj,src/utils/itch_replay/main.cpp) $(ENGINE_OBJS)
+$(BUILD)/itch_replay: $(call obj,tools/itch_replay/main.cpp) $(ENGINE_OBJS)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $^ -o $@ $(LDLIBS)
 itch-replay:
 	$(MAKE) MODE=perf build/perf/itch_replay

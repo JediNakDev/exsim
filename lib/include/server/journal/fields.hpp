@@ -20,7 +20,7 @@
 #include <engine/command.hpp>
 #include <engine/event.hpp>
 #include <engine/matching_engine.hpp>
-#include <engine/types.hpp>
+#include <common/types.hpp>
 
 #include <cstdint>
 #include <string_view>
@@ -99,7 +99,7 @@ template <typename T>
     }
 }
 
-// Upper-case name (engine/types.hpp to_string) of an enum-kind value; "" when the
+// Upper-case name (common/types.hpp to_string) of an enum-kind value; "" when the
 // kind is not an enum or the value is out of range.
 [[nodiscard]] constexpr std::string_view enum_value_name(FieldKind kind, std::uint64_t raw) noexcept {
     if (raw > 0xFF) {

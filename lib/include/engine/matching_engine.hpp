@@ -21,7 +21,7 @@
 #include "engine/command.hpp"
 #include "engine/event.hpp"
 #include "engine/instrument.hpp"
-#include "engine/types.hpp"
+#include "common/types.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <memory>

@@ -10,7 +10,7 @@
 #include "engine/event.hpp"
 #include "server/config.hpp"
 #include "server/core/session_dispatch_set.hpp"
-#include "engine/types.hpp"
+#include "common/types.hpp"
 
 #include <algorithm>
 #include <cstddef>

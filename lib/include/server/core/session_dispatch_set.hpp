@@ -6,7 +6,7 @@
 // never allocates or overflows while doing so.
 
 #include "engine/event.hpp"
-#include "engine/types.hpp"
+#include "common/types.hpp"
 
 #include <cstddef>
 #include <cstdint>

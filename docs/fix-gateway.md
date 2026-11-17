@@ -1,6 +1,7 @@
 # FIX 4.4 gateway integration
 
-Include [`gateway/fix/fix_gateway.hpp`](../lib/include/gateway/fix/fix_gateway.hpp)
+Include [`gateway/fix/fix_connection.hpp`](../lib/include/gateway/fix/fix_connection.hpp)
+and [`gateway/fix/fix_user_state.hpp`](../lib/include/gateway/fix/fix_user_state.hpp)
 for the exchange side. The test client is
 [`fix_client.hpp`](../test/exsim/support/clients/fix_client.hpp) in test support.
 All types are in `exsim::gateway::fix`; implementations are header-only C++23

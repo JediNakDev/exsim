@@ -13,7 +13,8 @@
 // steady-state allocation tests can wrap them.
 
 #include "test/exsim/support/clients/ouch_client.hpp"
-#include "gateway/ouch/ouch_server.hpp"
+#include "gateway/ouch/ouch_connection.hpp"
+#include "gateway/ouch/ouch_user_state.hpp"
 #include "engine/matching_engine.hpp"
 #include "server/core/session_dispatch_set.hpp"
 #include "../../../framework/test.hpp"

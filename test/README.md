@@ -39,4 +39,4 @@ Each test case builds its own state and shares nothing with other cases, so the 
 
 Fuzz campaigns and end-to-end suites are deferred.
 
-The active benchmark suite lives in [benchmark/](../benchmark/README.md). Replay lives in `src/utils/itch_replay/`. CME schema sources, regeneration, and supported scope are documented in the [CME profile](../docs/ilink-and-mdp.md).
+The active benchmark suite lives in [benchmark/](../benchmark/README.md). Replay lives in `tools/itch_replay/`. CME schema sources, regeneration, and supported scope are documented in the [CME profile](../docs/ilink-and-mdp.md).

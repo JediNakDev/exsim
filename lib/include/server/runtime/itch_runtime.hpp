@@ -21,7 +21,7 @@
 // allocation. Construction and open() allocate.
 
 #include "engine/event.hpp"
-#include "md/publisher.hpp"
+#include "md/itch_publisher.hpp"
 #include "md/retransmission_server.hpp"
 #include "net/poller.hpp"
 #include "net/socket.hpp"

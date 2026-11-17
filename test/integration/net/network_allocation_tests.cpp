@@ -2,7 +2,7 @@
 // Counting uses the shared per-thread counter in test/framework/alloc_counter.cpp,
 // which reports nothing under ASan/TSan, so the test is skipped there.
 #include <cerrno>
-#include <net/clocks.hpp>
+#include <common/clocks.hpp>
 #include "test/exsim/support/clients/tcp_client.hpp"
 #include <net/tcp_server.hpp>
 #include <net/udp.hpp>
@@ -30,6 +30,7 @@ struct EchoEveryByteHandler {
 
 TEST_CASE(Network, connect_echo_close_and_udp_cycles_allocate_nothing_after_setup) {
     if (!testfw::allocation_counting_available()) return;
+    using namespace exsim::common;
     using namespace exsim::net;
     Poller poller;
     TcpServerConfig config;

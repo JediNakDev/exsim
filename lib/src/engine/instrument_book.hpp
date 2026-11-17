@@ -7,7 +7,7 @@
 // from the engine's OrderBookStorage.
 
 #include <engine/instrument.hpp>
-#include <engine/types.hpp>
+#include <common/types.hpp>
 
 #include <cstdint>
 

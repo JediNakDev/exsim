@@ -6,7 +6,7 @@
 // are rejected. The gateway validates inbound fields through FixFieldReader.
 // Builder buffers can be reused after finish(); construct a new Builder per
 // message.
-#include "engine/price_text.hpp"
+#include "common/price_text.hpp"
 #include "wire.hpp"
 #include <algorithm>
 #include <charconv>

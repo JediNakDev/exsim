@@ -1,4 +1,4 @@
-#include "server/server_runtime.hpp"
+#include "server/runtime/server_runtime.hpp"
 #include "test/exsim/gateway/fix/fix_test_support.hpp"
 #include "test/framework/test.hpp"
 
@@ -25,8 +25,8 @@ std::string exchange_frame(Runtime& runtime, int fd, std::string_view frame) {
     REQUIRE_EQ(exsim::net::send_some(fd, frame.data(), frame.size()), static_cast<ssize_t>(frame.size()));
     std::string output;
     std::array<char, 8192> buffer{};
-    const auto deadline = exsim::net::monotonic_ns() + 2'000'000'000;
-    while (exsim::net::monotonic_ns() < deadline) {
+    const auto deadline = exsim::common::monotonic_ns() + 2'000'000'000;
+    while (exsim::common::monotonic_ns() < deadline) {
         runtime.poll_once();
         const auto size = ::recv(fd, buffer.data(), buffer.size(), 0);
         if (size > 0)
@@ -73,7 +73,8 @@ TEST_CASE(fix_runtime, tcp_logon_orders_matching_and_logout) {
     // Deliver peer EOF before destroying sessions that are still bound.
     alice.close();
     bob.close();
-    const auto deadline = exsim::net::monotonic_ns() + 2'000'000'000;
-    while (runtime.core().bound_connection_count() != 0 && exsim::net::monotonic_ns() < deadline) runtime.poll_once();
+    const auto deadline = exsim::common::monotonic_ns() + 2'000'000'000;
+    while (runtime.core().bound_connection_count() != 0 && exsim::common::monotonic_ns() < deadline)
+        runtime.poll_once();
     CHECK_EQ(runtime.core().bound_connection_count(), 0u);
 }

@@ -6,8 +6,8 @@
 // timestamps count nanoseconds from the start of the trading day.
 
 #include <protocol/moldudp64.hpp>
-#include <engine/types.hpp>
-#include <net/clocks.hpp>
+#include <common/types.hpp>
+#include <common/clocks.hpp>
 
 #include <array>
 #include <cstddef>
@@ -49,7 +49,7 @@ using MoldSessionName = std::array<char, 10>;  // right-space-padded ASCII
                                                             std::uint64_t& itch_timestamp_out) noexcept {
     if (event_time < day_origin) return false;
     const std::uint64_t since_origin = event_time - day_origin;
-    if (since_origin >= net::kNanosecondsPerDay) return false;  // ITCH: [0, one day)
+    if (since_origin >= common::kNanosecondsPerDay) return false;  // ITCH: [0, one day)
     itch_timestamp_out = since_origin;
     return true;
 }
