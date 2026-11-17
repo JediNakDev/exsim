@@ -363,6 +363,45 @@ TEST_CASE(api_http_server, trickled_request_is_cut_off_at_the_request_deadline) 
     keep_alive_server.stop();
 }
 
+// A pipelined request's time starts when the previous response is sent, so a slow handler does not use it
+// up. The handler takes 1.5 s of a 1 s timeout; margins of 0.5 s and more keep this stable on a loaded runner.
+TEST_CASE(api_http_server, pipelined_partial_request_gets_its_time_after_a_slow_handler) {
+    HttpServerOptions options;
+    options.port = 0;
+    options.idle_timeout = std::chrono::milliseconds(1000);
+    HttpServer server(
+        options,
+        [](const HttpRequest& request) {
+            if (request.path == "/slow") std::this_thread::sleep_for(std::chrono::milliseconds(1500));
+            return echo_path_handler(request);
+        },
+        plain_rejection);
+    server.start();
+    const std::string slow_request_then_partial_request =
+        "GET /slow HTTP/1.1\r\n\r\nPOST /late HTTP/1.1\r\nContent-Length: 1\r\n\r\n";
+    {
+        // The last byte arrives well inside the time counted from the first response, long after the
+        // second request's headers.
+        TestClientConnection client(server.port());
+        client.send_text(slow_request_then_partial_request);
+        CHECK(client.receive_until("GET /slow body=0", 1).find("GET /slow body=0") != std::string::npos);
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        client.send_text("x");
+        CHECK(client.receive_until("POST /late body=1", 1).find("POST /late body=1") != std::string::npos);
+    }
+    {
+        // The last byte never arrives: the second request is cut off one timeout after the first response.
+        TestClientConnection client(server.port());
+        client.send_text(slow_request_then_partial_request);
+        CHECK(client.receive_until("GET /slow body=0", 1).find("GET /slow body=0") != std::string::npos);
+        const auto first_response_received = std::chrono::steady_clock::now();
+        const std::string received = client.receive_until_closed();
+        CHECK(received.rfind("HTTP/1.1 408", 0) == 0u);
+        CHECK(std::chrono::steady_clock::now() - first_response_received < std::chrono::milliseconds(4000));
+    }
+    server.stop();
+}
+
 TEST_CASE(api_http_server, stop_closes_open_keep_alive_connections) {
     HttpServerOptions options;
     options.port = 0;
