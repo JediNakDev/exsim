@@ -34,7 +34,11 @@ struct HttpServerOptions {
     std::uint16_t port = 7600;  // 0 = ephemeral (read it back with port())
     std::size_t max_connections = 32;
     std::size_t max_requests_per_connection = 1000;
-    // How long an idle connection is kept, and how long a started request has to arrive completely.
+    // How long an idle connection is kept, and how long a request has to arrive completely. A request's
+    // time starts at its first byte read into an empty buffer, or when the previous response on the
+    // connection has been sent, whichever is later. Time a pipelined request spends queued behind an
+    // earlier request's handler does not count, so a slow handler never causes a 408 for a request
+    // that arrived on time.
     std::chrono::milliseconds idle_timeout{10'000};
     std::chrono::milliseconds write_timeout{10'000};
     HttpLimits limits;

@@ -164,6 +164,10 @@ void HttpServer::serve_connection(int socket_descriptor) {
     std::size_t requests_served = 0;
     // A started request must be complete by this time. Timing each read alone
     // would let a client hold its slot by sending one byte per idle timeout.
+    // The deadline starts at the first byte read into an empty buffer or when
+    // the previous response was sent, whichever is later: time spent queued
+    // behind a slow handler does not count against a pipelined request.
+    // Expiry is checked whenever a read would block; reads that succeed are bounded by the size limits.
     std::chrono::steady_clock::time_point request_deadline;
     char chunk[16 * 1024];
     while (!stopping_.load()) {
@@ -200,7 +204,7 @@ void HttpServer::serve_connection(int socket_descriptor) {
                 !keep_alive)
                 return;
             request = HttpRequest{};
-            request_deadline = std::chrono::steady_clock::now() + options_.idle_timeout;  // for pipelined bytes
+            request_deadline = std::chrono::steady_clock::now() + options_.idle_timeout;  // next request's time starts
             continue;
         }
 
