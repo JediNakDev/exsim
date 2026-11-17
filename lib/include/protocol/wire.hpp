@@ -9,7 +9,7 @@
 #include <span>
 #include <string_view>
 namespace exsim::protocol {
-enum class Status {
+enum class Status : std::uint8_t {
     ok,
     incomplete,
     invalid_length,

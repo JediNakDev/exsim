@@ -15,9 +15,59 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <string>
+#include <string_view>
 
 namespace exsim {
+
+// Signed decimal with up to four fraction digits. The integer part may be
+// omitted, but a decimal point must be followed by at least one digit.
+inline bool parse_decimal_price(std::string_view text, Price& out) noexcept {
+    if (text.empty()) {
+        return false;
+    }
+    bool negative = false;
+    if (text.front() == '-') {
+        negative = true;
+        text.remove_prefix(1);
+    }
+    const std::size_t dot = text.find('.');
+    const std::string_view whole = text.substr(0, dot);
+    const std::string_view frac = dot == std::string_view::npos ? std::string_view{} : text.substr(dot + 1);
+    if ((whole.empty() && frac.empty()) || frac.size() > 4 || (dot != std::string_view::npos && frac.empty())) {
+        return false;
+    }
+    constexpr auto maximum = static_cast<std::uint64_t>(std::numeric_limits<Price>::max());
+    const std::uint64_t limit = negative ? maximum + 1 : maximum;
+    std::uint64_t value = 0;
+    for (char c : whole) {
+        if (c < '0' || c > '9') {
+            return false;
+        }
+        if (value > (limit - static_cast<unsigned>(c - '0')) / 10) {
+            return false;
+        }
+        value = value * 10 + static_cast<unsigned>(c - '0');
+    }
+    if (value > limit / kPriceScale) {
+        return false;
+    }
+    value *= kPriceScale;
+    std::uint64_t scale = kPriceScale / 10;
+    for (char c : frac) {
+        if (c < '0' || c > '9') {
+            return false;
+        }
+        const auto fraction_units = static_cast<unsigned>(c - '0') * scale;
+        if (value > limit - fraction_units) return false;
+        value += fraction_units;
+        scale /= 10;
+    }
+    out = negative && value == maximum + 1 ? std::numeric_limits<Price>::min()
+        : negative ? -static_cast<Price>(value) : static_cast<Price>(value);
+    return true;
+}
 
 // Writes at most `capacity` bytes and returns the length, or returns zero
 // without writing when the text does not fit. Allocation-free.
