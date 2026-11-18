@@ -9,7 +9,7 @@
 #include "common/types.hpp"
 #include <cstddef>
 #include <type_traits>
-#include <vector>
+#include <memory>
 
 namespace exsim {
 
@@ -150,28 +150,34 @@ static_assert(std::is_trivially_copyable_v<Event>);
 // against remaining() before mutation. push failure must never be ignored.
 class EventBuffer {
 public:
-    explicit EventBuffer(std::size_t initial_capacity = 4096) { events_.reserve(initial_capacity); }
+    // Raw storage: Event has no default constructor, and a vector's push_back keeps a growth path
+    // that stops it inlining although capacity never changes.
+    explicit EventBuffer(std::size_t capacity = 4096)
+        : events_(std::allocator<Event>{}.allocate(capacity)), capacity_(capacity) {}
+    ~EventBuffer() { std::allocator<Event>{}.deallocate(events_, capacity_); }
+    EventBuffer(const EventBuffer&) = delete;
+    EventBuffer& operator=(const EventBuffer&) = delete;
 
-    void clear() noexcept { events_.clear(); }
+    void clear() noexcept { size_ = 0; }
     [[nodiscard]] bool push(const Event& e) noexcept {
-        if (remaining() == 0) return false;
-        events_.push_back(e);
+        if (size_ == capacity_) return false;
+        std::construct_at(events_ + size_++, e);
         return true;
     }
-    [[nodiscard]] std::size_t remaining() const noexcept { return capacity() - size(); }
+    [[nodiscard]] std::size_t remaining() const noexcept { return capacity_ - size_; }
     [[nodiscard]] bool can_append(std::size_t n) const noexcept { return n <= remaining(); }
 
-    [[nodiscard]] std::size_t size() const noexcept { return events_.size(); }
-    [[nodiscard]] bool empty() const noexcept { return events_.empty(); }
-    [[nodiscard]] std::size_t capacity() const noexcept { return events_.capacity(); }
+    [[nodiscard]] std::size_t size() const noexcept { return size_; }
+    [[nodiscard]] bool empty() const noexcept { return size_ == 0; }
+    [[nodiscard]] std::size_t capacity() const noexcept { return capacity_; }
     [[nodiscard]] const Event& operator[](std::size_t i) const noexcept { return events_[i]; }
-    [[nodiscard]] const Event* begin() const noexcept { return events_.data(); }
-    [[nodiscard]] const Event* end() const noexcept {
-        return events_.empty() ? events_.data() : events_.data() + events_.size();
-    }
+    [[nodiscard]] const Event* begin() const noexcept { return events_; }
+    [[nodiscard]] const Event* end() const noexcept { return events_ + size_; }
 
 private:
-    std::vector<Event> events_;
+    Event* events_;
+    std::size_t capacity_;
+    std::size_t size_ = 0;
 };
 
 }  // namespace exsim
