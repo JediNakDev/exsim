@@ -3,22 +3,22 @@
 #
 # Total Lost Samples: 0
 #
-# Samples: 1K of event 'cpu-clock:u'
-# Event count (approx.): 1861861860
+# Samples: 2K of event 'cpu-clock:u'
+# Event count (approx.): 2263263261
 #
-# Overhead       Samples  Command          Shared Object     Symbol                                                                                                                                                                                                                                                                                         
-# ........  ............  ...............  ................  ...............................................................................................................................................................................................................................................................................................
+# Overhead       Samples  Command          Shared Object        Symbol                                                                                                                                                                                                                                                                                         
+# ........  ............  ...............  ...................  ...............................................................................................................................................................................................................................................................................................
 #
-    19.89%           370  exsim_benchmark  exsim_benchmark   [.] exsim::MatchingEngine::handle(exsim::Command const&, exsim::EventBuffer&)
-    15.59%           290  exsim_benchmark  exsim_benchmark   [.] void bench::run_commands<BM_MixedWorkload(benchmark::State&)::{lambda(bench::Scenario&)#1}>(benchmark::State&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, BM_MixedWorkload(benchmark::State&)::{lambda(bench::Scenario&)#1}&&) [clone .isra.0]
-    14.41%           268  exsim_benchmark  exsim_benchmark   [.] exsim::MatchingEngine::Impl::rest(exsim::engine::InstrumentBook&, exsim::(anonymous namespace)::IncomingOrder const&, unsigned long, exsim::EventBuffer&)
-    12.47%           232  exsim_benchmark  exsim_benchmark   [.] std::vector<exsim::Event, std::allocator<exsim::Event> >::push_back(exsim::Event const&)
-    11.08%           206  exsim_benchmark  exsim_benchmark   [.] exsim::MatchingEngine::Impl::match_and_dispose(exsim::engine::InstrumentBook&, exsim::(anonymous namespace)::IncomingOrder&, unsigned long, exsim::EventBuffer&)
-     8.49%           158  exsim_benchmark  exsim_benchmark   [.] std::__detail::_MakeUniq<bench::Scenario>::__single_object std::make_unique<bench::Scenario>()
-     6.56%           122  exsim_benchmark  exsim_benchmark   [.] exsim::MatchingEngine::Impl::remove_resting(exsim::engine::InstrumentBook&, unsigned int)
-     6.02%           112  exsim_benchmark  exsim_benchmark   [.] std::mersenne_twister_engine<unsigned long, 64ul, 312ul, 156ul, 31ul, 13043109905998158313ul, 29ul, 6148914691236517205ul, 17ul, 8202884508482404352ul, 37ul, 18444473444759240704ul, 43ul, 6364136223846793005ul>::operator()()
-     2.10%            39  exsim_benchmark  [vdso]            [.] __kernel_clock_gettime
-     1.56%            29  exsim_benchmark  exsim_benchmark   [.] exsim::MatchingEngine::Impl::emit_resting_canceled(exsim::engine::InstrumentBook const&, unsigned int, exsim::CancelReason, unsigned long, unsigned long, exsim::EventBuffer&)
+    19.46%           440  exsim_benchmark  exsim_benchmark      [.] exsim::MatchingEngine::handle(exsim::Command const&, exsim::EventBuffer&)
+    17.51%           396  exsim_benchmark  exsim_benchmark      [.] void bench::run_commands<BM_MixedWorkload(benchmark::State&)::{lambda(bench::Scenario&)#1}>(benchmark::State&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, BM_MixedWorkload(benchmark::State&)::{lambda(bench::Scenario&)#1}&&) [clone .isra.0]
+    16.63%           376  exsim_benchmark  exsim_benchmark      [.] std::vector<exsim::Event, std::allocator<exsim::Event> >::push_back(exsim::Event const&)
+    13.93%           315  exsim_benchmark  exsim_benchmark      [.] exsim::MatchingEngine::Impl::rest(exsim::engine::InstrumentBook&, exsim::(anonymous namespace)::IncomingOrder const&, unsigned long, exsim::EventBuffer&)
+     9.51%           215  exsim_benchmark  exsim_benchmark      [.] exsim::MatchingEngine::Impl::match_and_dispose(exsim::engine::InstrumentBook&, exsim::(anonymous namespace)::IncomingOrder&, unsigned long, exsim::EventBuffer&)
+     7.47%           169  exsim_benchmark  exsim_benchmark      [.] std::__detail::_MakeUniq<bench::Scenario>::__single_object std::make_unique<bench::Scenario>()
+     5.57%           126  exsim_benchmark  exsim_benchmark      [.] exsim::MatchingEngine::Impl::remove_resting(exsim::engine::InstrumentBook&, unsigned int)
+     5.26%           119  exsim_benchmark  exsim_benchmark      [.] std::mersenne_twister_engine<unsigned long, 64ul, 312ul, 156ul, 31ul, 13043109905998158313ul, 29ul, 6148914691236517205ul, 17ul, 8202884508482404352ul, 37ul, 18444473444759240704ul, 43ul, 6364136223846793005ul>::operator()()
+     1.90%            43  exsim_benchmark  exsim_benchmark      [.] exsim::MatchingEngine::Impl::emit_resting_canceled(exsim::engine::InstrumentBook const&, unsigned int, exsim::CancelReason, unsigned long, unsigned long, exsim::EventBuffer&)
+     1.24%            28  exsim_benchmark  [vdso]               [.] __kernel_clock_gettime
 
 
 #

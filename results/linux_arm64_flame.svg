@@ -1,6 +1,6 @@
 <?xml version="1.0" standalone="no"?>
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<svg version="1.1" width="1200" height="326" onload="init(evt)" viewBox="0 0 1200 326" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<svg version="1.1" width="1200" height="342" onload="init(evt)" viewBox="0 0 1200 342" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
 <!-- Flame graph stack visualization. See https://github.com/brendangregg/FlameGraph for latest version, and http://www.brendangregg.com/flamegraphs.html for examples. -->
 <!-- NOTES:  -->
 <defs>
@@ -422,141 +422,161 @@
 	}
 ]]>
 </script>
-<rect x="0.0" y="0" width="1200.0" height="326.0" fill="url(#background)"  />
+<rect x="0.0" y="0" width="1200.0" height="342.0" fill="url(#background)"  />
 <text id="title" x="600.00" y="24" >exsim MixedWorkload</text>
-<text id="details" x="10.00" y="309" > </text>
+<text id="details" x="10.00" y="325" > </text>
 <text id="unzoom" x="10.00" y="24" class="hide">Reset Zoom</text>
 <text id="search" x="1090.00" y="24" >Search</text>
 <text id="ignorecase" x="1174.00" y="24" >ic</text>
-<text id="matched" x="1090.00" y="309" > </text>
+<text id="matched" x="1090.00" y="325" > </text>
 <g id="frames">
 <g >
-<title>std::mersenne_twister_engine&lt;unsigned long, 64ul, 312ul, 156ul, 31ul, 13043109905998158313ul, 29ul, 6148914691236517205ul, 17ul, 8202884508482404352ul, 37ul, 18444473444759240704ul, 43ul, 6364136223846793005ul&gt;::operator (112,112,112 samples, 6.02%)</title><rect x="1118.9" y="69" width="71.1" height="15.0" fill="rgb(211,30,7)" rx="2" ry="2" />
-<text  x="1121.95" y="79.5" >std::mer..</text>
+<title>std::vector&lt;exsim::Event, std::allocator&lt;exsim::Event&gt; &gt;::push_back (286,286,286 samples, 12.65%)</title><rect x="859.6" y="69" width="149.3" height="15.0" fill="rgb(206,7,1)" rx="2" ry="2" />
+<text  x="862.64" y="79.5" >std::vector&lt;exsim::..</text>
 </g>
 <g >
-<title>exsim::MatchingEngine::Impl::match_and_dispose (206,206,206 samples, 11.08%)</title><rect x="457.9" y="53" width="130.7" height="15.0" fill="rgb(208,16,4)" rx="2" ry="2" />
-<text  x="460.89" y="63.5" >exsim::MatchingE..</text>
+<title>exsim::MatchingEngine::Impl::remove_resting (126,126,126 samples, 5.57%)</title><rect x="589.8" y="69" width="65.8" height="15.0" fill="rgb(239,160,38)" rx="2" ry="2" />
+<text  x="592.82" y="79.5" >exsim::..</text>
 </g>
 <g >
-<title>void bench::run_commands&lt;BM_MixedWorkload (1,861,861,860 samples, 100.00%)</title><rect x="10.0" y="85" width="1180.0" height="15.0" fill="rgb(220,71,17)" rx="2" ry="2" />
-<text  x="13.00" y="95.5" >void bench::run_commands&lt;BM_MixedWorkload</text>
+<title>exsim::MatchingEngine::Impl::rest (391,391,391 samples, 17.29%)</title><rect x="655.6" y="69" width="204.0" height="15.0" fill="rgb(232,126,30)" rx="2" ry="2" />
+<text  x="658.58" y="79.5" >exsim::MatchingEngine::Imp..</text>
 </g>
 <g >
-<title>[libc.so.6] (22,022,022 samples, 1.18%)</title><rect x="1074.5" y="53" width="14.0" height="15.0" fill="rgb(223,84,20)" rx="2" ry="2" />
-<text  x="1077.54" y="63.5" ></text>
+<title>malloc (1,001,001 samples, 0.04%)</title><rect x="1008.9" y="69" width="0.5" height="15.0" fill="rgb(230,119,28)" rx="2" ry="2" />
+<text  x="1011.90" y="79.5" ></text>
 </g>
 <g >
-<title>exsim::book::OrderBook::OrderBook (9,009,009 samples, 0.48%)</title><rect x="1088.5" y="53" width="5.7" height="15.0" fill="rgb(237,150,35)" rx="2" ry="2" />
-<text  x="1091.49" y="63.5" ></text>
+<title>bench::CSVWriter::write (1,001,001 samples, 0.04%)</title><rect x="217.7" y="85" width="0.5" height="15.0" fill="rgb(232,127,30)" rx="2" ry="2" />
+<text  x="220.71" y="95.5" ></text>
 </g>
 <g >
-<title>BM_MixedWorkload (1,861,861,860 samples, 100.00%)</title><rect x="10.0" y="101" width="1180.0" height="15.0" fill="rgb(232,127,30)" rx="2" ry="2" />
-<text  x="13.00" y="111.5" >BM_MixedWorkload</text>
+<title>void bench::run_commands&lt;BM_MixedWorkload (2,263,263,261 samples, 100.00%)</title><rect x="10.0" y="101" width="1180.0" height="15.0" fill="rgb(220,71,17)" rx="2" ry="2" />
+<text  x="13.00" y="111.5" >void bench::run_commands&lt;BM_MixedWorkload</text>
 </g>
 <g >
-<title>exsim::MatchingEngine::Impl::rest (14,014,014 samples, 0.75%)</title><rect x="195.9" y="69" width="8.9" height="15.0" fill="rgb(232,126,30)" rx="2" ry="2" />
-<text  x="198.88" y="79.5" ></text>
+<title>std::vector&lt;exsim::Event, std::allocator&lt;exsim::Event&gt; &gt;::push_back (90,090,090 samples, 3.98%)</title><rect x="812.7" y="53" width="46.9" height="15.0" fill="rgb(206,7,1)" rx="2" ry="2" />
+<text  x="815.67" y="63.5" >std:..</text>
 </g>
 <g >
-<title>all (1,861,861,860 samples, 100%)</title><rect x="10.0" y="277" width="1180.0" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
-<text  x="13.00" y="287.5" ></text>
+<title>[libc.so.6] (5,005,005 samples, 0.22%)</title><rect x="1110.2" y="53" width="2.6" height="15.0" fill="rgb(223,84,20)" rx="2" ry="2" />
+<text  x="1113.15" y="63.5" ></text>
 </g>
 <g >
-<title>[libc.so.6] (1,861,861,860 samples, 100.00%)</title><rect x="10.0" y="213" width="1180.0" height="15.0" fill="rgb(223,84,20)" rx="2" ry="2" />
-<text  x="13.00" y="223.5" >[libc.so.6]</text>
-</g>
-<g >
-<title>std::chrono::_V2::steady_clock::now (39,039,039 samples, 2.10%)</title><rect x="1094.2" y="69" width="24.7" height="15.0" fill="rgb(249,203,48)" rx="2" ry="2" />
-<text  x="1097.20" y="79.5" >s..</text>
-</g>
-<g >
-<title>exsim::MatchingEngine::handle (1,214,214,213 samples, 65.22%)</title><rect x="204.8" y="69" width="769.5" height="15.0" fill="rgb(254,229,54)" rx="2" ry="2" />
-<text  x="207.76" y="79.5" >exsim::MatchingEngine::handle</text>
-</g>
-<g >
-<title>__kernel_clock_gettime (39,039,039 samples, 2.10%)</title><rect x="1094.2" y="37" width="24.7" height="15.0" fill="rgb(231,122,29)" rx="2" ry="2" />
-<text  x="1097.20" y="47.5" >_..</text>
-</g>
-<g >
-<title>benchmark::RunSpecifiedBenchmarks (1,861,861,860 samples, 100.00%)</title><rect x="10.0" y="165" width="1180.0" height="15.0" fill="rgb(234,136,32)" rx="2" ry="2" />
-<text  x="13.00" y="175.5" >benchmark::RunSpecifiedBenchmarks</text>
-</g>
-<g >
-<title>clock_gettime (39,039,039 samples, 2.10%)</title><rect x="1094.2" y="53" width="24.7" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
-<text  x="1097.20" y="63.5" >c..</text>
-</g>
-<g >
-<title>[libc.so.6] (2,002,002 samples, 0.11%)</title><rect x="194.0" y="69" width="1.2" height="15.0" fill="rgb(223,84,20)" rx="2" ry="2" />
-<text  x="196.98" y="79.5" ></text>
-</g>
-<g >
-<title>_start (1,861,861,860 samples, 100.00%)</title><rect x="10.0" y="245" width="1180.0" height="15.0" fill="rgb(245,185,44)" rx="2" ry="2" />
-<text  x="13.00" y="255.5" >_start</text>
-</g>
-<g >
-<title>std::vector&lt;exsim::Event, std::allocator&lt;exsim::Event&gt; &gt;::push_back (158,158,158 samples, 8.49%)</title><rect x="874.1" y="53" width="100.2" height="15.0" fill="rgb(206,7,1)" rx="2" ry="2" />
-<text  x="877.06" y="63.5" >std::vector&lt;..</text>
-</g>
-<g >
-<title>[libbenchmark.so.1.8.3] (1,861,861,860 samples, 100.00%)</title><rect x="10.0" y="149" width="1180.0" height="15.0" fill="rgb(243,178,42)" rx="2" ry="2" />
-<text  x="13.00" y="159.5" >[libbenchmark.so.1.8.3]</text>
-</g>
-<g >
-<title>exsim_benchmark (1,861,861,860 samples, 100.00%)</title><rect x="10.0" y="261" width="1180.0" height="15.0" fill="rgb(231,119,28)" rx="2" ry="2" />
-<text  x="13.00" y="271.5" >exsim_benchmark</text>
-</g>
-<g >
-<title>exsim::MatchingEngine::Impl::emit_resting_canceled (29,029,029 samples, 1.56%)</title><rect x="439.5" y="53" width="18.4" height="15.0" fill="rgb(251,216,51)" rx="2" ry="2" />
-<text  x="442.49" y="63.5" ></text>
-</g>
-<g >
-<title>exsim::MatchingEngine::Impl::rest (328,328,328 samples, 17.63%)</title><rect x="666.0" y="53" width="208.1" height="15.0" fill="rgb(232,126,30)" rx="2" ry="2" />
-<text  x="668.98" y="63.5" >exsim::MatchingEngine::Impl..</text>
-</g>
-<g >
-<title>[libc.so.6] (9,009,009 samples, 0.48%)</title><rect x="1088.5" y="37" width="5.7" height="15.0" fill="rgb(223,84,20)" rx="2" ry="2" />
-<text  x="1091.49" y="47.5" ></text>
-</g>
-<g >
-<title>main (1,861,861,860 samples, 100.00%)</title><rect x="10.0" y="197" width="1180.0" height="15.0" fill="rgb(243,179,42)" rx="2" ry="2" />
-<text  x="13.00" y="207.5" >main</text>
-</g>
-<g >
-<title>__libc_start_main (1,861,861,860 samples, 100.00%)</title><rect x="10.0" y="229" width="1180.0" height="15.0" fill="rgb(236,142,34)" rx="2" ry="2" />
-<text  x="13.00" y="239.5" >__libc_start_main</text>
-</g>
-<g >
-<title>std::__detail::_MakeUniq&lt;bench::Scenario&gt;::__single_object std::make_unique&lt;bench::Scenario&gt; (189,189,189 samples, 10.16%)</title><rect x="974.3" y="69" width="119.9" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
-<text  x="977.30" y="79.5" >std::__detail:..</text>
-</g>
-<g >
-<title>benchmark::RunSpecifiedBenchmarks (1,861,861,860 samples, 100.00%)</title><rect x="10.0" y="181" width="1180.0" height="15.0" fill="rgb(234,136,32)" rx="2" ry="2" />
+<title>benchmark::RunSpecifiedBenchmarks (2,263,263,261 samples, 100.00%)</title><rect x="10.0" y="181" width="1180.0" height="15.0" fill="rgb(234,136,32)" rx="2" ry="2" />
 <text  x="13.00" y="191.5" >benchmark::RunSpecifiedBenchmarks</text>
 </g>
 <g >
-<title>cfree (1,001,001 samples, 0.05%)</title><rect x="195.2" y="69" width="0.7" height="15.0" fill="rgb(223,86,20)" rx="2" ry="2" />
-<text  x="198.25" y="79.5" ></text>
+<title>[libbenchmark.so.1.8.3] (2,263,263,261 samples, 100.00%)</title><rect x="10.0" y="149" width="1180.0" height="15.0" fill="rgb(243,178,42)" rx="2" ry="2" />
+<text  x="13.00" y="159.5" >[libbenchmark.so.1.8.3]</text>
 </g>
 <g >
-<title>cfree (1,001,001 samples, 0.05%)</title><rect x="195.2" y="53" width="0.7" height="15.0" fill="rgb(223,86,20)" rx="2" ry="2" />
-<text  x="198.25" y="63.5" ></text>
+<title>BM_MixedWorkload (2,263,263,261 samples, 100.00%)</title><rect x="10.0" y="117" width="1180.0" height="15.0" fill="rgb(232,127,30)" rx="2" ry="2" />
+<text  x="13.00" y="127.5" >BM_MixedWorkload</text>
 </g>
 <g >
-<title>exsim::MatchingEngine::Impl::remove_resting (122,122,122 samples, 6.56%)</title><rect x="588.6" y="53" width="77.4" height="15.0" fill="rgb(239,160,38)" rx="2" ry="2" />
-<text  x="591.58" y="63.5" >exsim::M..</text>
+<title>[libc.so.6] (2,263,263,261 samples, 100.00%)</title><rect x="10.0" y="229" width="1180.0" height="15.0" fill="rgb(223,84,20)" rx="2" ry="2" />
+<text  x="13.00" y="239.5" >[libc.so.6]</text>
 </g>
 <g >
-<title>std::vector&lt;exsim::Event, std::allocator&lt;exsim::Event&gt; &gt;::push_back (74,074,074 samples, 3.98%)</title><rect x="827.1" y="37" width="47.0" height="15.0" fill="rgb(206,7,1)" rx="2" ry="2" />
-<text  x="830.12" y="47.5" >std:..</text>
+<title>[libbenchmark.so.1.8.3] (2,263,263,261 samples, 100.00%)</title><rect x="10.0" y="165" width="1180.0" height="15.0" fill="rgb(243,178,42)" rx="2" ry="2" />
+<text  x="13.00" y="175.5" >[libbenchmark.so.1.8.3]</text>
 </g>
 <g >
-<title>[libbenchmark.so.1.8.3] (1,861,861,860 samples, 100.00%)</title><rect x="10.0" y="133" width="1180.0" height="15.0" fill="rgb(243,178,42)" rx="2" ry="2" />
+<title>[libc.so.6] (2,002,002 samples, 0.09%)</title><rect x="216.7" y="85" width="1.0" height="15.0" fill="rgb(223,84,20)" rx="2" ry="2" />
+<text  x="219.67" y="95.5" ></text>
+</g>
+<g >
+<title>benchmark::RunSpecifiedBenchmarks (2,263,263,261 samples, 100.00%)</title><rect x="10.0" y="197" width="1180.0" height="15.0" fill="rgb(234,136,32)" rx="2" ry="2" />
+<text  x="13.00" y="207.5" >benchmark::RunSpecifiedBenchmarks</text>
+</g>
+<g >
+<title>exsim::MatchingEngine::Impl::rest (14,014,014 samples, 0.62%)</title><rect x="218.2" y="85" width="7.3" height="15.0" fill="rgb(232,126,30)" rx="2" ry="2" />
+<text  x="221.24" y="95.5" ></text>
+</g>
+<g >
+<title>exsim::MatchingEngine::Impl::match_and_dispose (215,215,215 samples, 9.51%)</title><rect x="477.6" y="69" width="112.2" height="15.0" fill="rgb(208,16,4)" rx="2" ry="2" />
+<text  x="480.62" y="79.5" >exsim::Matchi..</text>
+</g>
+<g >
+<title>exsim::book::OrderBook::OrderBook (5,005,005 samples, 0.22%)</title><rect x="1110.2" y="69" width="2.6" height="15.0" fill="rgb(237,150,35)" rx="2" ry="2" />
+<text  x="1113.15" y="79.5" ></text>
+</g>
+<g >
+<title>[libc.so.6] (24,024,024 samples, 1.06%)</title><rect x="1097.6" y="69" width="12.6" height="15.0" fill="rgb(223,84,20)" rx="2" ry="2" />
+<text  x="1100.62" y="79.5" ></text>
+</g>
+<g >
+<title>std::chrono::_V2::steady_clock::now (29,029,029 samples, 1.28%)</title><rect x="1112.8" y="85" width="15.1" height="15.0" fill="rgb(249,203,48)" rx="2" ry="2" />
+<text  x="1115.76" y="95.5" ></text>
+</g>
+<g >
+<title>__libc_start_main (2,263,263,261 samples, 100.00%)</title><rect x="10.0" y="245" width="1180.0" height="15.0" fill="rgb(236,142,34)" rx="2" ry="2" />
+<text  x="13.00" y="255.5" >__libc_start_main</text>
+</g>
+<g >
+<title>all (2,263,263,261 samples, 100%)</title><rect x="10.0" y="293" width="1180.0" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="13.00" y="303.5" ></text>
+</g>
+<g >
+<title>clock_gettime (28,028,028 samples, 1.24%)</title><rect x="1112.8" y="69" width="14.6" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="1115.76" y="79.5" ></text>
+</g>
+<g >
+<title>std::__detail::_MakeUniq&lt;bench::Scenario&gt;::__single_object std::make_unique&lt;bench::Scenario&gt; (198,198,198 samples, 8.76%)</title><rect x="1009.4" y="85" width="103.4" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
+<text  x="1012.43" y="95.5" >std::__detai..</text>
+</g>
+<g >
+<title>clock_gettime@plt (1,001,001 samples, 0.04%)</title><rect x="1127.4" y="69" width="0.5" height="15.0" fill="rgb(229,112,27)" rx="2" ry="2" />
+<text  x="1130.37" y="79.5" ></text>
+</g>
+<g >
+<title>operator new (1,001,001 samples, 0.04%)</title><rect x="1008.9" y="85" width="0.5" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="1011.90" y="95.5" ></text>
+</g>
+<g >
+<title>__kernel_clock_gettime (28,028,028 samples, 1.24%)</title><rect x="1112.8" y="53" width="14.6" height="15.0" fill="rgb(231,122,29)" rx="2" ry="2" />
+<text  x="1115.76" y="63.5" ></text>
+</g>
+<g >
+<title>std::ostream&amp; std::ostream::_M_insert&lt;double&gt; (1,001,001 samples, 0.04%)</title><rect x="217.7" y="69" width="0.5" height="15.0" fill="rgb(244,180,43)" rx="2" ry="2" />
+<text  x="220.71" y="79.5" ></text>
+</g>
+<g >
+<title>exsim::MatchingEngine::Impl::emit_resting_canceled (43,043,043 samples, 1.90%)</title><rect x="455.2" y="69" width="22.4" height="15.0" fill="rgb(251,216,51)" rx="2" ry="2" />
+<text  x="458.17" y="79.5" >e..</text>
+</g>
+<g >
+<title>[libbenchmark.so.1.8.3] (2,263,263,261 samples, 100.00%)</title><rect x="10.0" y="133" width="1180.0" height="15.0" fill="rgb(243,178,42)" rx="2" ry="2" />
 <text  x="13.00" y="143.5" >[libbenchmark.so.1.8.3]</text>
 </g>
 <g >
-<title>[libbenchmark.so.1.8.3] (1,861,861,860 samples, 100.00%)</title><rect x="10.0" y="117" width="1180.0" height="15.0" fill="rgb(243,178,42)" rx="2" ry="2" />
-<text  x="13.00" y="127.5" >[libbenchmark.so.1.8.3]</text>
+<title>std::ostreambuf_iterator&lt;char, std::char_traits&lt;char&gt; &gt; std::num_put&lt;char, std::ostreambuf_iterator&lt;char, std::char_traits&lt;char&gt; &gt; &gt;::_M_insert_float&lt;double&gt; (1,001,001 samples, 0.04%)</title><rect x="217.7" y="53" width="0.5" height="15.0" fill="rgb(238,154,36)" rx="2" ry="2" />
+<text  x="220.71" y="63.5" ></text>
+</g>
+<g >
+<title>std::mersenne_twister_engine&lt;unsigned long, 64ul, 312ul, 156ul, 31ul, 13043109905998158313ul, 29ul, 6148914691236517205ul, 17ul, 8202884508482404352ul, 37ul, 18444473444759240704ul, 43ul, 6364136223846793005ul&gt;::operator (119,119,119 samples, 5.26%)</title><rect x="1127.9" y="85" width="62.1" height="15.0" fill="rgb(211,30,7)" rx="2" ry="2" />
+<text  x="1130.89" y="95.5" >std::m..</text>
+</g>
+<g >
+<title>std::__num_base::_S_format_float (1,001,001 samples, 0.04%)</title><rect x="217.7" y="37" width="0.5" height="15.0" fill="rgb(240,164,39)" rx="2" ry="2" />
+<text  x="220.71" y="47.5" ></text>
+</g>
+<g >
+<title>exsim::MatchingEngine::handle (1,502,502,501 samples, 66.39%)</title><rect x="225.5" y="85" width="783.4" height="15.0" fill="rgb(254,229,54)" rx="2" ry="2" />
+<text  x="228.54" y="95.5" >exsim::MatchingEngine::handle</text>
+</g>
+<g >
+<title>_start (2,263,263,261 samples, 100.00%)</title><rect x="10.0" y="261" width="1180.0" height="15.0" fill="rgb(245,185,44)" rx="2" ry="2" />
+<text  x="13.00" y="271.5" >_start</text>
+</g>
+<g >
+<title>main (2,263,263,261 samples, 100.00%)</title><rect x="10.0" y="213" width="1180.0" height="15.0" fill="rgb(243,179,42)" rx="2" ry="2" />
+<text  x="13.00" y="223.5" >main</text>
+</g>
+<g >
+<title>exsim_benchmark (2,263,263,261 samples, 100.00%)</title><rect x="10.0" y="277" width="1180.0" height="15.0" fill="rgb(231,119,28)" rx="2" ry="2" />
+<text  x="13.00" y="287.5" >exsim_benchmark</text>
 </g>
 </g>
 </svg>
