@@ -21,7 +21,7 @@ CORE=${PERF_CORE:-0}
 FILTER=${PERF_FILTER:-MixedWorkload}
 EVENT=${PERF_EVENT:-cpu-clock:u}
 RUN=(taskset -c "$CORE" "$BENCH" --core="$CORE" --csv=/dev/null
-     --benchmark_filter="$FILTER" --benchmark_repetitions=40)
+     --benchmark_filter="$FILTER" --benchmark_repetitions=200)
 
 if [[ ! -x "$BENCH" ]]; then
     echo "error: $BENCH not found; run 'make -j4 bench-build' first" >&2
@@ -38,7 +38,10 @@ mkdir -p "$OUT"
 "$PERF" report -i "$OUT/perf.data" --stdio --no-children -g none -n --percent-limit=1 > "$OUT/perf_report.txt"
 
 if [[ -n "${FLAMEGRAPH_DIR:-}" ]]; then
-    "$PERF" script -i "$OUT/perf.data" | "$FLAMEGRAPH_DIR/stackcollapse-perf.pl" \
-        | "$FLAMEGRAPH_DIR/flamegraph.pl" --title "exsim $FILTER" > "$OUT/flame.svg"
+    "$PERF" script -i "$OUT/perf.data" | "$FLAMEGRAPH_DIR/stackcollapse-perf.pl" > "$OUT/stacks.folded"
+    "$FLAMEGRAPH_DIR/flamegraph.pl" --title "exsim $FILTER" "$OUT/stacks.folded" > "$OUT/flame.svg"
+    # Only the stacks under the engine, rooted at handle: no benchmark setup or loop.
+    grep 'MatchingEngine::handle(' "$OUT/stacks.folded" | sed 's/^.*;\(exsim::MatchingEngine::handle(\)/\1/' \
+        | "$FLAMEGRAPH_DIR/flamegraph.pl" --title "exsim $FILTER, under MatchingEngine::handle" > "$OUT/flame_engine.svg"
 fi
 echo "wrote $OUT"

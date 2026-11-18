@@ -11,7 +11,8 @@ Linux needs `perf`, `taskset` and permission to sample. Hardware counters are
 needed for the counter report; software sampling can still work without a PMU.
 `FLAMEGRAPH_DIR` points to Brendan Gregg's FlameGraph tools. The script writes
 counter output, a sampled call graph, a text report and, when the tools are
-provided, `flame.svg`. A failed counter or sampling command stops the script.
+provided, `flame.svg` and `flame_engine.svg` (only the stacks under
+`MatchingEngine::handle`). A failed counter or sampling command stops the script.
 It does not substitute fabricated counters or stacks.
 
 `BENCH` selects the binary, `PERF` selects perf, `PERF_FILTER` selects cases,
