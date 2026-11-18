@@ -47,6 +47,8 @@ TEST_CASE(foundation, bounded_events) {
     CHECK(out.push(event));
     CHECK(!out.push(event));
     CHECK_EQ(out.size(), 2u);
+    CHECK_EQ(out.capacity(), 2u);
+    CHECK_EQ(out.end() - out.begin(), 2);
     CHECK(!out.can_append(1));
     out.clear();
     CHECK_EQ(out.remaining(), out.capacity());
