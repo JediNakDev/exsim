@@ -29,6 +29,8 @@ make -j4 integration FILTER=restart
 
 Debug builds use AddressSanitizer and UBSan. `FILTER` selects native cases by substring. For `integration` it is also passed to the Python test as `-k`, so a filter that matches in only one runner is fine.
 
+On arm64 Linux (GCC 13), ASan's stack-use-after-return check makes `md_feed.clean_feed_matches_engine_after_every_batch` run for over 25 minutes instead of about 90 seconds. Run debug there with `ASAN_OPTIONS=detect_stack_use_after_return=0`.
+
 Builds go to `build/<mode>/`. CI runs both suites on macOS and Ubuntu in release and debug modes, a ThreadSanitizer run on Ubuntu, a benchmark build, and a format check (`make format-check`, clang-format 18).
 
 ## Isolation
