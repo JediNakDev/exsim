@@ -41,7 +41,7 @@ if [[ -n "${FLAMEGRAPH_DIR:-}" ]]; then
     "$PERF" script -i "$OUT/perf.data" | "$FLAMEGRAPH_DIR/stackcollapse-perf.pl" > "$OUT/stacks.folded"
     "$FLAMEGRAPH_DIR/flamegraph.pl" --title "exsim $FILTER" "$OUT/stacks.folded" > "$OUT/flame.svg"
     # Only the stacks under the engine, rooted at handle: no benchmark setup or loop.
-    grep 'MatchingEngine::handle(' "$OUT/stacks.folded" | sed 's/^.*;\(exsim::MatchingEngine::handle(\)/\1/' \
+    grep 'MatchingEngine::handle' "$OUT/stacks.folded" | sed 's/^.*;exsim::MatchingEngine::handle/exsim::MatchingEngine::handle/' \
         | "$FLAMEGRAPH_DIR/flamegraph.pl" --title "exsim $FILTER, under MatchingEngine::handle" > "$OUT/flame_engine.svg"
 fi
 echo "wrote $OUT"
