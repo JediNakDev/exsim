@@ -6,7 +6,8 @@ jobs:
   test:
     name: unit and integration (${{ matrix.os }}, ${{ matrix.mode }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    # The debug unit step alone has taken 13 minutes on a loaded runner.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
