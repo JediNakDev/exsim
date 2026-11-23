@@ -23,15 +23,15 @@ From the repository root:
 
 ```sh
 make -j4 apps
-./build/release/exsim_exchanged --config test/fixtures/exchange.conf --admin-socket exsim.sock
+./build/release/exsim_exchanged --config test/fixtures/exchange.conf
 ```
 
 This builds the exchange and starts one with empty books, waiting for external trading clients. Once ready it prints one JSON line with its ports. Each exchange is its own process: start more with their own config files, and stop one with **Ctrl+C** or `kill <pid>`.
 
-Change a running exchange over its admin socket:
+Change a running exchange over the admin socket its config names (`admin_socket = exsim.sock`, next to the config file):
 
 ```sh
-echo 'phase AAPL halted' | nc -U exsim.sock
+echo 'phase AAPL halted' | nc -U test/fixtures/exsim.sock
 ```
 
 See [Running an exchange](./docs/running.md) for the ready line, runtime commands, and config.

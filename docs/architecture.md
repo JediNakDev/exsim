@@ -23,7 +23,7 @@ The operating system is the process manager. A shell, tmux, systemd, or a test h
 
 Each exchange runs gateways, matching, market-data publication, and recovery. One event loop sequences commands across sessions.
 
-An optional Unix domain socket (`--admin-socket PATH`) carries runtime commands: phase changes, fault injection, book and status. It is owner-only, runs one line per connection on the event loop, and never blocks it on input. See [running an exchange](running.md).
+An optional Unix domain socket (`admin_socket` in the config) carries runtime commands: phase changes, fault injection, book and status. It is owner-only, runs one line per connection on the event loop, and never blocks it on input. See [running an exchange](running.md).
 
 ## Trading connections
 

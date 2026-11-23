@@ -7,7 +7,7 @@
 // Format: INI-style sections, `key = value`, `#` or `;` comments.
 //
 //   [exchange]                 name, bind_address, ouch_port, fix_port,
-//                              ilink_port, max_connections,
+//                              ilink_port, admin_socket, max_connections,
 //                              heartbeat_interval_ms, soup_session,
 //                              trading_day_start, trading_day_end
 //   [market_data]              protocol (itch50 or mdp3), address, port,
@@ -85,6 +85,7 @@ struct ExchangeSection {
     std::uint16_t ouch_port = 0;  // 0 = OS-assigned (logged at startup)
     std::uint16_t fix_port = 0;
     std::uint16_t ilink_port = 0;
+    std::string admin_socket;  // Unix socket for runtime commands, relative to the config file; empty = none
     std::uint32_t max_connections = 64;
     std::uint32_t heartbeat_interval_ms = 1000;  // SoupBinTCP server heartbeat
     std::string soup_session = "EXSIM";          // SoupBinTCP session (<= 10 chars)

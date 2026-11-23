@@ -47,23 +47,11 @@ std::string ready_line(exsim::server::ServerRuntime& exchange) {
 }  // namespace
 
 int main(int argc, char** argv) {
-    std::string path;
-    std::string admin_path;
-    for (int i = 1; i < argc; ++i) {
-        const std::string_view arg = argv[i];
-        if (arg == "--config" && i + 1 < argc) {
-            path = argv[++i];
-        } else if (arg == "--admin-socket" && i + 1 < argc) {
-            admin_path = argv[++i];
-        } else {
-            path.clear();
-            break;
-        }
-    }
-    if (path.empty()) {
-        std::cerr << "usage: exsim_exchanged --config PATH [--admin-socket PATH]\n";
+    if (argc != 3 || std::string_view(argv[1]) != "--config") {
+        std::cerr << "usage: exsim_exchanged --config PATH\n";
         return 2;
     }
+    const std::string path = argv[2];
     std::signal(SIGPIPE, SIG_IGN);
     sigset_t signals;
     sigemptyset(&signals);
@@ -75,9 +63,10 @@ int main(int argc, char** argv) {
         std::string error;
         if (!exsim::server::load_config(path.c_str(), config, error))
             throw std::runtime_error("invalid exchange config: " + error);
-        // A relative journal path is relative to the config file, not the working directory.
-        if (!config.journal_path.empty() && config.journal_path.front() != '/')
-            config.journal_path = (std::filesystem::path(path).parent_path() / config.journal_path).string();
+        // Relative journal and admin socket paths are relative to the config file, not the working directory.
+        for (std::string* file : {&config.journal_path, &config.exchange.admin_socket})
+            if (!file->empty() && file->front() != '/')
+                *file = (std::filesystem::path(path).parent_path() / *file).string();
         const auto session =
             std::to_string(static_cast<unsigned long>(::getpid())) + std::to_string(exsim::common::monotonic_ns());
         config.market_data.session = session.substr(session.size() - 10);
@@ -85,6 +74,7 @@ int main(int argc, char** argv) {
         exsim::server::ServerRuntimeOptions options;
         exsim::server::ServerRuntime runtime(config, options);
         exsim::server::AdminSocket admin(runtime);
+        const std::string& admin_path = config.exchange.admin_socket;
         if (!admin_path.empty() && !(error = admin.open(admin_path)).empty()) throw std::runtime_error(error);
         if (!(error = runtime.start()).empty()) throw std::runtime_error(error);
         if (!admin_path.empty() && !(error = admin.start()).empty()) throw std::runtime_error(error);

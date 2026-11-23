@@ -268,9 +268,10 @@ ServerConfig parse_ok(const std::string& text) {
 
 }  // namespace
 
-TEST_CASE(server_config, trading_day_and_journal_keys) {
+TEST_CASE(server_config, trading_day_admin_socket_and_journal_keys) {
     ServerConfig cfg = parse_ok(std::string(kMinimal) + R"(
 [exchange]
+admin_socket = run/admin.sock
 trading_day_start = 09:30
 trading_day_end = 16:00:00.5
 
@@ -281,6 +282,8 @@ flush_interval_ms = 0
 )");
     CHECK_EQ(cfg.exchange.trading_day_start_ns, (9 * 3600 + 30 * 60) * 1'000'000'000ull);
     CHECK_EQ(cfg.exchange.trading_day_end_ns, 16 * 3600 * 1'000'000'000ull + 500'000'000ull);
+    CHECK_EQ(cfg.exchange.admin_socket, "run/admin.sock");
+    CHECK(parse_ok(kMinimal).exchange.admin_socket.empty());
     CHECK(cfg.journal_failure_policy == JournalFailurePolicy::Continue);
     CHECK_EQ(cfg.journal_flush_interval_ms, 0u);
 

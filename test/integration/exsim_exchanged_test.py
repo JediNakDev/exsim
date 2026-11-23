@@ -83,12 +83,13 @@ class Exchange:
     """One exsim_exchanged child. `ready` is its ready line, or None if it exited during startup."""
 
     def __init__(self, directory, text, name):
+        # The fixture's relative admin socket resolves next to this config, not the working directory.
         self.config = Path(directory) / f"{name}.conf"
-        self.config.write_text(text)
+        self.config.write_text(text.replace("admin_socket = exsim.sock", f"admin_socket = {name}.sock"))
         self.socket = Path(directory) / f"{name}.sock"
         self.stderr = tempfile.TemporaryFile(mode="w+")
         self.process = subprocess.Popen(
-            [str(BUILD / "exsim_exchanged"), "--config", str(self.config), "--admin-socket", str(self.socket)],
+            [str(BUILD / "exsim_exchanged"), "--config", str(self.config)],
             stdout=subprocess.PIPE, stderr=self.stderr, text=True)
         if not select.select([self.process.stdout], [], [], 10)[0]:
             self.process.kill()

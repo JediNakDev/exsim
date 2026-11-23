@@ -1,8 +1,8 @@
 #ifndef EXSIM_SERVER_ADMIN_ADMIN_SOCKET_HPP
 #define EXSIM_SERVER_ADMIN_ADMIN_SOCKET_HPP
 
-// Runtime admin commands (core_admin.hpp) over a Unix domain socket, opened by
-// `exsim_exchanged --admin-socket PATH`:
+// Runtime admin commands (core_admin.hpp) over a Unix domain socket, opened
+// when the config's [exchange] section sets `admin_socket = PATH`:
 //
 //   echo 'phase AAPL halted' | nc -U PATH
 //

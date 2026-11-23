@@ -190,7 +190,11 @@ struct Parser {
         if (k == "ilink_port") return parse_uint(v, x.ilink_port) || bad_value(k, v);
         if (k == "fixp_sbe_port")
             return fail("exchange.fixp_sbe_port is not supported: the legacy FIXP/SBE gateway was removed");
-        if (k == "admin_port") return fail("exchange.admin_port is not supported: there is no public admin listener");
+        if (k == "admin_port") return fail("exchange.admin_port is not supported: runtime commands use admin_socket");
+        if (k == "admin_socket") {
+            x.admin_socket = std::string(v);
+            return true;
+        }
         if (k == "max_connections")
             return (parse_uint(v, x.max_connections) && x.max_connections > 0) || bad_value(k, v);
         if (k == "heartbeat_interval_ms")

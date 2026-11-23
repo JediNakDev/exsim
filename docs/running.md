@@ -4,15 +4,10 @@ One `exsim_exchanged` process runs one exchange. Build and start one from the re
 
 ```sh
 make -j4 apps
-./build/release/exsim_exchanged --config test/fixtures/exchange.conf --admin-socket exsim.sock
+./build/release/exsim_exchanged --config test/fixtures/exchange.conf
 ```
 
-| Option | Meaning |
-| --- | --- |
-| `--config PATH` | Required. The exchange's INI config. |
-| `--admin-socket PATH` | Optional. Unix socket for [runtime commands](#runtime-commands). |
-
-Every start creates empty books and a fresh market data session. External trading clients provide the orders. To run several exchanges, start several processes, each with its own config and admin socket.
+`--config PATH` is the only option; everything else, including the [admin socket](#runtime-commands), is in the config file. Every start creates empty books and a fresh market data session. External trading clients provide the orders. To run several exchanges, start several processes, each with its own config.
 
 ## Ready line
 
@@ -43,11 +38,18 @@ The process belongs to the shell that started it, so it ends with your SSH sessi
 
 ## Runtime commands
 
-With `--admin-socket`, the exchange takes one command per connection on that Unix socket and replies with lines ending in `OK` or `ERR <message>`:
+Name a Unix socket in the config, and the exchange takes one command per connection on it:
+
+```ini
+[exchange]
+admin_socket = exsim.sock
+```
+
+A relative path is relative to the config file, like the journal. Leave the key out for no admin socket. Replies are lines ending in `OK` or `ERR <message>`:
 
 ```sh
-echo 'phase AAPL continuous' | nc -U exsim.sock
-echo 'fault user ALICE reject 1' | nc -U exsim.sock
+echo 'phase AAPL continuous' | nc -U test/fixtures/exsim.sock
+echo 'fault user ALICE reject 1' | nc -U test/fixtures/exsim.sock
 ```
 
 A command is one line of at most 4096 bytes. It runs on the exchange's event loop; an invalid command leaves the exchange running.
@@ -60,7 +62,7 @@ and drains the process, which then exits. Phase changes can enter auctions and
 uncross them on transition to continuous. Faults and phases are runtime state
 and reset on restart.
 
-The socket file is created with mode 0600, so only its owner can connect; there is no other access control. An existing path is refused. One client is served at a time and others wait. Socket paths are limited to 103 bytes on macOS and 107 on Linux. On Ubuntu, `nc -U` comes from `netcat-openbsd`; `socat - UNIX-CONNECT:exsim.sock` works too.
+The socket file is created with mode 0600, so only its owner can connect; there is no other access control. An existing path is refused. One client is served at a time and others wait. The resolved socket path is limited to 103 bytes on macOS and 107 on Linux. On Ubuntu, `nc -U` comes from `netcat-openbsd`; `socat - UNIX-CONNECT:exsim.sock` works too.
 
 ## Trading connections
 
@@ -78,7 +80,7 @@ Config files are yours to keep next to your trading engine and in version contro
 
 Exchanges can use optional `[journal]` settings: `path`, `on_failure`, and `flush_interval_ms`. A relative `path` is relative to the config file. An exchange refuses a journal path whose last component is a symlink, and takes an exclusive lock on the file before truncating it, so a second running exchange that names the same journal fails to start and leaves the first one's history intact.
 
-The legacy Exsim `fixp_sbe` protocol and `admin_port` are rejected; CME iLink 3 has its own FIXP/SBE gateway, and runtime commands use the admin socket.
+The legacy Exsim `fixp_sbe` protocol and `admin_port` are rejected; CME iLink 3 has its own FIXP/SBE gateway, and runtime commands use `admin_socket`.
 
 `ilink_account` is no longer a `[user <name>]` key and nothing replaces it; the simulator never used the value. A config that still has it fails to load with `<line>: unknown key 'ilink_account'`. Remove the line.
 
