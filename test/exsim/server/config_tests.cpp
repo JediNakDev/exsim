@@ -344,6 +344,17 @@ TEST_CASE(server_config, rejects_legacy_listeners_and_protocols) {
                             err));
 }
 
+TEST_CASE(server_config, rejects_a_nul_byte_anywhere) {
+    // "a.sock\0suffix" would open a.sock: the OS reads paths as C strings.
+    std::string text = std::string(kMinimal) + "[exchange]\nadmin_socket = a.sock";
+    text += '\0';
+    text += "suffix\n";
+    ServerConfig cfg;
+    std::string err;
+    CHECK(!parse_config(text, cfg, err));
+    CHECK_EQ(err, "0: config contains a NUL byte");
+}
+
 // The publisher needs room for its largest ITCH message in one packet, so the
 // parser must reject anything the publisher would refuse (QA review F3).
 TEST_CASE(server_config, max_payload_matches_the_publisher_minimum) {

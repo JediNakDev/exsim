@@ -98,11 +98,18 @@ class Exchange:
         self.ready = json.loads(line) if line else None
 
     def admin(self, command):
+        """Sends one command and reads its reply up to the final OK or ERR line, as docs/running.md says."""
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
             client.settimeout(5)
             client.connect(str(self.socket))
             client.sendall(command.encode() + b"\n")
-            return receive_all(client)
+            reply = b""
+            while chunk := client.recv(4096):
+                reply += chunk
+                last = reply.splitlines()[-1] if reply.endswith(b"\n") else b""
+                if last == b"OK" or last.startswith(b"ERR"):
+                    break
+            return reply.decode()
 
     def stop(self, stop_signal=signal.SIGTERM):
         if self.process.poll() is None:
@@ -171,6 +178,8 @@ class ExsimExchangedTests(unittest.TestCase):
         self.assertTrue(exchange.admin("unknown").startswith("ERR"))
         self.assertIn("ERR", exchange.admin("phase UNKNOWN halted"))
         self.assertEqual(exchange.admin("x" * 4097), "ERR command longer than 4096 bytes\n")
+        # The exchange stops reading at 4608 bytes and closes with input unread: Linux resets.
+        self.assertEqual(exchange.admin("x" * 6000), "ERR command longer than 4096 bytes\n")
         self.assertIn("HALTED", exchange.admin("phase AAPL halted"))
         self.assertIn("phase=HALTED", exchange.admin("book AAPL"))
         trader.order("HALTED", b"B", expected=b"J")
@@ -227,6 +236,18 @@ class ExsimExchangedTests(unittest.TestCase):
         first = self.start()
         self.assertIn("admin socket", self.refused(name="exchange"))
         self.assertIn("orders live=0", first.admin("status"))
+
+    def test_restart_refused_by_a_stale_admin_socket_keeps_the_journal(self):
+        text = config() + "\n[journal]\npath = run.journal\n"
+        crashed = self.start(text)
+        self.assertIn("HALTED", crashed.admin("phase AAPL halted"))
+        self.assertEqual(crashed.stop(), 0)
+        journal = (self.directory / "run.journal").read_bytes()
+        stale = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        stale.bind(str(crashed.socket))  # the file a kill -9 leaves behind
+        stale.close()
+        self.assertIn("admin socket", self.refused(text))
+        self.assertEqual((self.directory / "run.journal").read_bytes(), journal)
 
     def test_port_conflict_exits_with_the_listener_error(self):
         with socket.socket() as busy:

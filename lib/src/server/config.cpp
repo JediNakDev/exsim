@@ -587,6 +587,8 @@ std::string format_day_time(Timestamp ns_since_midnight) {
 bool parse_config(std::string_view text, ServerConfig& out, std::string& error) {
     ServerConfig cfg{};
     Parser p{cfg, error};
+    // Paths reach the OS as C strings, which would end at a NUL and name another file.
+    if (text.find('\0') != std::string_view::npos) return p.fail("config contains a NUL byte");
     while (!text.empty()) {
         const std::size_t nl = text.find('\n');
         std::string_view line = text.substr(0, nl);

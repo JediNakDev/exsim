@@ -48,17 +48,19 @@ struct TemporaryDirectory {
     }
 };
 
-// A started runtime with an admin socket at <directory>/admin.sock.
+// A started runtime with an admin socket at <directory>/admin.sock, in
+// exsim_exchanged's order: the socket is bound first and destroyed last.
 struct AdminExchange {
     TemporaryDirectory directory;
     std::string path = (directory.path / "admin.sock").string();
+    server::AdminSocket admin;
+    std::string opened = admin.open(path);
     server::ServerRuntime runtime;
-    server::AdminSocket admin{runtime};
     explicit AdminExchange(server::ServerRuntimeOptions options)
         : runtime(loopback_config_with_ephemeral_ports(), quiet(options)) {
-        REQUIRE_EQ(admin.open(path), "");
+        REQUIRE_EQ(opened, "");
         REQUIRE(runtime.start().empty());
-        REQUIRE_EQ(admin.start(), "");
+        REQUIRE_EQ(admin.start(runtime), "");
     }
 };
 
@@ -163,13 +165,28 @@ TEST_CASE(admin_socket, serves_one_client_at_a_time_and_survives_one_that_leaves
     CHECK(next.reply(exchange.runtime).ends_with("OK\n"));
 }
 
+TEST_CASE(admin_socket, a_client_that_never_finishes_its_line_is_dropped_at_its_deadline) {
+    AdminExchange exchange(server::ServerRuntimeOptions{});
+    AdminClient stalled(exchange.path);
+    stalled.send("sta");
+    for (int iteration = 0; iteration < 20; ++iteration) exchange.runtime.poll_once();
+    exchange.admin.close_stalled_client(common::monotonic_ns());  // still within its 5 s
+    AdminClient waiting(exchange.path);
+    waiting.send("status\n");
+    for (int iteration = 0; iteration < 20; ++iteration) exchange.runtime.poll_once();
+    bool closed = false;
+    CHECK_EQ(waiting.take(closed), "");
+    exchange.admin.close_stalled_client(common::monotonic_ns() + server::AdminSocket::kCommandTimeoutNs);
+    CHECK_EQ(stalled.reply(exchange.runtime), "ERR no complete command within 5 s\n");
+    CHECK(waiting.reply(exchange.runtime).find("orders live=0") != std::string::npos);
+}
+
 TEST_CASE(admin_socket, refuses_a_taken_path_and_removes_only_its_own_file) {
     TemporaryDirectory directory;
     const std::string regular = (directory.path / "regular").string();
     std::ofstream(regular) << "keep";
-    server::ServerRuntime runtime(loopback_config_with_ephemeral_ports(), quiet({}));
     {
-        server::AdminSocket admin(runtime);
+        server::AdminSocket admin;
         CHECK(admin.open(regular).find("Address already in use") != std::string::npos);
         CHECK(admin.open(std::string(200, 'x')).find("too long") != std::string::npos);
     }
@@ -177,13 +194,21 @@ TEST_CASE(admin_socket, refuses_a_taken_path_and_removes_only_its_own_file) {
 
     const std::string path = (directory.path / "admin.sock").string();
     {
-        server::AdminSocket first(runtime);
+        server::AdminSocket first;
         REQUIRE_EQ(first.open(path), "");
         {
-            server::AdminSocket second(runtime);
+            server::AdminSocket second;
             CHECK(second.open(path).find("Address already in use") != std::string::npos);
         }
         CHECK(exists(path));  // the refused socket left the first one's file alone
     }
     CHECK(!exists(path));
+
+    {
+        server::AdminSocket replaced;
+        REQUIRE_EQ(replaced.open(path), "");
+        REQUIRE_EQ(::unlink(path.c_str()), 0);
+        std::ofstream(path) << "another file at the same path";
+    }
+    CHECK(exists(path));  // not the file open() created, so it stays
 }

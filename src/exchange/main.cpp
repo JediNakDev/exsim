@@ -71,13 +71,13 @@ int main(int argc, char** argv) {
             std::to_string(static_cast<unsigned long>(::getpid())) + std::to_string(exsim::common::monotonic_ns());
         config.market_data.session = session.substr(session.size() - 10);
         config.exchange.soup_session = config.market_data.session;
-        exsim::server::ServerRuntimeOptions options;
-        exsim::server::ServerRuntime runtime(config, options);
-        exsim::server::AdminSocket admin(runtime);
+        // Bound before the runtime exists: constructing it truncates the journal.
+        exsim::server::AdminSocket admin;
         const std::string& admin_path = config.exchange.admin_socket;
         if (!admin_path.empty() && !(error = admin.open(admin_path)).empty()) throw std::runtime_error(error);
+        exsim::server::ServerRuntime runtime(config, exsim::server::ServerRuntimeOptions{});
         if (!(error = runtime.start()).empty()) throw std::runtime_error(error);
-        if (!admin_path.empty() && !(error = admin.start()).empty()) throw std::runtime_error(error);
+        if (!admin_path.empty() && !(error = admin.start(runtime)).empty()) throw std::runtime_error(error);
         std::cout << ready_line(runtime) << std::endl;
         while (!runtime.finished()) {
             // macOS has no sigtimedwait; consume blocked signals between polls.
@@ -89,6 +89,7 @@ int main(int argc, char** argv) {
                 runtime.request_shutdown();
             }
             runtime.poll_once();
+            admin.close_stalled_client(exsim::common::monotonic_ns());
         }
     } catch (const std::exception& error) {
         std::cerr << "exsim_exchanged: " << error.what() << '\n';

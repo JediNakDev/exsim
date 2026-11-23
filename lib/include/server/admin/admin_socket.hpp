@@ -14,13 +14,18 @@
 // Everything runs on the reactor thread through ServerRuntime's one watched
 // fd: the listener until a client connects, then that client until its line
 // is complete. Other clients wait in the listen backlog. Reads never block
-// the loop. The reply is written with a 1 s deadline, so a local client that
-// stops reading stalls trading for at most that long.
+// the loop, and a client that has not sent its line within 5 s is answered
+// with an error, so it cannot hold up the next one. The reply is written with
+// a 1 s deadline, so a local client that stops reading stalls trading for at
+// most that long.
 
 #include "net/socket.hpp"
 #include "server/runtime/server_runtime.hpp"
 
+#include <sys/types.h>
+
 #include <cstddef>
+#include <cstdint>
 #include <string>
 
 namespace exsim::server {
@@ -28,19 +33,25 @@ namespace exsim::server {
 class AdminSocket {
 public:
     static constexpr std::size_t kMaxCommandBytes = 4096;
+    static constexpr std::uint64_t kCommandTimeoutNs = 5'000'000'000;
 
-    explicit AdminSocket(ServerRuntime& runtime) noexcept : runtime_(runtime) {}
+    AdminSocket() = default;
     AdminSocket(const AdminSocket&) = delete;
     AdminSocket& operator=(const AdminSocket&) = delete;
-    // Stops watching and removes the socket file.
+    // Removes the socket file if the path still names the one open() created.
+    // It does not touch the runtime: declare the AdminSocket before the
+    // runtime, so the runtime and its poller are gone first.
     ~AdminSocket();
 
     // Creates the socket file; an existing path is refused and left alone.
-    // Call it before runtime.start(), so a taken path fails before any
-    // listener opens or feed packet goes out. Returns "" or an error message.
+    // Call it before constructing the runtime, so a taken path fails before
+    // the journal is truncated, a listener opens or a feed packet goes out.
+    // Returns "" or an error message.
     [[nodiscard]] std::string open(std::string path);
     // After runtime.start(): answers commands from now on. Returns "" or an error message.
-    [[nodiscard]] std::string start();
+    [[nodiscard]] std::string start(ServerRuntime& runtime);
+    // Between polls: answers and drops a client that has not sent its line by its deadline.
+    void close_stalled_client(std::uint64_t now_ns) noexcept;
 
 private:
     static void on_readable(void* context) noexcept;
@@ -48,10 +59,13 @@ private:
     void reply_and_close(std::string_view reply) noexcept;
     void watch(int fd) noexcept;
 
-    ServerRuntime& runtime_;
+    ServerRuntime* runtime_ = nullptr;
     std::string path_;
+    dev_t device_ = 0;  // identity of the socket file open() created
+    ino_t inode_ = 0;
     net::Socket listener_;
     net::Socket client_;
+    std::uint64_t client_deadline_ns_ = 0;
     std::string command_;
 };
 

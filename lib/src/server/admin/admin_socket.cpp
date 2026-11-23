@@ -4,6 +4,7 @@
 #include "server/admin/core_admin.hpp"
 
 #include <poll.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -21,9 +22,10 @@ constexpr std::size_t kReadBytes = 512;
 }  // namespace
 
 AdminSocket::~AdminSocket() {
-    if (!listener_.is_open()) return;
-    runtime_.unwatch_readable_fd();
-    ::unlink(path_.c_str());
+    // The path may have been removed and reused since open(); leave another file alone.
+    struct stat info {};
+    if (listener_.is_open() && ::lstat(path_.c_str(), &info) == 0 && info.st_dev == device_ && info.st_ino == inode_)
+        ::unlink(path_.c_str());
 }
 
 std::string AdminSocket::open(std::string path) {
@@ -31,16 +33,26 @@ std::string AdminSocket::open(std::string path) {
         return "admin socket " + path + ": " + std::strerror(error) +
                (error == EADDRINUSE ? " (remove the file if no exchange is using it)" : "");
     }
+    struct stat info {};
+    if (::lstat(path.c_str(), &info) == 0) {
+        device_ = info.st_dev;
+        inode_ = info.st_ino;
+    }
     path_ = std::move(path);
     // A command never grows past this before it is answered, so reading does not allocate.
     command_.reserve(kMaxCommandBytes + kReadBytes);
     return {};
 }
 
-std::string AdminSocket::start() {
-    if (const net::ErrorCode error = runtime_.watch_readable_fd(listener_.fd(), on_readable, this); error != 0)
+std::string AdminSocket::start(ServerRuntime& runtime) {
+    runtime_ = &runtime;
+    if (const net::ErrorCode error = runtime.watch_readable_fd(listener_.fd(), on_readable, this); error != 0)
         return "admin socket " + path_ + ": " + std::strerror(error);
     return {};
+}
+
+void AdminSocket::close_stalled_client(std::uint64_t now_ns) noexcept {
+    if (client_.is_open() && now_ns >= client_deadline_ns_) reply_and_close("ERR no complete command within 5 s\n");
 }
 
 void AdminSocket::on_readable(void* context) noexcept {
@@ -51,7 +63,9 @@ void AdminSocket::on_readable(void* context) noexcept {
     }
     net::Ipv4Endpoint unused;
     // EAGAIN, or a client that already left: wait for the next one.
-    if (net::accept_connection(self.listener_.fd(), self.client_, unused) == 0) self.watch(self.client_.fd());
+    if (net::accept_connection(self.listener_.fd(), self.client_, unused) != 0) return;
+    self.client_deadline_ns_ = common::monotonic_ns() + kCommandTimeoutNs;
+    self.watch(self.client_.fd());
 }
 
 // One recv per readable event, like every other socket on the level-triggered poller.
@@ -76,7 +90,7 @@ void AdminSocket::read_command() noexcept {
     if (command_.ends_with('\r')) command_.pop_back();
     std::string reply;
     try {
-        CoreAdmin(runtime_.core()).execute_line(command_, reply);
+        CoreAdmin(runtime_->core()).execute_line(command_, reply);
     } catch (...) {
         reply_and_close("ERR internal error\n");
         return;
@@ -104,7 +118,7 @@ void AdminSocket::reply_and_close(std::string_view reply) noexcept {
 }
 
 void AdminSocket::watch(int fd) noexcept {
-    if (const net::ErrorCode error = runtime_.watch_readable_fd(fd, on_readable, this); error != 0) {
+    if (const net::ErrorCode error = runtime_->watch_readable_fd(fd, on_readable, this); error != 0) {
         // Nothing is watched now: admin commands stop, trading goes on.
         std::fprintf(stderr, "admin socket %s stopped: %s\n", path_.c_str(), std::strerror(error));
     }

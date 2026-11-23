@@ -52,7 +52,9 @@ echo 'phase AAPL continuous' | nc -U test/fixtures/exsim.sock
 echo 'fault user ALICE reject 1' | nc -U test/fixtures/exsim.sock
 ```
 
-A command is one line of at most 4096 bytes. It runs on the exchange's event loop; an invalid command leaves the exchange running.
+A command is one line of at most 4096 bytes, ended by a newline or by closing the write side, and must arrive within 5 s of connecting. It runs on the exchange's event loop; an invalid command leaves the exchange running.
+
+A reply ends at its first line that is `OK` or starts with `ERR`; read up to there. The exchange then closes the connection. On Linux, a client that sent more than the exchange read gets a reset there instead of end of input. A reply the client does not read within 1 s is cut off without that last line, so a stalled reader holds up trading for at most 1 s.
 
 Send `help` for the full syntax. Commands include `status`, `book AAPL [levels]`,
 `phase <SYMBOL|*> <closed|pre_open|continuous|halted|pre_close>`,
