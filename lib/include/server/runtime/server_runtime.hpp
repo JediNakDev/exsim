@@ -11,7 +11,7 @@
 //     route events: gateway connections (-> on_data -> core.submit ->
 //                   dispatch to sessions and market data),
 //                   market data recovery (MoldUDP64 requests or MDP replay),
-//                   the owner's watched readable fd (a control socket)
+//                   the owner's watched readable fd (the admin socket)
 //     timer pass, at most once per idle_poll_timeout_ms:
 //       core.timer(now): end of day, market data timers, journal flush
 //       endpoints: delayed inbound bytes, gateway timers, requested closes
@@ -139,7 +139,7 @@ public:
         while (!finished()) poll_once();
     }
 
-    // After start(): registers one owner fd (the exchange control socket) with
+    // After start(): registers one owner fd (the admin socket or its client) with
     // the poller, so a readable fd wakes an idle wait and poll_once calls
     // on_readable(context) when it is readable or hung up. The callback runs on
     // the server thread and may call request_shutdown or unwatch_readable_fd.

@@ -34,10 +34,10 @@ Judge every change against these themes, in this order. `CONTEXT.md` has the det
 
 ## User constraints
 
-- Product: API-managed empty exchange processes. External trading engines supply all orders and liquidity.
+- Product: empty exchange processes, one per exchange, started from a config file. External trading engines supply all orders and liquidity.
 - No web frontend, built-in trader strategies, or PostgreSQL. Keep live exchange state in RAM, with config files and optional logs on disk.
 - Language: C++23 for production builds, tests, and editor tooling.
-- Management: an OpenAPI-described C++ HTTP API. Trading engines connect directly to each exchange's protocol endpoints.
+- Management: run `exsim_exchanged --config PATH` directly and stop it with a signal. Runtime commands go over its owner-only Unix admin socket. No HTTP management API (user decision 2026-11-23). Trading engines connect directly to each exchange's protocol endpoints.
 - Active verification: unit and integration tests on macOS and local OrbStack Ubuntu. Fuzz and end-to-end suites are deferred.
 - Do not edit `README.md` unless the user asks for a specific change.
 - Simulation, matching, exchange protocols, accounting, and simulated time belong in C++.

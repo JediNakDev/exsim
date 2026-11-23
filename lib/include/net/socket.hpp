@@ -1,7 +1,7 @@
 #ifndef EXSIM_NET_SOCKET_HPP
 #define EXSIM_NET_SOCKET_HPP
 
-// POSIX socket ownership and IPv4 setup helpers.
+// POSIX socket ownership, IPv4 setup helpers and a Unix domain listener.
 //
 // Error convention for the whole exsim::net layer: a function that can fail
 // returns an ErrorCode, which is 0 on success and otherwise the errno value of
@@ -112,9 +112,15 @@ ErrorCode bind_ipv4(int fd, Ipv4Endpoint local) noexcept;
 ErrorCode open_tcp_listener(Ipv4Endpoint local, int backlog, int send_buffer_bytes, int receive_buffer_bytes,
                             Socket& listener_out) noexcept;
 
+// Opens a Unix domain stream listener at `path` with file mode 0600, so only
+// the owner can connect. An existing path fails with EADDRINUSE and is left
+// alone; a path too long for sockaddr_un fails with ENAMETOOLONG. The caller
+// removes the file when done.
+ErrorCode open_unix_listener(std::string_view path, int backlog, Socket& listener_out) noexcept;
+
 // Accepts one pending connection. Returns EAGAIN (== EWOULDBLOCK) when the
 // backlog is empty. The accepted socket is non-blocking, close-on-exec and
-// SIGPIPE-safe.
+// SIGPIPE-safe. peer_out is {} for a peer that is not IPv4.
 ErrorCode accept_connection(int listen_fd, Socket& accepted_out, Ipv4Endpoint& peer_out) noexcept;
 
 ErrorCode local_endpoint(int fd, Ipv4Endpoint& endpoint_out) noexcept;

@@ -1,5 +1,3 @@
-#include "api/api_json.hpp"
-#include "api/exchange_service.hpp"
 #include "server/runtime/server_runtime.hpp"
 #include "test/exsim/gateway/fix/fix_test_support.hpp"
 #include "test/exsim/gateway/ilink/ilink_test_support.hpp"
@@ -7,7 +5,6 @@
 #include "test/framework/test.hpp"
 
 #include <arpa/inet.h>
-#include <cstdlib>
 #include <fstream>
 #include <functional>
 #include <poll.h>
@@ -134,31 +131,6 @@ void fix_exchange(int fd, std::string_view message, const Pump& pump) {
     }
     FAIL("FIX response timeout");
 }
-struct TempDirectory {
-    std::filesystem::path path;
-    TempDirectory() {
-        char text[] = "/tmp/exsim-mdp-XXXXXX";
-        const char* result = ::mkdtemp(text);
-        REQUIRE(result);
-        path = result;
-    }
-    ~TempDirectory() {
-        std::error_code error;
-        std::filesystem::remove_all(path, error);
-    }
-};
-api::HttpResponse api_request(api::ExchangeService& service, std::string method, std::string path,
-                              std::string body = {}) {
-    api::HttpRequest request;
-    request.method = std::move(method);
-    request.path = std::move(path);
-    request.body = std::move(body);
-    return service.handle(request);
-}
-std::string config_json(const std::string& text) {
-    api::ApiJsonWriter writer;
-    return writer.begin_object().key("config").string(text).end_object().take();
-}
 std::string ilink_user_text() {
     return "\n[user ILINK]\nprotocol=ilink3\nsession_id=3\nowner=3\ncancel_on_disconnect=true\n"
            "ilink_access_key=ACCESS-1\nilink_secret_key=" +
@@ -244,57 +216,6 @@ TEST_CASE(mdp_runtime, fix_orders_udp_redundancy_snapshots_and_tcp_recovery) {
     const auto deadline = common::monotonic_ns() + 4000000000;
     while (!runtime.finished() && common::monotonic_ns() < deadline) runtime.poll_once();
     CHECK(runtime.finished());
-}
-
-TEST_CASE(mdp_runtime, api_managed_exchange_readiness_redaction_conflicts_and_restart) {
-    Feeds feeds;
-    TempDirectory directory;
-    const char* build = std::getenv("EXSIM_BUILD");
-    api::ExchangeService service(directory.path,
-                                 std::filesystem::path(build ? build : "build/release") / "exsim_exchanged");
-    const auto text = feeds.config_text() + ilink_user_text();
-    const auto created = api_request(service, "POST", "/v1/exchanges", config_json(text));
-    REQUIRE_EQ(created.status, 201);
-    REQUIRE(created.body.find("exsim-replay") == std::string::npos);
-    REQUIRE(created.body.find("[REDACTED]") != std::string::npos);
-    REQUIRE(created.body.find(std::string(43, 'A')) == std::string::npos);
-    const auto json = api::parse_json(created.body);
-    const auto path = "/v1/exchanges/" + json.find("id")->text;
-    const auto started = api_request(service, "POST", path + "/start");
-    REQUIRE_EQ(started.status, 200);
-    const auto running = api::parse_json(started.body);
-    const auto* connections = running.find("runtime")->find("connections");
-    REQUIRE(connections);
-    CHECK_EQ(connections->find("marketDataProtocol")->text, "mdp3_sbe");
-    CHECK_EQ(connections->find("recoveryTransport")->text, "tcp");
-    expect_template(datagram(feeds.primary, {}, 4), 4, 1);
-    auto alice = connect_port(static_cast<std::uint16_t>(std::stoul(connections->find("ilinkOrderEntryPort")->text)));
-    server::ServerConfig config;
-    std::string error;
-    REQUIRE(server::parse_config(text, config, error));
-    ilink_logon(alice.fd(), config.users.back(), 1700000000000001ull, {});
-    ilink_send(alice.fd(), ilink_test::order(config.users.back(), 1, 1, "MANAGED", 1, 7));
-    CHECK_EQ(ilink_packet(alice.fd(), {}).id(), 522);
-    expect_template(datagram(feeds.primary, {}, 46), 46, 1);
-    // Cross-protocol destination conflicts include snapshot and definition feeds.
-    auto other_text = text;
-    auto position = other_text.find("port = " + std::to_string(feeds.p.port));
-    other_text.replace(position, std::string("port = " + std::to_string(feeds.p.port)).size(),
-                       "port = " + std::to_string(feeds.s.port));
-    position = other_text.find("snapshot_port = " + std::to_string(feeds.s.port));
-    other_text.replace(position, std::string("snapshot_port = " + std::to_string(feeds.s.port)).size(),
-                       "snapshot_port = " + std::to_string(feeds.p.port));
-    const auto other = api_request(service, "POST", "/v1/exchanges", config_json(other_text));
-    REQUIRE_EQ(other.status, 201);
-    const auto other_json = api::parse_json(other.body);
-    CHECK_EQ(api_request(service, "POST", "/v1/exchanges/" + other_json.find("id")->text + "/start").status, 409);
-    alice.close();
-    REQUIRE_EQ(api_request(service, "POST", path + "/stop").status, 200);
-    const auto restart = api_request(service, "POST", path + "/start");
-    REQUIRE_EQ(restart.status, 200);
-    const auto restarted = api::parse_json(restart.body);
-    CHECK_EQ(restarted.find("runtime")->find("liveOrders")->text, "0");
-    REQUIRE_EQ(api_request(service, "POST", path + "/stop").status, 200);
 }
 
 TEST_CASE(ilink_runtime, private_fills_correlate_with_mdp_and_replay_over_real_sockets) {

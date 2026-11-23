@@ -3,8 +3,6 @@
 // * The exchange core depends on the engine, not on the market data layer:
 //   no header reachable from server/core/ (exchange_core.hpp included)
 //   includes an md/ header.
-// * The management service (api/) never reaches the server runtime; the
-//   daemon's runtime snapshot lives with the control socket in ipc/.
 
 #include "test/framework/test.hpp"
 
@@ -54,22 +52,5 @@ TEST_CASE(server_core_layering, core_headers_do_not_reach_market_data_headers) {
         for (const std::string& header : reachable) {
             if (header.starts_with("md/")) FAIL(root + " reaches " + header);
         }
-    }
-}
-
-TEST_CASE(server_core_layering, management_api_does_not_reach_the_server_runtime) {
-    std::set<std::string> reachable;
-    std::size_t files = 0;
-    for (const char* directory : {"lib/include/api", "lib/src/api"}) {
-        for (const auto& entry : std::filesystem::directory_iterator(directory)) {
-            collect_includes_of_file(entry.path(), reachable);
-            ++files;
-        }
-    }
-    REQUIRE(files > 1);
-    REQUIRE(reachable.contains("api/json.hpp"));
-    for (const std::string& header : reachable) {
-        if (header.starts_with("server/runtime/") || header == "server/core/exchange_core.hpp")
-            FAIL("api/ reaches " + header);
     }
 }

@@ -38,13 +38,11 @@ UNIT_SRCS := $(shell find test/exsim test/framework -name '*_tests.cpp' | sort) 
 INTEGRATION_SRCS := $(shell find test/integration -name '*_tests.cpp' | sort) test/framework/alloc_counter.cpp
 .PHONY: all apps test unit integration clean format format-check
 all: apps
-apps: $(BUILD)/exsim_api $(BUILD)/exsim_exchanged
+apps: $(BUILD)/exsim_exchanged
 $(BUILD)/obj/%.o: %.cpp Makefile
 	@mkdir -p $(dir $@)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 $(BUILD)/exsim_exchanged: $(call obj,src/exchange/main.cpp) $(LIB_OBJS)
-	$(CXX) $(LDFLAGS) $^ -o $@ $(LDLIBS)
-$(BUILD)/exsim_api: $(call obj,src/api/main.cpp) $(LIB_OBJS) | $(BUILD)/exsim_exchanged
 	$(CXX) $(LDFLAGS) $^ -o $@ $(LDLIBS)
 $(BUILD)/unit_tests: $(call obj,test/main.cpp $(UNIT_SRCS)) $(LIB_OBJS) $(TEST_LIB_OBJS)
 	$(CXX) $(LDFLAGS) $^ -o $@ $(LDLIBS)
@@ -56,7 +54,7 @@ $(BUILD)/integration_tests: $(call obj,test/main.cpp $(INTEGRATION_SRCS)) $(LIB_
 # nothing exits 2 (native) or 5 (Python 3.12+); that is not a failure.
 integration: apps $(BUILD)/integration_tests
 	EXSIM_BUILD=$(BUILD) ./$(BUILD)/integration_tests $(FILTER); [ $$? -eq 0 -o $$? -eq 2 ]
-	EXSIM_BUILD=$(BUILD) python3 -B test/integration/exchange_api_test.py $(if $(FILTER),-k '$(FILTER)'); [ $$? -eq 0 -o $$? -eq 5 ]
+	EXSIM_BUILD=$(BUILD) python3 -B test/integration/exsim_exchanged_test.py $(if $(FILTER),-k '$(FILTER)'); [ $$? -eq 0 -o $$? -eq 5 ]
 test: unit integration
 clean:
 	rm -rf $(BUILD)

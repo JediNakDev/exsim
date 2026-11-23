@@ -188,7 +188,7 @@ TEST_CASE(server_config, minimal_uses_defaults) {
 }
 
 // Large capacity is an explicit config choice: the defaults stay small
-// (documented in docs/api.md).
+// (documented in docs/running.md).
 TEST_CASE(server_config, defaults_are_small) {
     ServerConfig cfg;
     std::string err;

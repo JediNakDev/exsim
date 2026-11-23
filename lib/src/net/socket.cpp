@@ -1,6 +1,8 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <netinet/tcp.h>
+#include <sys/stat.h>
+#include <sys/un.h>
 #include <unistd.h>
 
 #include <charconv>
@@ -38,8 +40,8 @@ ErrorCode configure_socket(int fd) noexcept {
     return error ? error : set_no_sigpipe(fd);
 }
 #endif
-ErrorCode open_socket(int type, Socket& output) noexcept {
-    Socket next(::socket(AF_INET, type | kSocketFlags, 0));
+ErrorCode open_socket(int family, int type, Socket& output) noexcept {
+    Socket next(::socket(family, type | kSocketFlags, 0));
     if (!next.is_open()) return errno;
     const auto error = configure_socket(next.fd());
     if (error) return error;
@@ -84,8 +86,8 @@ std::size_t format_ipv4_endpoint(Ipv4Endpoint endpoint_value, std::span<char> ou
     *cursor = '\0';
     return static_cast<std::size_t>(cursor - output.data());
 }
-ErrorCode open_tcp_socket(Socket& output) noexcept { return open_socket(SOCK_STREAM, output); }
-ErrorCode open_udp_socket(Socket& output) noexcept { return open_socket(SOCK_DGRAM, output); }
+ErrorCode open_tcp_socket(Socket& output) noexcept { return open_socket(AF_INET, SOCK_STREAM, output); }
+ErrorCode open_udp_socket(Socket& output) noexcept { return open_socket(AF_INET, SOCK_DGRAM, output); }
 ErrorCode set_non_blocking(int fd) noexcept {
     const int flags = fcntl(fd, F_GETFL);
     return flags < 0 ? errno : system_call_error(fcntl(fd, F_SETFL, flags | O_NONBLOCK));
@@ -127,8 +129,29 @@ ErrorCode open_tcp_listener(Ipv4Endpoint endpoint_value, int backlog, int send_b
     output = std::move(next);
     return 0;
 }
+ErrorCode open_unix_listener(std::string_view path, int backlog, Socket& output) noexcept {
+    sockaddr_un socket_address{};
+    socket_address.sun_family = AF_UNIX;
+    if (path.empty()) return EINVAL;
+    if (path.size() >= sizeof(socket_address.sun_path)) return ENAMETOOLONG;
+    path.copy(socket_address.sun_path, path.size());
+    Socket next;
+    int error = open_socket(AF_UNIX, SOCK_STREAM, next);
+    if (error) return error;
+    if ((error = system_call_error(
+             bind(next.fd(), reinterpret_cast<const sockaddr*>(&socket_address), sizeof(socket_address)))))
+        return error;
+    // Owner only before listen(): until then a connect is refused anyway, so no other user ever gets in.
+    if ((error = system_call_error(chmod(socket_address.sun_path, S_IRUSR | S_IWUSR))) ||
+        (error = system_call_error(listen(next.fd(), backlog)))) {
+        unlink(socket_address.sun_path);
+        return error;
+    }
+    output = std::move(next);
+    return 0;
+}
 ErrorCode accept_connection(int fd, Socket& output, Ipv4Endpoint& peer) noexcept {
-    sockaddr_in socket_address{};
+    sockaddr_storage socket_address{};
     socklen_t length = sizeof(socket_address);
     int accepted;
     do {
@@ -142,7 +165,9 @@ ErrorCode accept_connection(int fd, Socket& output, Ipv4Endpoint& peer) noexcept
     Socket next(accepted);
     const int error = configure_socket(accepted);
     if (error) return error;
-    peer = endpoint_from_socket_address(socket_address);
+    peer = socket_address.ss_family == AF_INET
+               ? endpoint_from_socket_address(reinterpret_cast<const sockaddr_in&>(socket_address))
+               : Ipv4Endpoint{};
     output = std::move(next);
     return 0;
 }

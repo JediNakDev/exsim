@@ -4,10 +4,9 @@ What this project is and what it should show. `AGENTS.md` has the working rules.
 
 ## What it is
 
-A small exchange simulator. A management API starts empty exchange processes; external trading engines connect to them and supply all orders.
+A small exchange simulator. Each exchange is one process started from a config file; external trading engines connect to it and supply all orders.
 
-- `exsim_api`: HTTP management API. Creates, starts, stops, and inspects exchanges.
-- `exsim_exchanged`: one exchange process. Single-threaded reactor, matching engine, order entry gateways, market data.
+- `exsim_exchanged`: one exchange process. Single-threaded reactor, matching engine, order entry gateways, market data, and an optional Unix admin socket for runtime commands. Signals stop it.
 - Order entry over TCP: OUCH 4.2 (SoupBinTCP), FIX 4.4, CME iLink 3.
 - Market data over UDP: ITCH 5.0 (MoldUDP64), CME MDP 3.0.
 
@@ -22,10 +21,9 @@ A small exchange simulator. A management API starts empty exchange processes; ex
 | `lib/include/gateway` | Order entry sessions per protocol |
 | `lib/include/md` | Market data publishers and recovery |
 | `lib/include/net`, `lib/src/net` | Sockets, poller, TCP and UDP servers |
-| `lib/include/server`, `lib/src/server` | Exchange core, runtime loop, config, journal |
-| `lib/include/api`, `lib/src/api` | Management service and HTTP server |
+| `lib/include/server`, `lib/src/server` | Exchange core, runtime loop, config, journal, admin commands and socket |
 | `lib/include/util` | Hash map, object pool, SPSC queue |
-| `src/` | The two binaries |
+| `src/` | The exchange binary |
 | `tools/` | ITCH replay and the CME schema generator |
 | `test/` | Unit and integration tests |
 | `benchmark/` | Benchmark harness and profiling scripts |

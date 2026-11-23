@@ -13,7 +13,7 @@ All orders and liquidity come from external clients. The exchanges start empty.
 - [x] **P06: Implement MDP publication.** Instrument definitions, security status, MBP updates, trades, channel reset, heartbeats, packet/report sequences, event boundaries, and optional redundant A/B destinations.
 - [x] **P07: Implement MDP recovery.** Periodic snapshots with consistent incremental boundaries, instrument replay, bounded historical packet storage, authenticated TCP recovery, and explicit unavailable-history replies.
 - [x] **P08: Integrate runtime/config.** Register iLink, select ITCH or MDP, configure listeners and destinations, report bound ports, retain state in RAM, and handle faults, capacity limits, and shutdown.
-- [x] **P09: Extend management API.** Advertise protocols, publish connection details in OpenAPI, redact HMAC/replay secrets, reject feed conflicts across all destinations, and test managed lifecycle/restarts.
+- [x] **P09: Report connection details.** iLink and MDP ports and recovery transport appear in the ready line. (This first shipped through the HTTP management API, since removed.)
 - [x] **P10: Verify and document.** Unit and integration checks pass on macOS and OrbStack Ubuntu in release and ASan/UBSan builds, including existing protocol regressions and the combined private/public CME socket flow. Schema regeneration is reproducible. Fuzz and end-to-end suites remain deferred.
 
 ## Run
@@ -23,10 +23,9 @@ make -j4 apps
 ./build/release/exsim_exchanged --config test/fixtures/ilink3-mdp.conf
 ```
 
-For managed exchanges, submit that same INI to the existing management API.
-Query `/v1/exchanges/{id}/connections` after startup for assigned listener
-ports. The example has local test credentials; clients sign their iLink
-Negotiate and Establish requests with the configured base64url HMAC key.
+Read the assigned listener ports from the ready line it prints at startup.
+The example has local test credentials; clients sign their iLink Negotiate
+and Establish requests with the configured base64url HMAC key.
 
 ## Supported messages
 

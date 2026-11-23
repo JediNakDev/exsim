@@ -24,8 +24,8 @@ an explicit 131,072-order capacity. Each case creates a fresh engine and
 prepares its script before timing. The first of ten iterations warms caches
 and checks every command for rejection; nine iterations feed the CSV.
 
-No standalone matcher, benchmark-only sharding, gateway, socket, market-data
-encoding or management API work is measured. Event production and buffer
+No standalone matcher, benchmark-only sharding, gateway, socket or market-data
+encoding work is measured. Event production and buffer
 clearing are included. Event consumption is not measured.
 
 ## Timing

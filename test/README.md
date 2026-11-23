@@ -10,14 +10,14 @@ This runs two suites. Each is a folder, and every test file is named `*_tests.cp
 
 | Command | Folder | Coverage |
 | --- | --- | --- |
-| `make -j4 unit` | `exsim/` (mirrors `lib/`) | Matching, books, containers, codecs, gateways, config, JSON, core policies, publishers, and ITCH replay |
-| `make -j4 integration` | `integration/` | Sockets, HTTP, feeds, and API-managed exchange processes, plus the Python API test `integration/exchange_api_test.py` |
+| `make -j4 unit` | `exsim/` (mirrors `lib/`) | Matching, books, containers, codecs, gateways, config, core policies, publishers, and ITCH replay |
+| `make -j4 integration` | `integration/` | Sockets, feeds, the admin socket, and the exchange runtime, plus `integration/exsim_exchanged_test.py`, which runs the binary as a trading engine's harness would |
 
 Shared code is not a suite: `framework/` is the test framework, `exsim/support/` holds protocol clients, the ITCH book builder, the MoldUDP64 receiver and the journal reader, and `fixtures/` holds config files. Support code links only into test binaries.
 
-Integration tests use loopback TCP/UDP and real child processes. They check lifecycle, trading, feed recovery, conflicts, isolation, and shutdown. See [integration/net](integration/net/README.md) for the socket tests. The ITCH replay unit test compares 100,000 synthetic messages with a reference book.
+Integration tests use loopback TCP/UDP, Unix sockets and real child processes. They check startup, the ready line, runtime commands, trading, feed recovery, journals, and shutdown on signals. See [integration/net](integration/net/README.md) for the socket tests. The ITCH replay unit test compares 100,000 synthetic messages with a reference book.
 
-CME tests cover signed iLink sessions, sequence gaps, reconnect/retransmission, order ownership, fills, cancellation, MDP book reconstruction and snapshots, TCP packet recovery, and API-managed processes. A combined socket test checks private iLink fills against MDP trade IDs, prices, and event timestamps.
+CME tests cover signed iLink sessions, sequence gaps, reconnect/retransmission, order ownership, fills, cancellation, MDP book reconstruction and snapshots, and TCP packet recovery. A combined socket test checks private iLink fills against MDP trade IDs, prices, and event timestamps.
 
 ## Debug and filtering
 
