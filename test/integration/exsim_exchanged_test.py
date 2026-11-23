@@ -98,18 +98,11 @@ class Exchange:
         self.ready = json.loads(line) if line else None
 
     def admin(self, command):
-        """Sends one command and reads its reply up to the final OK or ERR line, as docs/running.md says."""
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
             client.settimeout(5)
             client.connect(str(self.socket))
             client.sendall(command.encode() + b"\n")
-            reply = b""
-            while chunk := client.recv(4096):
-                reply += chunk
-                last = reply.splitlines()[-1] if reply.endswith(b"\n") else b""
-                if last == b"OK" or last.startswith(b"ERR"):
-                    break
-            return reply.decode()
+            return receive_all(client)
 
     def stop(self, stop_signal=signal.SIGTERM):
         if self.process.poll() is None:
@@ -178,7 +171,7 @@ class ExsimExchangedTests(unittest.TestCase):
         self.assertTrue(exchange.admin("unknown").startswith("ERR"))
         self.assertIn("ERR", exchange.admin("phase UNKNOWN halted"))
         self.assertEqual(exchange.admin("x" * 4097), "ERR command longer than 4096 bytes\n")
-        # The exchange stops reading at 4608 bytes and closes with input unread: Linux resets.
+        # The exchange rejects the line at 4608 bytes; it discards the rest so Linux does not reset.
         self.assertEqual(exchange.admin("x" * 6000), "ERR command longer than 4096 bytes\n")
         self.assertIn("HALTED", exchange.admin("phase AAPL halted"))
         self.assertIn("phase=HALTED", exchange.admin("book AAPL"))
@@ -196,7 +189,10 @@ class ExsimExchangedTests(unittest.TestCase):
         self.assertFalse(exchange.socket.exists())
 
     def test_admin_answers_one_line_per_connection_however_it_arrives(self):
-        exchange = self.start()
+        instrument = CONFIG[CONFIG.index("[instrument AAPL]"):CONFIG.index("[user")].replace("AAPL", "ERR")
+        exchange = self.start(config() + "\n" + instrument)
+        # A body line may start with ERR; only end of input ends the reply.
+        self.assertEqual(exchange.admin("phase ERR halted"), "ERR CONTINUOUS -> HALTED\nOK\n")
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
             client.settimeout(5)
             client.connect(str(exchange.socket))

@@ -112,6 +112,11 @@ void AdminSocket::reply_and_close(std::string_view reply) noexcept {
         pollfd event{client_.fd(), POLLOUT, 0};
         (void)::poll(&event, 1, static_cast<int>((deadline - now) / 1'000'000) + 1);
     }
+    // Linux resets the peer when a socket closes with unread input, and the
+    // client would lose the reply. Discard what it sent past its line (bounded:
+    // this is the reactor thread), so it reads the reply to end of input.
+    char unread[4096];
+    for (int attempt = 0; attempt < 16 && net::receive_some(client_.fd(), unread, sizeof unread) > 0; ++attempt) {}
     watch(listener_.fd());  // replaces the client's registration before its fd closes
     client_.close();
     command_.clear();

@@ -7,7 +7,9 @@
 //   echo 'phase AAPL halted' | nc -U PATH
 //
 // One command per connection: the client sends one line, gets the reply lines
-// (ending in "OK" or "ERR <message>"), and the exchange closes the connection.
+// (the last is "OK" or "ERR <message>"), and the exchange closes the
+// connection. End of input ends the reply; a body line may start with any
+// symbol, including "ERR".
 // The socket file is mode 0600, so only its owner can connect. That is the
 // only access control, which is why there is no TCP admin port.
 //
@@ -50,7 +52,8 @@ public:
     [[nodiscard]] std::string open(std::string path);
     // After runtime.start(): answers commands from now on. Returns "" or an error message.
     [[nodiscard]] std::string start(ServerRuntime& runtime);
-    // Between polls: answers and drops a client that has not sent its line by its deadline.
+    // Between polls: answers and drops a client that has not sent its line by
+    // its deadline. It is late by up to one poll wait (1 ms in exsim_exchanged).
     void close_stalled_client(std::uint64_t now_ns) noexcept;
 
 private:
