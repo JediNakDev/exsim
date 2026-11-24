@@ -86,7 +86,8 @@ public:
 
     // Applies one ITCH 5.0 message. Returns true for a book message (A, F, E,
     // C, X, D, U) of the replayed stock that decodes; false for any other
-    // message, which changes nothing.
+    // message, which leaves the book alone. An 'R' naming the stock still
+    // sets its locate.
     bool apply(std::span<const char> message) {
         namespace itch50 = protocol::itch50;
         if (message.empty()) return false;

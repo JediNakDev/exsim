@@ -44,7 +44,7 @@ private:
     void warmup_book(std::vector<char>& out) {
         // Seed ~5% of total budget with adds on both sides.
         std::size_t seed_n = std::max<std::size_t>(64, n_ / 20);
-        for (std::size_t i = 0; i < seed_n && out.size() / 32 < n_; ++i) {
+        for (std::size_t i = 0; i < seed_n && emitted_ < n_; ++i) {
             emit_add(out);
         }
     }
