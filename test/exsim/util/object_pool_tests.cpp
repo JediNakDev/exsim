@@ -43,8 +43,9 @@ TEST_CASE(object_pool, empty_pool_creates_nothing) {
     CHECK(pool.create(1) == nullptr);
 }
 
-// Creates, destroys and re-creates objects through every node. Run under
-// ASan and UBSan (MODE=debug) it also checks the node's lifetime handling.
+// Creates, destroys and re-creates objects through every node, checking the
+// over-aligned address, the capacity limit, each object's value, and that
+// freeing a node leaves its neighbours intact.
 TEST_CASE(object_pool, recreated_objects_keep_their_own_values) {
     struct alignas(64) Record {  // over-aligned like book::Order
         std::uint64_t id;

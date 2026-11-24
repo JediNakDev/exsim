@@ -46,10 +46,11 @@ public:
             return;
         }
 
-        std::destroy_at(object);
-        // A union and its members are pointer-interconvertible, and assigning
-        // `next` makes it the active member again.
+        // A union and its live member are pointer-interconvertible, so take the
+        // node before ending the object's lifetime. Assigning `next` then
+        // makes it the active member again.
         Node* node = reinterpret_cast<Node*>(object);
+        std::destroy_at(object);
         node->next = free_list_;
         free_list_ = node;
     }
