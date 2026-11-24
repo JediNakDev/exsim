@@ -344,6 +344,7 @@ TEST_CASE(engine_admission, rejections_do_not_consume_order_ids) {
 
 TEST_CASE(engine_capacity, rejects_when_live_orders_reach_max_orders) {
     Harness h(Phase::Continuous, 2);
+    CHECK_EQ(h.engine().live_order_count(), std::size_t{0});
     h.rest(1, 1, Side::BUY, 1000, 10);
     h.rest(1, 2, Side::BUY, 900, 10);
     CHECK_EQ(h.engine().live_order_count(), std::size_t{2});
