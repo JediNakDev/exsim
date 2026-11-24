@@ -431,6 +431,8 @@ struct Parser {
         const bool cme_profile = cfg.market_data.protocol == MarketDataProtocol::Mdp3 ||
                                  std::any_of(cfg.users.begin(), cfg.users.end(),
                                              [](const auto& user) { return user.protocol == Protocol::Ilink3; });
+        const bool ouch_users = std::any_of(cfg.users.begin(), cfg.users.end(),
+                                            [](const auto& user) { return user.protocol == Protocol::Ouch42; });
         std::set<std::int32_t> security_ids;
         std::set<std::string> cme_symbols;
         for (const InstrumentConfig& ic : cfg.instruments) {
@@ -450,6 +452,10 @@ struct Parser {
             }
             if (ic.max_order_qty < ic.lot_size) {
                 return fail("instrument " + sym + ": max_order_qty < lot_size");
+            }
+            // OUCH 4.2 Price(4) is unsigned 32-bit, so a fill above it could not be reported.
+            if (ouch_users && ic.max_price > Price{UINT32_MAX}) {
+                return fail("instrument " + sym + ": max_price exceeds the OUCH price field (429496.7295)");
             }
             if (cme_profile) {
                 if (ic.cme_security_id <= 0 || !security_ids.insert(ic.cme_security_id).second)

@@ -71,6 +71,22 @@ reference_price = 10
     CHECK(!parse_config(prefix + instrument + "[instrument NQ]\ncme_security_id=800001\n", config, error));
 }
 
+// OUCH 4.2 Price(4) is unsigned 32-bit: an OUCH user could not be told about a
+// fill printed above 429,496.7295, so such an instrument is refused at load.
+TEST_CASE(server_config_mdp, ouch_user_limits_max_price_to_the_ouch_price_field) {
+    const std::string config_text =
+        "[market_data]\nprotocol = mdp3\nport = 19001\nsnapshot_port = 19002\ninstrument_port = 19003\n"
+        "replay_username = CME\nreplay_password = secret\n"
+        "[instrument ES]\ncme_security_id = 800001\ntick_size = 1\nmin_price = 1\nmax_price = 600000\n"
+        "reference_price = 150\n"
+        "[user ALICE]\nprotocol = fix44\nsession_id = 1\n";
+    ServerConfig config;
+    std::string error;
+    REQUIRE(parse_config(config_text, config, error));
+    CHECK(!parse_config(config_text + "[user BOB]\nprotocol = ouch42\nsession_id = 2\n", config, error));
+    CHECK(error.find("OUCH") != std::string::npos);
+}
+
 TEST_CASE(server_config_mdp, rejects_keys_of_the_other_market_data_protocol) {
     const std::string mdp =
         "[market_data]\nprotocol = mdp3\nport = 19001\nsnapshot_port = 19002\ninstrument_port = 19003\n"
