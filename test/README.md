@@ -10,7 +10,7 @@ This runs two suites. Each is a folder, and every test file is named `*_tests.cp
 
 | Command | Folder | Coverage |
 | --- | --- | --- |
-| `make -j4 unit` | `exsim/` (mirrors `lib/`) | Matching, books, containers, codecs, gateways, config, core policies, publishers, and ITCH replay |
+| `make -j4 unit` | `exsim/` (mirrors `src/`) | Matching, books, containers, codecs, gateways, config, core policies, publishers, and ITCH replay |
 | `make -j4 integration` | `integration/` | Sockets, feeds, the admin socket, and the exchange runtime, plus `integration/exsim_exchanged_test.py`, which runs the binary as a trading engine's harness would |
 
 Shared code is not a suite: `framework/` is the test framework, `exsim/support/` holds protocol clients, the ITCH book builder, the MoldUDP64 receiver and the journal reader, and `fixtures/` holds config files. Support code links only into test binaries.

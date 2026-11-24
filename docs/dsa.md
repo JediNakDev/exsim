@@ -12,7 +12,7 @@ A bitmap marks occupied ticks. Summary layers above it mark nonzero 64-bit words
 
 The tradeoff is memory. Arrays cover the configured price band, including empty ticks. The production engine allows at most 2^24 ticks per instrument side. A narrow band saves memory.
 
-See [price levels](../lib/include/book/price_level.hpp), [order book](../lib/include/book/order_book.hpp), [occupancy bitmap](../lib/include/book/active_bitmap.hpp), and [instrument books](../lib/src/engine/instrument_book.hpp).
+See [price levels](../src/book/price_level.hpp), [order book](../src/book/order_book.hpp), [occupancy bitmap](../src/book/active_bitmap.hpp), and [instrument books](../src/engine/instrument_book.hpp).
 
 ## Order lookup and storage
 
@@ -26,7 +26,7 @@ Free-list pools store orders and price levels. The engine allocates them once, a
 
 The engine's instrument books share one order pool, one level pool, and one order ID map, each sized by the engine's order limit. Every live level holds at least one live order, so the order limit also bounds levels. Each book only sees and changes the orders resting on its own ladders.
 
-See [hash map](../lib/include/util/flat_hash_map.hpp) and [object pool](../lib/include/util/object_pool.hpp).
+See [hash map](../src/util/flat_hash_map.hpp) and [object pool](../src/util/object_pool.hpp).
 
 ## Matching
 
@@ -38,7 +38,7 @@ A simple aggressive order takes expected O(1 + F + L log64 P) work, where F is t
 
 Auction planning scans occupied prices and bitmap words in the crossed range. It chooses the largest executable quantity, then the smallest imbalance, then the price closest to the last trade or reference price. A remaining tie uses the lower price. Execution fills FIFO orders at that single auction price.
 
-See [matching engine](../lib/src/engine/matching_engine.cpp).
+See [matching engine](../src/engine/matching_engine.cpp).
 
 Measured cost of `MatchingEngine::handle` per command on an Apple M6 (macOS 27.0.1, one continuous-phase instrument, 131,072-order capacity). Event production is included; gateways, sockets and market-data encoding are not.
 
@@ -63,7 +63,7 @@ A hash map finds an instrument by its symbol.
 
 Event buffers are supplied by the caller. Their capacity is checked before commands run. Capacity and price limits bound memory use; they do not make every command constant time. Order storage grows with the order limit only, not with the number of instruments. Each instrument still reserves two price ladders and their bitmaps for its whole price band, so wide bands across many instruments can use substantial RAM.
 
-See [order metadata](../lib/src/engine/order_metadata.hpp) and [engine interface](../lib/include/engine/matching_engine.hpp).
+See [order metadata](../src/engine/order_metadata.hpp) and [engine interface](../src/engine/matching_engine.hpp).
 
 ## Operation time complexity
 
@@ -120,6 +120,6 @@ Market-data recovery uses a bounded retransmission ring. Old messages are overwr
 
 Optional journaling passes commands to a writer through a bounded single-producer, single-consumer queue. It keeps disk writes outside matching.
 
-See [retransmission ring](../lib/include/md/retransmission_ring.hpp) and [journal worker](../lib/include/server/runtime/journal_worker.hpp).
+See [retransmission ring](../src/md/retransmission_ring.hpp) and [journal worker](../src/server/runtime/journal_worker.hpp).
 
 The journal worker uses atomic wait/notify when idle. It retains `std::thread` because blocked file I/O cannot be interrupted and shutdown bounds its wait before detaching. Schema 2 stores the full instrument identity and active command fields in 56 to 128 byte records with sequence, payload length and checksum. Flush writes a 24-byte checkpoint footer, overwritten by the next append.

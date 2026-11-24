@@ -14,23 +14,25 @@ A small exchange simulator. Each exchange is one process started from a config f
 
 | Path | Holds |
 |---|---|
-| `lib/include/book`, `lib/src/book` | Order book storage |
-| `lib/include/common` | Shared vocabulary: ids, enums, prices, clocks, price text |
-| `lib/include/engine`, `lib/src/engine` | Matching engine, commands, events |
-| `lib/include/protocol` | Wire codecs |
-| `lib/include/gateway` | Order entry sessions per protocol |
-| `lib/include/md` | Market data publishers and recovery |
-| `lib/include/net`, `lib/src/net` | Sockets, poller, TCP and UDP servers |
-| `lib/include/server`, `lib/src/server` | Exchange core, runtime loop, config, journal, admin commands and socket |
-| `lib/include/util` | Hash map, object pool, SPSC queue |
-| `src/` | The exchange binary |
+| `src/book` | Order book storage |
+| `src/common` | Shared vocabulary: ids, enums, prices, clocks, price text |
+| `src/engine` | Matching engine, commands, events |
+| `src/protocol` | Wire codecs |
+| `src/gateway` | Order entry sessions per protocol |
+| `src/md` | Market data publishers and recovery |
+| `src/net` | Sockets, poller, TCP and UDP servers |
+| `src/server` | Exchange core, runtime loop, config, journal, admin commands and socket |
+| `src/util` | Hash map, object pool, SPSC queue |
+| `src/main.cpp` | The exchange binary |
+| `config/` | Example exchange configs |
+| `spec/` | Pinned CME XML schemas |
 | `tools/` | ITCH replay and the CME schema generator |
 | `test/` | Unit and integration tests |
 | `benchmark/` | Benchmark harness and profiling scripts |
 
 ## Design goal
 
-Simple, straightforward, lightweight. A reader should understand the whole system from the README and one pass through `lib/`. If a feature needs a long explanation, it is probably too much for this project.
+Simple, straightforward, lightweight. A reader should understand the whole system from the README and one pass through `src/`. If a feature needs a long explanation, it is probably too much for this project.
 
 ## Themes the project should demonstrate
 
@@ -70,7 +72,7 @@ These are what a reviewer should be able to see in the code. They are the review
 ### 6. Testing
 
 - Unit tests for components, integration tests for sockets and processes.
-- Tests mirror the `lib/` layout and run in CI with sanitizers.
+- Tests mirror the `src/` layout and run in CI with sanitizers.
 
 ### 7. README
 

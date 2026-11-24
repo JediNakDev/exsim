@@ -111,7 +111,7 @@ profile and are not silently accepted.
 
 ## Pinned schemas and regeneration
 
-XML lives in `spec/cme/`. Builds use committed C++ layouts and need no network
+XML lives in `spec/`. Builds use committed C++ layouts and need no network
 or CME credentials. Linux builds require OpenSSL development headers and
 libcrypto (`libssl-dev` on Ubuntu); macOS uses system CommonCrypto.
 
@@ -131,7 +131,7 @@ Regenerate fixed-block descriptors and null defaults:
 
 ```sh
 c++ -std=c++23 tools/cme_codegen/main.cpp -o output/cme_codegen
-output/cme_codegen spec/cme/ilinkbinary.xml > lib/include/protocol/ilink3_schema.hpp
+output/cme_codegen spec/ilinkbinary.xml > src/protocol/ilink3_schema.hpp
 ```
 
 Schema changes also need gateway/MDP behavior review and updated wire tests.
