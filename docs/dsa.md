@@ -86,9 +86,9 @@ These costs apply after setup. Nothing grows afterwards. Hash-table operations u
 | Read one side's total resting leaves | O(1) | Stored per-side sum |
 | Append or unlink a known order at a level | O(1) | Intrusive FIFO links |
 | Take or return a reserved pool slot | O(1) | Free-list head |
-| Rest an order | O(1), or O(log64 P) when it opens a level | One hash insertion, pool slot, and FIFO append; a new level sets its bit in each bitmap layer |
+| Rest an order | O(1), or O(log64 P) when it opens a level | One hash insertion, pool slot, and FIFO append; a new level sets its bit in up to one word per bitmap layer |
 | Reduce a known order | O(1) | Pointer operation; the order keeps its FIFO position |
-| Remove a known order | O(1), or O(log64 P) when its level empties | Pointer operation; an empty level clears its bit in each bitmap layer, and an empty best level searches for the next price |
+| Remove a known order | O(1), or O(log64 P) when its level empties | Pointer operation; an empty level clears its bit in up to one word per bitmap layer, and an empty best level searches for the next price |
 | Find the next occupied price | O(log64 P) | At most two words per summary layer |
 
 ### Matching engine
