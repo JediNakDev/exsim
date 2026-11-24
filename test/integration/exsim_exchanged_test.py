@@ -82,7 +82,7 @@ class Trader:
 class Exchange:
     """One exsim_exchanged child. `ready` is its ready line, or None if it exited during startup."""
 
-    def __init__(self, directory, text, name):
+    def __init__(self, directory, text, name, hangup=signal.SIG_DFL):
         # The fixture's relative admin socket resolves next to this config, not the working directory.
         self.config = Path(directory) / f"{name}.conf"
         self.config.write_text(text.replace("admin_socket = exsim.sock", f"admin_socket = {name}.sock"))
@@ -90,7 +90,9 @@ class Exchange:
         self.stderr = tempfile.TemporaryFile(mode="w+")
         self.process = subprocess.Popen(
             [str(BUILD / "exsim_exchanged"), "--config", str(self.config)],
-            stdout=subprocess.PIPE, stderr=self.stderr, text=True)
+            stdout=subprocess.PIPE, stderr=self.stderr, text=True,
+            # Exec keeps an ignored SIGHUP, so set it even when the suite runs under nohup.
+            preexec_fn=lambda: signal.signal(signal.SIGHUP, hangup))
         if not select.select([self.process.stdout], [], [], 10)[0]:
             self.process.kill()
             raise AssertionError("exchange startup timed out")
@@ -134,13 +136,13 @@ class ExsimExchangedTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name)
 
-    def launch(self, text=None, name="exchange"):
-        exchange = Exchange(self.directory, text or config(), name)
+    def launch(self, text=None, name="exchange", hangup=signal.SIG_DFL):
+        exchange = Exchange(self.directory, text or config(), name, hangup)
         self.addCleanup(exchange.close)
         return exchange
 
-    def start(self, text=None, name="exchange"):
-        exchange = self.launch(text, name)
+    def start(self, text=None, name="exchange", hangup=signal.SIG_DFL):
+        exchange = self.launch(text, name, hangup)
         self.assertIsNotNone(exchange.ready, exchange.errors())
         return exchange
 
@@ -221,13 +223,12 @@ class ExsimExchangedTests(unittest.TestCase):
             self.assertFalse(exchange.socket.exists())
 
     def test_hup_inherited_as_ignored_keeps_running_like_nohup(self):
-        # The child inherits the ignored disposition through fork and exec, as under nohup.
-        self.addCleanup(signal.signal, signal.SIGHUP, signal.signal(signal.SIGHUP, signal.SIG_IGN))
-        exchange = self.start()
+        exchange = self.start(hangup=signal.SIG_IGN)
         exchange.process.send_signal(signal.SIGHUP)
-        time.sleep(0.1)  # the loop checks for signals every millisecond
+        # A loop that took the SIGHUP stops on its next pass, so it answers at most one command.
+        for _ in range(2):
+            self.assertIn("orders live=0", exchange.admin("status"))
         self.assertIsNone(exchange.process.poll())
-        self.assertIn("orders live=0", exchange.admin("status"))
         self.assertEqual(exchange.stop(), 0)
 
     def test_bad_arguments_and_configs_exit_nonzero(self):
