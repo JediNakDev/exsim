@@ -112,8 +112,8 @@ bench: bench-build
 # not Apple clang; clang 19 is the first with std::hardware_destructive_interference_size on libstdc++.
 # Each runs FUZZ_SECONDS from its seeds, keeps new inputs in build/fuzz/corpus/<name>, and stops at
 # the first crash, leaving the input in build/fuzz/. FILTER picks harnesses by substring. An input runs
-# in milliseconds; the 25 s timeout (OSS-Fuzz's) still catches a hang but not a 12 s stall seen in ASan's
-# free on a loaded VM.
+# in milliseconds; the 60 s timeout still catches a hang, but not the stalls of up to 37 s seen inside
+# ASan's munmap and madvise on a loaded VM.
 FUZZ_CXX ?= clang++-19
 FUZZ_SECONDS ?= 60
 FUZZ_NAMES := $(basename $(notdir $(wildcard fuzz/*.cpp)))
@@ -129,6 +129,6 @@ fuzz-run: $(FUZZ_RUN:%=$(BUILD)/fuzz_%)
 	for name in $(FUZZ_RUN); do \
 		seeds=fuzz/seeds/$$name; [ $$name != config ] || seeds=config; \
 		mkdir -p $(BUILD)/corpus/$$name && \
-		$(BUILD)/fuzz_$$name -max_total_time=$(FUZZ_SECONDS) -timeout=25 -print_final_stats=1 \
+		$(BUILD)/fuzz_$$name -max_total_time=$(FUZZ_SECONDS) -timeout=60 -print_final_stats=1 \
 			-artifact_prefix=$(BUILD)/$$name- $(BUILD)/corpus/$$name $$seeds || exit 1; \
 	done
