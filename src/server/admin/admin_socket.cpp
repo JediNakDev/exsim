@@ -54,8 +54,8 @@ std::string AdminSocket::start(ServerRuntime& runtime) {
 void AdminSocket::on_timer(std::uint64_t now_ns) noexcept {
     if (client_.is_open() && now_ns >= client_deadline_ns_) reply_and_close("ERR no complete command within 5 s\n");
     if (listener_paused_until_ns_ != 0 && now_ns >= listener_paused_until_ns_) {
-        listener_paused_until_ns_ = 0;
-        watch(listener_.fd());
+        const net::ErrorCode error = runtime_->watch_readable_fd(listener_.fd(), on_readable, this);
+        listener_paused_until_ns_ = error ? now_ns + net::kAcceptPauseNs : 0;
     }
 }
 

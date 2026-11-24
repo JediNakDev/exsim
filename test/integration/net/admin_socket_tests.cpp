@@ -226,10 +226,14 @@ TEST_CASE(admin_socket, listeners_pause_while_out_of_descriptors_and_accept_afte
     int iterations = 0;
     {
         DescriptorLimit limit;
-        for (const auto end = common::monotonic_ns() + 200'000'000; common::monotonic_ns() < end; ++iterations)
+        for (const auto end = common::monotonic_ns() + 200'000'000; common::monotonic_ns() < end; ++iterations) {
             exchange.runtime.poll_once();
+            exchange.admin.on_timer(common::monotonic_ns());  // as main does
+        }
     }
-    CHECK_LE(iterations, 20);  // about one per 20 ms wait; Linux returned at once every time before the fix
+    // About one per 20 ms wait, plus one per re-armed listener after each
+    // 100 ms pause. Linux returned at once every time before the fix.
+    CHECK_LE(iterations, 20);
     auto& ouch = exchange.runtime.endpoint<server::runtime::OuchGateway>();
     CHECK_EQ(ouch.transport_connection_count(), 0u);
     // The admin listener comes back from main's timer call, the order-entry one
