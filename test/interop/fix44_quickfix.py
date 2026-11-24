@@ -196,8 +196,9 @@ def scenario(app, exchange):
     app.wait("ALICE", "logout", mark, "logout")
     if len([values for user, kind, values in app.events[a9:] if kind == "in" and values.get("11") == "A9"]) != 1:
         raise AssertionError("ALICE: order A9 was reported more than once")
+    mark = app.mark()
     exchange.terminate()
-    app.wait("BOB", "in", mark, "exchange Logout", _35="5")
+    app.wait("BOB", "in", mark, "exchange Logout", _35="5", _58="end of day")
     app.wait("BOB", "out", mark, "Logout reply", _35="5")
     app.wait("BOB", "logout", mark, "logout")
     if exchange.wait(timeout=10) != 0:

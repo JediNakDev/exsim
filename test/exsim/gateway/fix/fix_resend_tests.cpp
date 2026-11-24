@@ -206,6 +206,11 @@ TEST_CASE(gateway_fix_resend, store_capacity_exhaustion_fails_closed) {
     client.send("A", "98=0|108=30|554=secret1|");
     CHECK(client.drain().empty());
     CHECK(client.connection().wants_disconnect());
+    // A reset Logon not at MsgSeqNum 1 is refused too; the full store sends nothing.
+    client.reconnect();
+    client.send_at("A", 2, "98=0|108=30|141=Y|554=secret1|");
+    CHECK(client.drain().empty());
+    CHECK(client.connection().wants_disconnect());
 }
 
 TEST_CASE(gateway_fix_resend, output_overflow_requests_disconnect) {
