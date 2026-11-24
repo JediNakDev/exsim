@@ -82,7 +82,7 @@ class Trader:
 class Exchange:
     """One exsim_exchanged child. `ready` is its ready line, or None if it exited during startup."""
 
-    def __init__(self, directory, text, name, hangup=signal.SIG_DFL):
+    def __init__(self, directory, text, name, hangup=None):
         # The fixture's relative admin socket resolves next to this config, not the working directory.
         self.config = Path(directory) / f"{name}.conf"
         self.config.write_text(text.replace("admin_socket = exsim.sock", f"admin_socket = {name}.sock"))
@@ -91,8 +91,9 @@ class Exchange:
         self.process = subprocess.Popen(
             [str(BUILD / "exsim_exchanged"), "--config", str(self.config)],
             stdout=subprocess.PIPE, stderr=self.stderr, text=True,
-            # Exec keeps an ignored SIGHUP, so set it even when the suite runs under nohup.
-            preexec_fn=lambda: signal.signal(signal.SIGHUP, hangup))
+            # Exec keeps an ignored SIGHUP. The SIGHUP tests set it, so they also work
+            # under nohup; every other child keeps the suite's own.
+            preexec_fn=None if hangup is None else lambda: signal.signal(signal.SIGHUP, hangup))
         if not select.select([self.process.stdout], [], [], 10)[0]:
             self.process.kill()
             raise AssertionError("exchange startup timed out")
@@ -136,12 +137,12 @@ class ExsimExchangedTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name)
 
-    def launch(self, text=None, name="exchange", hangup=signal.SIG_DFL):
+    def launch(self, text=None, name="exchange", hangup=None):
         exchange = Exchange(self.directory, text or config(), name, hangup)
         self.addCleanup(exchange.close)
         return exchange
 
-    def start(self, text=None, name="exchange", hangup=signal.SIG_DFL):
+    def start(self, text=None, name="exchange", hangup=None):
         exchange = self.launch(text, name, hangup)
         self.assertIsNotNone(exchange.ready, exchange.errors())
         return exchange
@@ -217,7 +218,7 @@ class ExsimExchangedTests(unittest.TestCase):
 
     def test_int_term_and_hup_stop_cleanly_and_remove_the_admin_socket(self):
         for stop_signal in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
-            exchange = self.start()
+            exchange = self.start(hangup=signal.SIG_DFL)
             self.assertTrue(exchange.socket.exists())
             self.assertEqual(exchange.stop(stop_signal), 0)
             self.assertFalse(exchange.socket.exists())
