@@ -154,6 +154,8 @@ private:
     void insert_order(std::uint32_t slot) noexcept;  // level must have room (checked by callers)
     void remove_order(std::uint32_t slot) noexcept;
     BookUpdateStatus record(BookUpdateStatus status) noexcept;
+    // Throws std::invalid_argument; runs before order_slots_by_reference_ allocates its table.
+    static const BookBuilderConfig& validated(const BookBuilderConfig& config);
     template <class Message>
     BookUpdateStatus decode_then_apply(std::span<const char> bytes) noexcept;
 
