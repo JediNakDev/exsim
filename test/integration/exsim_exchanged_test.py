@@ -213,12 +213,22 @@ class ExsimExchangedTests(unittest.TestCase):
             self.assertIn("orders live=0", receive_all(client))
         self.assertIsNone(exchange.process.poll())
 
-    def test_int_and_term_stop_cleanly_and_remove_the_admin_socket(self):
-        for stop_signal in (signal.SIGINT, signal.SIGTERM):
+    def test_int_term_and_hup_stop_cleanly_and_remove_the_admin_socket(self):
+        for stop_signal in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
             exchange = self.start()
             self.assertTrue(exchange.socket.exists())
             self.assertEqual(exchange.stop(stop_signal), 0)
             self.assertFalse(exchange.socket.exists())
+
+    def test_hup_inherited_as_ignored_keeps_running_like_nohup(self):
+        # The child inherits the ignored disposition through fork and exec, as under nohup.
+        self.addCleanup(signal.signal, signal.SIGHUP, signal.signal(signal.SIGHUP, signal.SIG_IGN))
+        exchange = self.start()
+        exchange.process.send_signal(signal.SIGHUP)
+        time.sleep(0.1)  # the loop checks for signals every millisecond
+        self.assertIsNone(exchange.process.poll())
+        self.assertIn("orders live=0", exchange.admin("status"))
+        self.assertEqual(exchange.stop(), 0)
 
     def test_bad_arguments_and_configs_exit_nonzero(self):
         binary = str(BUILD / "exsim_exchanged")
