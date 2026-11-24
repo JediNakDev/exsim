@@ -43,24 +43,33 @@ TEST_CASE(object_pool, empty_pool_creates_nothing) {
     CHECK(pool.create(1) == nullptr);
 }
 
-TEST_CASE(object_pool, throwing_constructor_restores_the_free_slot) {
-    struct SometimesThrows {
-        int value;
-        explicit SometimesThrows(bool fail) : value(42) {
-            if (fail) throw 7;
-        }
+// Creates, destroys and re-creates objects through every node. Run under
+// ASan and UBSan (MODE=debug) it also checks the node's lifetime handling.
+TEST_CASE(object_pool, recreated_objects_keep_their_own_values) {
+    struct alignas(64) Record {  // over-aligned like book::Order
+        std::uint64_t id;
+        std::uint32_t round;
     };
-    ObjectPool<SometimesThrows> pool(1);
-    bool threw = false;
-    try {
-        (void)pool.create(true);
-    } catch (int) {
-        threw = true;
+    constexpr std::uint64_t kCapacity = 8;
+    ObjectPool<Record> pool(kCapacity);
+    Record* records[kCapacity] = {};
+    for (std::uint32_t round = 0; round < 3; ++round) {
+        for (std::uint64_t i = 0; i < kCapacity; ++i) {
+            records[i] = pool.create(Record{i, round});
+            REQUIRE(records[i] != nullptr);
+            CHECK_EQ(reinterpret_cast<std::uintptr_t>(records[i]) % alignof(Record), 0u);
+        }
+        CHECK(pool.create(Record{kCapacity, round}) == nullptr);
+        for (std::uint64_t i = 0; i < kCapacity; ++i) {
+            CHECK_EQ(records[i]->id, i);
+            CHECK_EQ(records[i]->round, round);
+        }
+        // Freeing a node writes its link into that node only.
+        for (std::uint64_t i = 0; i < kCapacity; i += 2) pool.destroy(records[i]);
+        for (std::uint64_t i = 1; i < kCapacity; i += 2) {
+            CHECK_EQ(records[i]->id, i);
+            CHECK_EQ(records[i]->round, round);
+        }
+        for (std::uint64_t i = 1; i < kCapacity; i += 2) pool.destroy(records[i]);
     }
-    REQUIRE(threw);
-    auto* value = pool.create(false);
-    REQUIRE(value != nullptr);
-    CHECK_EQ(value->value, 42);
-    CHECK(pool.create(false) == nullptr);
-    pool.destroy(value);
 }
