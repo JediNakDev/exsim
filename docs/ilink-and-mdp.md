@@ -82,9 +82,13 @@ uses one UDP packet; an event can span packets and ends with EndOfEvent.
 `max_tokens_per_session` bounds each user's client-ID and request-ID tables.
 `store_messages_per_session` and `store_bytes_per_session` bound iLink
 history for each of the current and immediately previous UUIDs. Older UUIDs
-are unavailable. Reaching a session history/output limit disconnects that
-session. Reconnect uses Establish with the negotiated UUID and exact next
-client sequence; new UUIDs need Negotiate first.
+are unavailable. Reaching a session output limit disconnects that session.
+Reconnect uses Establish with the negotiated UUID and exact next client
+sequence; new UUIDs need Negotiate first. A full history store also
+disconnects, and Establish on that UUID is then refused. Negotiate a new UUID
+to restart history; the full UUID stays retransmittable as the previous UUID.
+Reports produced between the overflow and that Negotiate are lost, so
+provision the store for the whole day.
 
 Explicit iLink retransmit ranges allow up to 2500 messages. A current-UUID
 request with count zero returns up to 2500 retained messages; previous-UUID

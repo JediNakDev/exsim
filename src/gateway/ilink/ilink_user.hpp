@@ -69,6 +69,7 @@ public:
         uuid = next_uuid;
         expected_sequence = 1;
         gap_pending = false;
+        output_failed = false;  // a new UUID starts an empty history store
     }
     template <class Core>
     void application(const protocol::cme::MessageView& message, Core& core) noexcept {
