@@ -187,16 +187,15 @@ def scenario(app, exchange):
     app.wait("ALICE", "out", mark, "GapFill", _35="4", _34=request["7"], _123="Y")
     app.wait("ALICE", "out", mark, "PossDup order", _35="D", _11="A9", _43="Y")
     app.wait("ALICE", "in", mark, "ExecutionReport New", _35="8", _11="A9", _150="0")
-    app.send("ALICE", "1", (112, "AFTER"))
-    app.wait("ALICE", "in", mark, "Heartbeat", _35="0", _112="AFTER")
-    if len([values for user, kind, values in app.events[mark:] if kind == "in" and values.get("11") == "A9"]) != 1:
-        raise AssertionError("ALICE: order A9 was reported more than once")
     print("ok: QuickFIX answers the exchange's ResendRequest with GapFill")
 
+    a9 = mark
     mark = app.mark()
     alice.logout()
     app.wait("ALICE", "in", mark, "Logout reply", _35="5")
     app.wait("ALICE", "logout", mark, "logout")
+    if len([values for user, kind, values in app.events[a9:] if kind == "in" and values.get("11") == "A9"]) != 1:
+        raise AssertionError("ALICE: order A9 was reported more than once")
     exchange.terminate()
     app.wait("BOB", "in", mark, "exchange Logout", _35="5")
     app.wait("BOB", "out", mark, "Logout reply", _35="5")
@@ -256,8 +255,6 @@ FileStorePath={log_dir}
                      if "Invalid" in line or "too low" in line or "rejected" in line.lower()]
         if problems:
             raise AssertionError("QuickFIX found problems:\n" + "\n".join(problems))
-        print(f"PASS (QuickFIX logs in {log_dir})")
-        return 0
     except AssertionError as error:
         print(f"FAIL: {error}\nQuickFIX logs in {log_dir}")
         return 1
@@ -268,6 +265,8 @@ FileStorePath={log_dir}
         finally:
             exchange.kill()  # no-op once the scenario has stopped it
             exchange.wait()
+    print(f"PASS (QuickFIX logs in {log_dir})")
+    return 0
 
 
 if __name__ == "__main__":
