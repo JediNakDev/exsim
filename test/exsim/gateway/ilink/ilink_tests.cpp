@@ -368,7 +368,9 @@ TEST_CASE(ilink_session, store_overflow_recovers_by_negotiating_a_new_uuid) {
     CHECK_EQ(exchange.core.engine().live_order_count(), 3u);
     Client same_uuid(exchange, 1, 101);
     same_uuid.send(establishment(same_uuid.user_config(), same_uuid.uuid, exchange.auth_time(), 4));
-    CHECK_EQ(frames(same_uuid.memory)[0].id(), 505);
+    const auto refused = frames(same_uuid.memory);
+    REQUIRE_EQ(refused.size(), 1u);
+    CHECK_EQ(refused[0].id(), 505);
     same_uuid.connection.on_closed(exchange.core);
     Client next(exchange, 1, 102);
     next.uuid += 100;

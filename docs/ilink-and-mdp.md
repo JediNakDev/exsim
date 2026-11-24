@@ -86,10 +86,11 @@ are unavailable. Reaching a session output limit disconnects that session.
 Reconnect uses Establish with the negotiated UUID and exact next client
 sequence; new UUIDs need Negotiate first. A report that does not fit the
 history store is lost and disconnects the session, and Establish on that UUID
-is then refused. Negotiate a new UUID to restart history; the full UUID stays
-retransmittable as the previous UUID until the next Negotiate. That report and
-every report until the new Negotiate are lost, so provision the store for the
-whole day.
+is then refused. Negotiate a new UUID to restart history. The full UUID's
+reports stay retained as the previous UUID until the next successful Negotiate
+and can be replayed once the new UUID is established. That report and every
+report until the new Negotiate are lost, so provision the store for the whole
+day.
 
 Explicit iLink retransmit ranges allow up to 2500 messages. A current-UUID
 request with count zero returns up to 2500 retained messages; previous-UUID
