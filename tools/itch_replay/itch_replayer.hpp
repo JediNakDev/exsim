@@ -6,10 +6,14 @@
 //
 // ITCH messages are post-matching state: an 'A'/'F' add never trades, so it
 // is sent as a post-only order and a crossing add is rejected instead of
-// matched. 'E'/'X' reduce the resting size, 'D' cancels the order and 'U'
+// matched. 'E'/'C'/'X' reduce the resting size, 'D' cancels the order and 'U'
 // replaces it with a new reference and loses priority. The ITCH order
 // reference is the client token, so the engine's own (session, token) map
-// finds the order. All messages go to one instrument.
+// finds the order.
+//
+// The replay builds one book. Given a stock, it takes that stock's locate
+// from its 'R' (Stock Directory) message and skips book messages for every
+// other locate; without one, every book message goes to the book.
 
 #include "reference_book.hpp"
 #include <engine/matching_engine.hpp>
@@ -17,24 +21,27 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <optional>
 #include <span>
 #include <stdexcept>
 
 namespace exsim::itch_replay {
 
-// Wire size of the ITCH 5.0 messages that change the book (A, F, E, X, D,
-// U), or 0 for any other type byte.
-[[nodiscard]] inline std::size_t book_message_size(char type) noexcept {
-    namespace itch50 = protocol::itch50;
-    switch (type) {
-        case itch50::AddOrder::type: return itch50::AddOrder::wire_size;
-        case itch50::AddOrderMPID::type: return itch50::AddOrderMPID::wire_size;
-        case itch50::OrderExecuted::type: return itch50::OrderExecuted::wire_size;
-        case itch50::OrderCancel::type: return itch50::OrderCancel::wire_size;
-        case itch50::OrderDelete::type: return itch50::OrderDelete::wire_size;
-        case itch50::OrderReplace::type: return itch50::OrderReplace::wire_size;
-        default: return 0;
+// Walks a NASDAQ ITCH 5.0 file, where each message follows its 2-byte
+// big-endian length, and calls on_message(message) for each one in order.
+// Returns false when the file ends inside a frame.
+template <typename OnMessage>
+bool for_each_message(std::span<const char> file, OnMessage&& on_message) {
+    std::size_t offset = 0;
+    while (offset < file.size()) {
+        if (file.size() - offset < 2) return false;
+        const std::size_t length = protocol::wire::load<2>(file.data() + offset);
+        offset += 2;
+        if (file.size() - offset < length) return false;
+        on_message(file.subspan(offset, length));
+        offset += length;
     }
+    return true;
 }
 
 // Every live order comes from an add message, so the stream size bounds the
@@ -60,10 +67,12 @@ struct ReplayStats {
 
 class ItchReplayer {
 public:
-    explicit ItchReplayer(std::size_t max_live_orders, ReferenceBook* validate = nullptr)
+    explicit ItchReplayer(std::size_t max_live_orders, ReferenceBook* validate = nullptr,
+                          std::optional<Symbol> stock = std::nullopt)
         : engine_(EngineConfig{.max_instruments = 1, .max_orders = max_live_orders}),
           events_(required_event_capacity({.max_instruments = 1, .max_orders = max_live_orders})),
-          reference_(validate) {
+          reference_(validate),
+          stock_(stock) {
         // ITCH prices have 4 decimals: one tick is $0.0001 and the band ends at $200.
         InstrumentConfig config;
         config.symbol = Symbol("ITCH");
@@ -75,47 +84,62 @@ public:
         if (instrument_ == 0) throw std::runtime_error("replay instrument rejected");
     }
 
-    // Decodes one ITCH 5.0 message (exactly book_message_size(type) bytes)
-    // and applies it. Returns false for a message that does not decode.
+    // Applies one ITCH 5.0 message. Returns true for a book message (A, F, E,
+    // C, X, D, U) of the replayed stock that decodes; false for any other
+    // message, which changes nothing.
     bool apply(std::span<const char> message) {
         namespace itch50 = protocol::itch50;
+        if (message.empty()) return false;
         switch (message[0]) {
+            case itch50::StockDirectory::type: {
+                itch50::StockDirectory m;
+                if (stock_ && itch50::decode(message, m) == protocol::Status::ok && m.stock == *stock_)
+                    locate_ = m.stock_locate;
+                return false;
+            }
             case itch50::AddOrder::type: {
                 itch50::AddOrder m;
-                if (itch50::decode(message, m) != protocol::Status::ok) return false;
+                if (!decode_for_stock(message, m)) return false;
                 add(m.order_reference, m.side, m.price, m.shares);
                 return true;
             }
             case itch50::AddOrderMPID::type: {
                 itch50::AddOrderMPID m;
-                if (itch50::decode(message, m) != protocol::Status::ok) return false;
+                if (!decode_for_stock(message, m)) return false;
                 add(m.order_reference, m.side, m.price, m.shares);
                 return true;
             }
             case itch50::OrderExecuted::type: {
                 itch50::OrderExecuted m;
-                if (itch50::decode(message, m) != protocol::Status::ok) return false;
+                if (!decode_for_stock(message, m)) return false;
+                reduce(m.order_reference, m.shares);
+                ++stats_.executes;
+                return true;
+            }
+            case itch50::OrderExecutedWithPrice::type: {
+                itch50::OrderExecutedWithPrice m;
+                if (!decode_for_stock(message, m)) return false;
                 reduce(m.order_reference, m.shares);
                 ++stats_.executes;
                 return true;
             }
             case itch50::OrderCancel::type: {
                 itch50::OrderCancel m;
-                if (itch50::decode(message, m) != protocol::Status::ok) return false;
+                if (!decode_for_stock(message, m)) return false;
                 reduce(m.order_reference, m.shares);
                 ++stats_.cancels;
                 return true;
             }
             case itch50::OrderDelete::type: {
                 itch50::OrderDelete m;
-                if (itch50::decode(message, m) != protocol::Status::ok) return false;
+                if (!decode_for_stock(message, m)) return false;
                 reduce(m.order_reference, std::numeric_limits<Quantity>::max());
                 ++stats_.deletes;
                 return true;
             }
             case itch50::OrderReplace::type: {
                 itch50::OrderReplace m;
-                if (itch50::decode(message, m) != protocol::Status::ok) return false;
+                if (!decode_for_stock(message, m)) return false;
                 replace(m.original_reference, m.new_reference, m.price, m.shares);
                 return true;
             }
@@ -129,6 +153,13 @@ public:
 
 private:
     static constexpr SessionId kSession = 1;
+
+    // Decodes a book message; false when it does not decode or is for another stock.
+    template <typename Message>
+    bool decode_for_stock(std::span<const char> bytes, Message& m) const noexcept {
+        return protocol::itch50::decode(bytes, m) == protocol::Status::ok &&
+               (!stock_ || (locate_ != 0 && m.stock_locate == locate_));
+    }
 
     // Runs one command. Returns false when the engine rejected it, after
     // counting the rejection.
@@ -189,6 +220,8 @@ private:
     EventBuffer events_;
     ReferenceBook* reference_;
     InstrumentId instrument_ = 0;
+    std::optional<Symbol> stock_;
+    std::uint16_t locate_ = 0;  // the stock's locate once its R arrives; book messages never use 0
     ReplayStats stats_;
 };
 
