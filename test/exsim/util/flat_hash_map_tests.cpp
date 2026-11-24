@@ -14,27 +14,28 @@ TEST_CASE(flat_hash_map, insert_find_erase) {
     CHECK(!map.insert(0, 1));   // 0 is the empty sentinel
     REQUIRE(map.find(1) != nullptr);
     CHECK_EQ(*map.find(1), 10);
-    CHECK_EQ(map.size(), 2u);
     CHECK(map.erase(1));
     CHECK(!map.erase(1));
     CHECK(map.find(1) == nullptr);
     CHECK_EQ(*map.find(2), 20);
 }
 
-TEST_CASE(flat_hash_map, full_map_rejects_and_keeps_its_capacity) {
+// FlatHashMap(4) gets the smallest table, 16 slots, and fills it to 50%: 8 keys.
+TEST_CASE(flat_hash_map, full_map_rejects_until_a_key_is_erased) {
     FlatHashMap<int> map(4);
-    const std::size_t cap = map.capacity() / 2;  // at most 50% load
-    for (std::size_t i = 1; i <= cap; ++i) {
-        CHECK(map.insert(i, static_cast<int>(i)));
+    for (std::uint64_t key = 1; key <= 8; ++key) {
+        CHECK(map.insert(key, static_cast<int>(key)));
     }
-    CHECK(!map.insert(cap + 1, 0));
-    CHECK_EQ(map.capacity(), cap * 2);
+    CHECK(!map.insert(9, 9));
+    CHECK(map.erase(1));
+    CHECK(map.insert(9, 9));
 }
 
 // Randomised differential test against std::unordered_map, with heavy
 // erase churn to exercise backward-shift deletion across wrap-around.
 TEST_CASE(flat_hash_map, matches_unordered_map_under_churn) {
-    FlatHashMap<std::uint64_t> map(512);
+    constexpr std::size_t kMaxEntries = 512;  // a power of two: the table holds exactly this many
+    FlatHashMap<std::uint64_t> map(kMaxEntries);
     std::unordered_map<std::uint64_t, std::uint64_t> ref;
     std::mt19937_64 rng(42);
     std::uniform_int_distribution<std::uint64_t> key_d(1, 2000);
@@ -43,7 +44,7 @@ TEST_CASE(flat_hash_map, matches_unordered_map_under_churn) {
         const std::uint64_t k = key_d(rng);
         switch (rng() % 3) {
             case 0: {
-                const bool expect = ref.size() < map.capacity() / 2 && !ref.count(k);
+                const bool expect = ref.size() < kMaxEntries && !ref.count(k);
                 const bool got = map.insert(k, k * 3);
                 REQUIRE_EQ(got, expect);
                 if (got) ref[k] = k * 3;
@@ -58,6 +59,5 @@ TEST_CASE(flat_hash_map, matches_unordered_map_under_churn) {
                 break;
             }
         }
-        REQUIRE_EQ(map.size(), ref.size());
     }
 }

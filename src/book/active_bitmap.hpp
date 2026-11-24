@@ -14,7 +14,6 @@ namespace exsim::book {
 // single word, so next/previous searches read O(log64 size) words.
 class ActiveBitmap {
 public:
-    ActiveBitmap() = default;
     explicit ActiveBitmap(std::size_t size) {
         size_ = size;
         std::size_t word_count = size;

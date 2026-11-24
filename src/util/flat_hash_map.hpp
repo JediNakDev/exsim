@@ -6,7 +6,6 @@
 #include <memory>
 #include <limits>
 #include <stdexcept>
-#include <utility>
 #include <type_traits>
 
 namespace exsim::util {
@@ -53,14 +52,6 @@ public:
 
     FlatHashMap(const FlatHashMap&) = delete;
     FlatHashMap& operator=(const FlatHashMap&) = delete;
-    FlatHashMap(FlatHashMap&& other) noexcept { swap(other); }
-    FlatHashMap& operator=(FlatHashMap&& other) noexcept {
-        if (this != &other) {
-            FlatHashMap moved(std::move(other));
-            swap(moved);
-        }
-        return *this;
-    }
 
     [[nodiscard]] V* find(Key key) noexcept {
         const std::size_t index = slot_index_of(key);
@@ -121,20 +112,7 @@ public:
         return true;
     }
 
-    [[nodiscard]] std::size_t size() const noexcept { return size_; }
-    [[nodiscard]] bool empty() const noexcept { return size_ == 0; }
-    [[nodiscard]] std::size_t capacity() const noexcept { return mask_ == 0 ? 0 : mask_ + 1; }
-
 private:
-    void swap(FlatHashMap& other) noexcept {
-        using std::swap;
-        swap(slots_, other.slots_);
-        swap(mask_, other.mask_);
-        swap(size_, other.size_);
-        swap(max_entries_, other.max_entries_);
-        swap(shift_, other.shift_);
-    }
-
     struct Slot {
         Key key;
         V value;
