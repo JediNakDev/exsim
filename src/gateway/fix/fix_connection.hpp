@@ -14,9 +14,11 @@
 // bound connection releases the binding first.
 // Logon: SenderCompID must be a configured FIX user (authenticated with the
 // optional Password(554)), TargetCompID the exchange CompID, EncryptMethod 0,
-// HeartBtInt <= settings.max_heartbeat_interval_seconds. A refused Logon
-// closes the connection without a Logout: a Logout needs a MsgSeqNum, and the
-// session has none to give a peer it did not accept (clients count it).
+// HeartBtInt <= settings.max_heartbeat_interval_seconds. A Logon that fails
+// these checks, finds the user logged on, or finds the store exhausted closes
+// the connection without a Logout: a Logout needs a MsgSeqNum, and the session
+// has none to give a peer it did not accept (clients count it). A Logon with
+// MsgSeqNum too low, or not 1 with ResetSeqNumFlag=Y, gets a sequenced Logout.
 
 #include "engine/command.hpp"
 #include "gateway/fix/fix_common.hpp"

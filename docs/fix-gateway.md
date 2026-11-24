@@ -63,10 +63,11 @@ Authenticated sequence reset clears the resend store and both sequence counters,
 but preserves tokens, order records and ExecIDs. Duplicate low non-PossDup messages
 log out; a low PossDup message, GapFill included, is ignored and never advances
 expected sequence. A duplicate early ResendRequest already held is serviced once.
-MsgSeqNum above 2^64 - 2 is refused so expected never wraps. A refused Logon
-(bad field, CompID or Password, user already logged on, store exhausted) closes
-the connection without a Logout, which would need a MsgSeqNum the session has
-not assigned.
+MsgSeqNum above 2^64 - 2 is refused so expected never wraps. A Logon refused for
+a bad field, CompID or Password, a user already logged on, or an exhausted store
+closes the connection without a Logout, which would need a MsgSeqNum the session
+has not assigned. A Logon with MsgSeqNum too low, or with ResetSeqNumFlag(141)=Y
+and MsgSeqNum other than 1, gets a sequenced Logout.
 
 Live output that overflows the sink disconnects while stored reports remain
 recoverable. A resend that does not fit pauses and resumes from the session
