@@ -37,6 +37,7 @@ class Recorder(fix.Application):
         self.changed = threading.Condition()
         self.events = []  # (user, "in" | "out" | "logon" | "logout", fields)
         self.sessions = {}
+        self.skip_before = None  # ClOrdID: QuickFIX skips one MsgSeqNum before this order
 
     def record(self, session, kind, message=None):
         with self.changed:
@@ -61,6 +62,12 @@ class Recorder(fix.Application):
         self.record(session, "in", message)
 
     def toApp(self, message, session):
+        if message.isSetField(11) and message.getField(11) == self.skip_before:
+            # QuickFIX holds the session lock here, so no Heartbeat takes the skipped number.
+            self.skip_before = None
+            sequence = int(message.getHeader().getField(34)) + 1
+            message.getHeader().setField(34, str(sequence))
+            fix.Session.lookupSession(session).setNextSenderMsgSeqNum(sequence)
         self.record(session, "out", message)
 
     def fromApp(self, message, session):
@@ -103,6 +110,7 @@ def scenario(app, exchange):
         raise AssertionError("ALICE: refused Logon got a reply")
     PASSWORDS["ALICE"] = "alice"
     for user in PASSWORDS:
+        app.wait(user, "in", 0, "Logon reply at MsgSeqNum 1", _35="A", _34="1")
         app.wait(user, "logon", 0, "logon")
     print("ok: refused Logon, then both sessions logged on")
 
@@ -142,7 +150,7 @@ def scenario(app, exchange):
     app.wait("ALICE", "in", mark, "Heartbeat for TestRequest", _35="0", _112="PING")
     mark = app.mark()
     time.sleep(2.5)
-    app.wait("ALICE", "in", mark, "idle Heartbeat", _35="0")
+    app.wait("ALICE", "in", mark, "idle Heartbeat", _35="0", _112=None)
     print("ok: TestRequest and Heartbeat")
 
     # ALICE leaves an order resting and logs out; BOB fills it while she is
@@ -171,7 +179,7 @@ def scenario(app, exchange):
     # ALICE skips a MsgSeqNum: the exchange holds her order, asks for a
     # resend, and takes QuickFIX's GapFill; the PossDup copy is ignored.
     mark = app.mark()
-    alice.setNextSenderMsgSeqNum(alice.getExpectedSenderNum() + 1)
+    app.skip_before = "A9"
     app.send("ALICE", "D", *order("A9", "1", 10, "149"))
     request = app.wait("ALICE", "in", mark, "ResendRequest", _35="2")
     app.wait("ALICE", "out", mark, "GapFill", _35="4", _34=request["7"], _123="Y")
@@ -179,9 +187,12 @@ def scenario(app, exchange):
     app.wait("ALICE", "in", mark, "ExecutionReport New", _35="8", _11="A9", _150="0")
     app.send("ALICE", "1", (112, "AFTER"))
     app.wait("ALICE", "in", mark, "Heartbeat", _35="0", _112="AFTER")
-    if [values for user, kind, values in app.events[mark:] if kind == "in" and values.get("11") == "A9"
-            and values.get("150") != "0"]:
-        raise AssertionError("ALICE: order A9 was processed twice")
+    gap_fill = next(index for index, (user, kind, values) in enumerate(app.events)
+                    if index >= mark and user == "ALICE" and kind == "out" and values.get("35") == "4")
+    reports = [index for index, (user, kind, values) in enumerate(app.events)
+               if index >= mark and kind == "in" and values.get("11") == "A9"]
+    if len(reports) != 1 or reports[0] < gap_fill:
+        raise AssertionError("ALICE: order A9 was not processed exactly once, after the GapFill")
     print("ok: QuickFIX answers the exchange's ResendRequest with GapFill")
 
     mark = app.mark()
@@ -204,8 +215,14 @@ def main():
     exchange = subprocess.Popen([str(BUILD / "exsim_exchanged"), "--config", str(CONFIG)],
                                 stdout=subprocess.PIPE, text=True)
     initiator = None
+    stalled = threading.Timer(10, exchange.kill)
+    stalled.start()
     try:
-        port = json.loads(exchange.stdout.readline())["fixOrderEntryPort"]
+        ready = exchange.stdout.readline()
+        stalled.cancel()
+        if not ready:
+            raise AssertionError("exchange printed no ready line")
+        port = json.loads(ready)["fixOrderEntryPort"]
         settings_file = log_dir / "quickfix.cfg"
         settings_file.write_text(f"""[DEFAULT]
 ConnectionType=initiator
@@ -238,7 +255,7 @@ FileStorePath={log_dir}
                     if kind == "out" and values.get("35") in ("3", "j")]
         problems += [f"{path.name}: {line}" for path in log_dir.glob("*.event.current.log")
                      for line in path.read_text().splitlines()
-                     if "Invalid" in line or "rejected" in line.lower()]
+                     if "Invalid" in line or "too low" in line or "rejected" in line.lower()]
         if problems:
             raise AssertionError("QuickFIX found problems:\n" + "\n".join(problems))
         print(f"PASS (QuickFIX logs in {log_dir})")
@@ -249,8 +266,8 @@ FileStorePath={log_dir}
     finally:
         if initiator is not None:
             initiator.stop()
-        exchange.terminate()
-        exchange.wait(timeout=10)
+        exchange.kill()  # no-op once the scenario has stopped it
+        exchange.wait()
 
 
 if __name__ == "__main__":
