@@ -607,9 +607,12 @@ bool parse_config(std::string_view text, ServerConfig& out, std::string& error) 
         std::string_view line = text.substr(0, nl);
         text = nl == std::string_view::npos ? std::string_view{} : text.substr(nl + 1);
         ++p.line_no;
-        const std::size_t comment = line.find_first_of("#;");
-        if (comment != std::string_view::npos) {
-            line = line.substr(0, comment);
+        // A comment starts at '#' or ';' at the start of the line or after a space or tab, so values may hold both.
+        for (std::size_t at = 0; at < line.size(); ++at) {
+            if ((line[at] == '#' || line[at] == ';') && (at == 0 || line[at - 1] == ' ' || line[at - 1] == '\t')) {
+                line = line.substr(0, at);
+                break;
+            }
         }
         line = trim(line);
         if (line.empty()) {

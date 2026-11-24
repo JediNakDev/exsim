@@ -330,6 +330,19 @@ flush_interval_ms = 0
     CHECK(fails("[journal]\nflush_interval_ms = soon\n"));
 }
 
+// A comment starts at `#` or `;` only at the start of a line or after a space
+// or tab, so both characters can appear inside a value.
+TEST_CASE(server_config, comment_characters_inside_a_value_are_kept) {
+    const ServerConfig cfg = parse_ok(std::string(kMinimal) +
+                                      "[exchange]\nadmin_socket = run;1/s.sock\n"
+                                      "[user BOB]\npassword = pa#ss\nsession_id = 2 ; second user\n"
+                                      "[market_data]\nport = 36000 # comment\n");
+    CHECK_EQ(cfg.exchange.admin_socket, "run;1/s.sock");
+    CHECK_EQ(cfg.users[1].password, "pa#ss");
+    CHECK_EQ(cfg.users[1].session_id, 2u);
+    CHECK_EQ(cfg.market_data.port, 36000);
+}
+
 TEST_CASE(server_config, day_times_parse_and_format) {
     Timestamp ns = 0;
     CHECK(parse_day_time("00:00", ns));

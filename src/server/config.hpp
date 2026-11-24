@@ -4,7 +4,8 @@
 // Static exchange configuration. Parsed once at startup, so this is ordinary
 // allocating code; nothing here runs on the hot path.
 //
-// Format: INI-style sections, `key = value`, `#` or `;` comments.
+// Format: INI-style sections, `key = value`, `#` or `;` comments. A comment
+// starts at the start of a line or after a space or tab, so `pa#ss` is a value.
 //
 //   [exchange]                 name, bind_address, ouch_port, fix_port,
 //                              ilink_port, admin_socket, max_connections,
