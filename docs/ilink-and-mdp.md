@@ -84,11 +84,12 @@ uses one UDP packet; an event can span packets and ends with EndOfEvent.
 history for each of the current and immediately previous UUIDs. Older UUIDs
 are unavailable. Reaching a session output limit disconnects that session.
 Reconnect uses Establish with the negotiated UUID and exact next client
-sequence; new UUIDs need Negotiate first. A full history store also
-disconnects, and Establish on that UUID is then refused. Negotiate a new UUID
-to restart history; the full UUID stays retransmittable as the previous UUID.
-Reports produced between the overflow and that Negotiate are lost, so
-provision the store for the whole day.
+sequence; new UUIDs need Negotiate first. A report that does not fit the
+history store is lost and disconnects the session, and Establish on that UUID
+is then refused. Negotiate a new UUID to restart history; the full UUID stays
+retransmittable as the previous UUID until the next Negotiate. That report and
+every report until the new Negotiate are lost, so provision the store for the
+whole day.
 
 Explicit iLink retransmit ranges allow up to 2500 messages. A current-UUID
 request with count zero returns up to 2500 retained messages; previous-UUID

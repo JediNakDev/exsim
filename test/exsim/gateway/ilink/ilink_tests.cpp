@@ -372,7 +372,17 @@ TEST_CASE(ilink_session, store_overflow_recovers_by_negotiating_a_new_uuid) {
     same_uuid.connection.on_closed(exchange.core);
     Client next(exchange, 1, 102);
     next.uuid += 100;
-    next.login();
+    next.send(negotiation(next.user_config(), next.uuid, exchange.auth_time()));
+    next.send(establishment(next.user_config(), next.uuid, exchange.auth_time(), 1));
+    const auto handshake = frames(next.memory);
+    REQUIRE_EQ(handshake.size(), 2u);
+    REQUIRE_EQ(handshake[0].id(), 501);
+    CHECK_EQ(wire::get(handshake[0].view(), schema::NegotiationResponse501::PreviousUUID), alice.uuid);
+    CHECK_EQ(wire::get(handshake[0].view(), schema::NegotiationResponse501::PreviousSeqNo), 2u);
+    REQUIRE_EQ(handshake[1].id(), 504);
+    CHECK_EQ(wire::get(handshake[1].view(), schema::EstablishmentAck504::PreviousUUID), alice.uuid);
+    CHECK_EQ(wire::get(handshake[1].view(), schema::EstablishmentAck504::PreviousSeqNo), 2u);
+    next.memory.clear();
     using R = schema::RetransmitRequest508;
     wire::Root<R> request;
     request.set(R::UUID, next.uuid);
@@ -384,8 +394,11 @@ TEST_CASE(ilink_session, store_overflow_recovers_by_negotiating_a_new_uuid) {
     const auto previous = frames(next.memory);
     REQUIRE_EQ(previous.size(), 3u);
     CHECK_EQ(previous[0].id(), 509);
-    CHECK_EQ(previous[2].id(), 522);
-    CHECK_EQ(wire::get(previous[2].view(), schema::ExecutionReportNew522::UUID), alice.uuid);
+    for (std::uint32_t sequence = 1; sequence <= 2; ++sequence) {
+        REQUIRE_EQ(previous[sequence].id(), 522);
+        CHECK_EQ(wire::get(previous[sequence].view(), schema::ExecutionReportNew522::UUID), alice.uuid);
+        CHECK_EQ(wire::get(previous[sequence].view(), schema::ExecutionReportNew522::SeqNum), sequence);
+    }
     next.memory.clear();
     Client bob(exchange, 2);
     bob.login();
