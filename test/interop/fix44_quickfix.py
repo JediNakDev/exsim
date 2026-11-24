@@ -176,8 +176,10 @@ def scenario(app, exchange):
     app.wait("ALICE", "logon", mark, "logon after resend")
     print("ok: exchange answers ResendRequest with GapFill and PossDup report")
 
-    # ALICE skips a MsgSeqNum: the exchange holds her order, asks for a
-    # resend, and takes QuickFIX's GapFill; the PossDup copy is ignored.
+    # ALICE skips a MsgSeqNum: the exchange asks for a resend, and QuickFIX
+    # answers with a GapFill and a PossDup copy of the order, which must be
+    # reported once. The wire cannot show when the exchange ran the order;
+    # gateway_fix_sequence.gap_with_trading_messages_is_held_until_filled does.
     mark = app.mark()
     app.skip_before = "A9"
     app.send("ALICE", "D", *order("A9", "1", 10, "149"))
@@ -187,12 +189,8 @@ def scenario(app, exchange):
     app.wait("ALICE", "in", mark, "ExecutionReport New", _35="8", _11="A9", _150="0")
     app.send("ALICE", "1", (112, "AFTER"))
     app.wait("ALICE", "in", mark, "Heartbeat", _35="0", _112="AFTER")
-    gap_fill = next(index for index, (user, kind, values) in enumerate(app.events)
-                    if index >= mark and user == "ALICE" and kind == "out" and values.get("35") == "4")
-    reports = [index for index, (user, kind, values) in enumerate(app.events)
-               if index >= mark and kind == "in" and values.get("11") == "A9"]
-    if len(reports) != 1 or reports[0] < gap_fill:
-        raise AssertionError("ALICE: order A9 was not processed exactly once, after the GapFill")
+    if len([values for user, kind, values in app.events[mark:] if kind == "in" and values.get("11") == "A9"]) != 1:
+        raise AssertionError("ALICE: order A9 was reported more than once")
     print("ok: QuickFIX answers the exchange's ResendRequest with GapFill")
 
     mark = app.mark()
@@ -264,10 +262,12 @@ FileStorePath={log_dir}
         print(f"FAIL: {error}\nQuickFIX logs in {log_dir}")
         return 1
     finally:
-        if initiator is not None:
-            initiator.stop()
-        exchange.kill()  # no-op once the scenario has stopped it
-        exchange.wait()
+        try:
+            if initiator is not None:
+                initiator.stop()
+        finally:
+            exchange.kill()  # no-op once the scenario has stopped it
+            exchange.wait()
 
 
 if __name__ == "__main__":
