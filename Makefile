@@ -8,9 +8,14 @@ CXXFLAGS := -std=c++23 -Wall -Wextra -Wpedantic -Wshadow $(EXTRA_CXXFLAGS)
 # every object in one build shares the same flags, so the value is consistent.
 ifneq ($(findstring Free Software Foundation,$(shell $(CXX) --version 2>/dev/null)),)
 CXXFLAGS += -Wno-interference-size
+# GCC on arm64 (before 13.4 and 14.3) never frees ASan's fake stack frames: after a few thousand calls every call scans
+# a full slot table (about 7 us) and stack use after return goes undetected. x86-64 builds, as in CI, keep the check.
+ifneq ($(filter aarch64-%,$(shell $(CXX) -dumpmachine)),)
+ASAN_USE_AFTER_RETURN := --param=asan-use-after-return=0
+endif
 endif
 ifeq ($(MODE),debug)
-CXXFLAGS += -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined
+CXXFLAGS += -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined $(ASAN_USE_AFTER_RETURN)
 LDFLAGS += -fsanitize=address,undefined
 else ifeq ($(MODE),release)
 # Release keeps asserts on (no -DNDEBUG) on purpose: a broken invariant aborts. Only perf and bench define NDEBUG.
