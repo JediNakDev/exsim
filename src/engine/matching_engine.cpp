@@ -9,7 +9,6 @@
 
 #include <engine/matching_engine.hpp>
 
-#include "fixed_array.hpp"
 #include "order_metadata.hpp"
 #include "instrument_book.hpp"
 
@@ -29,7 +28,6 @@ namespace exsim {
 namespace {
 
 using engine::cl_ord_id_of;
-using engine::FixedArray;
 using engine::InstrumentBook;
 using engine::kNilOrder;
 using engine::make_session_token;
@@ -132,12 +130,12 @@ struct MatchingEngine::Impl {
     exsim::book::OrderBookStorage order_storage;
     std::vector<InstrumentBook> books;  // books[id - 1]; reserved up front so pointers stay stable
     exsim::util::FlatHashMap<InstrumentId> instrument_by_symbol;  // key: symbol_key(symbol)
-    FixedArray<OrderMetadata> metadata;                           // per order; slot 0 is unused
+    std::unique_ptr<OrderMetadata[]> metadata;                    // per order; slot 0 is unused
     OrderIndex free_head = kNilOrder;
     std::uint32_t live_count = 0;
     exsim::util::FlatHashMap<std::uint32_t> order_by_session_token;
-    FixedArray<OrderListEnds> orders_by_session;     // per SessionId, ascending OrderId
-    FixedArray<OrderListEnds> orders_by_instrument;  // per InstrumentId, ascending OrderId
+    std::unique_ptr<OrderListEnds[]> orders_by_session;     // per SessionId, ascending OrderId
+    std::unique_ptr<OrderListEnds[]> orders_by_instrument;  // per InstrumentId, ascending OrderId
     OrderId next_order_id = 1;
     MatchId next_match_id = 1;
 
@@ -203,10 +201,12 @@ MatchingEngine::Impl::Impl(const EngineConfig& config)
       max_orders(static_cast<std::uint32_t>(config.max_orders)),
       order_storage(max_orders),
       instrument_by_symbol(max_instruments),
-      metadata(std::size_t{max_orders} + 1),
+      metadata(std::make_unique<OrderMetadata[]>(std::size_t{max_orders} + 1)),
       order_by_session_token(max_orders),
-      orders_by_session(kSessionSlots),
-      orders_by_instrument(max_instruments + 1) {
+      orders_by_session(std::make_unique<OrderListEnds[]>(kSessionSlots)),
+      orders_by_instrument(std::make_unique<OrderListEnds[]>(max_instruments + 1)) {
+    // make_unique<T[]> zero-fills the arrays, so every list starts empty and
+    // every page is touched here instead of on the hot path.
     books.reserve(max_instruments);
     // Free-index stack: 1, 2, ..., max_orders (first allocations are sequential).
     for (std::uint32_t i = 1; i < max_orders; ++i) {
