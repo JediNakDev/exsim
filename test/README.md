@@ -31,7 +31,20 @@ Debug builds use AddressSanitizer and UBSan. `FILTER` selects native cases by su
 
 On arm64, GCC 12, 13.1 to 13.3.0 and 14.1 to 14.2.0 can leave ASan fake stack frames marked in use after a function returns ([fixed upstream](https://github.com/gcc-mirror/gcc/commit/13d971601175541146fda54682cde4d3f9cd2759) in 13.4, 14.3 and 15). Once a thread has no free frame of one size, after thousands of calls, each call needing that size scans the full table (about 7 us) and the stack-use-after-return check misses bugs in those frames. That stretched the arm64 Linux debug unit suite from about 3 minutes to over 9 hours, so the Makefile turns the check off for those releases on arm64. Short runs, such as the integration tests' child processes, lose the check while it would still work. x86-64 builds, as in CI, fixed releases, and 13.3.1 or 14.2.1 snapshots (which may hold the fix) keep it. With ASan's default fake stack size, `test_framework.asan_fake_stack_does_not_fill_up` fails if a build runs the broken check.
 
-Builds go to `build/<mode>/`. CI runs both suites on macOS and Ubuntu in release and debug modes, a ThreadSanitizer run on Ubuntu, a benchmark build, and a format check (`make format-check`, clang-format 18).
+Builds go to `build/<mode>/`. CI runs both suites on macOS and Ubuntu in release and debug modes, a ThreadSanitizer run on Ubuntu, a benchmark build, a fuzz run (45 seconds per harness), and a format check (`make format-check`, clang-format 18).
+
+## Fuzzing
+
+```sh
+make fuzz
+make fuzz FILTER=gateway FUZZ_SECONDS=600
+```
+
+`fuzz/` holds one libFuzzer harness per parser of untrusted input: the FIX 4.4, SoupBinTCP/OUCH 4.2 and iLink 3 order-entry connections, the MoldUDP64 retransmission request, the MDP TCP replay request, the config file and the admin command line. Each passes its bytes to the production code, built with ASan and UBSan. The gateway and admin harnesses build a full exchange core per input (`fuzz/exchange.hpp`).
+
+Each harness runs for `FUZZ_SECONDS` (default 60) and stops at the first crash or sanitizer report, leaving the input in `build/fuzz/`. Replay it with `./build/fuzz/fuzz_<name> <file>`, and give the fix a unit test that replays the same input. Seeds come from `fuzz/seeds/<name>` and, for the config harness, `config/*.conf`. New inputs collect in `build/fuzz/corpus/<name>`.
+
+libFuzzer ships with LLVM clang, not Apple clang, so run it on Linux. On Ubuntu 24.04, install `clang-19 libclang-rt-19-dev`. Set `FUZZ_CXX` to use another clang, version 19 or later.
 
 ## FIX interop check
 
@@ -53,6 +66,6 @@ Each test case builds its own state and shares nothing with other cases, so the 
 
 ## Scope
 
-Fuzz campaigns and end-to-end suites are deferred.
+End-to-end suites are deferred.
 
 The active benchmark suite lives in [benchmark/](../benchmark/README.md). Replay lives in `tools/itch_replay/`. CME schema sources, regeneration, and supported scope are documented in the [CME profile](../docs/ilink-and-mdp.md).

@@ -42,6 +42,17 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libbenchmark-dev
       - name: build benchmarks
         run: make -j4 MODE=bench bench-build
+  fuzz:
+    name: fuzz harnesses (ubuntu-24.04, clang 19)
+    runs-on: ubuntu-24.04
+    # A few minutes of build, then 45 seconds per harness.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: install clang 19 and libFuzzer
+        run: sudo apt-get update && sudo apt-get install -y clang-19 libclang-rt-19-dev
+      - name: fuzz
+        run: make -j4 fuzz FUZZ_SECONDS=45 EXTRA_CXXFLAGS=-Werror
   format:
     name: format check (clang-format 18)
     runs-on: ubuntu-24.04

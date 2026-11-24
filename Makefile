@@ -24,12 +24,16 @@ LDFLAGS += -fsanitize=address,undefined
 else ifeq ($(MODE),release)
 # Release keeps asserts on (no -DNDEBUG) on purpose: a broken invariant aborts. Only perf and bench define NDEBUG.
 CXXFLAGS += -O2 -g
+else ifeq ($(MODE),fuzz)
+# make fuzz: clang's libFuzzer. Every object gets coverage; any sanitizer report stops the run.
+CXXFLAGS += -O1 -g -fno-omit-frame-pointer -fsanitize=fuzzer-no-link,address,undefined -fno-sanitize-recover=all
+LDFLAGS += -fsanitize=fuzzer,address,undefined
 else ifneq ($(filter $(MODE),perf bench),)
 # bench is the perf configuration under another name, so the benchmarked engine is the perf build.
 CXXFLAGS += -O3 -march=native -DNDEBUG -flto -fno-omit-frame-pointer
 LDFLAGS += -flto
 else
-$(error MODE must be release, debug, perf or bench)
+$(error MODE must be release, debug, fuzz, perf or bench)
 endif
 LDFLAGS += $(EXTRA_LDFLAGS)
 LDLIBS := -lpthread
@@ -103,3 +107,27 @@ bench-build:
 	$(MAKE) MODE=bench BUILD=$(BENCH_BUILD) $(BENCH_BIN)
 bench: bench-build
 	$(BENCH_BIN) $(if $(FILTER),--benchmark_filter='$(FILTER)') $(ARGS)
+
+# One libFuzzer harness per parser of untrusted input (fuzz/*.cpp). libFuzzer ships with LLVM clang,
+# not Apple clang; clang 19 is the first with std::hardware_destructive_interference_size on libstdc++.
+# Each runs FUZZ_SECONDS from its seeds, keeps new inputs in build/fuzz/corpus/<name>, and stops at
+# the first crash, leaving the input in build/fuzz/. FILTER picks harnesses by substring. An input runs
+# in milliseconds; the 25 s timeout (OSS-Fuzz's) still catches a hang but not a 12 s stall seen in ASan's
+# free on a loaded VM.
+FUZZ_CXX ?= clang++-19
+FUZZ_SECONDS ?= 60
+FUZZ_NAMES := $(basename $(notdir $(wildcard fuzz/*.cpp)))
+FUZZ_RUN := $(if $(FILTER),$(foreach name,$(FUZZ_NAMES),$(if $(findstring $(FILTER),$(name)),$(name))),$(FUZZ_NAMES))
+.PHONY: fuzz fuzz-run
+$(FUZZ_NAMES:%=$(BUILD)/fuzz_%): $(BUILD)/fuzz_%: $(BUILD)/obj/fuzz/%.o $(LIB_OBJS)
+	$(CXX) $(LDFLAGS) $^ -o $@ $(LDLIBS)
+fuzz:
+	$(MAKE) MODE=fuzz CXX=$(FUZZ_CXX) fuzz-run
+# The config harness starts from the example configs; the others from fuzz/seeds/<name>.
+fuzz-run: $(FUZZ_RUN:%=$(BUILD)/fuzz_%)
+	for name in $(FUZZ_RUN); do \
+		seeds=fuzz/seeds/$$name; [ $$name != config ] || seeds=config; \
+		mkdir -p $(BUILD)/corpus/$$name && \
+		$(BUILD)/fuzz_$$name -max_total_time=$(FUZZ_SECONDS) -timeout=25 -print_final_stats=1 \
+			-artifact_prefix=$(BUILD)/$$name- $(BUILD)/corpus/$$name $$seeds || exit 1; \
+	done
