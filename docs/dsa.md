@@ -36,7 +36,7 @@ The engine adds validation, self-trade prevention, time-in-force rules, and priv
 
 A simple aggressive order takes expected O(1 + F + L log64 P) work, where F is the number of resting orders filled and L the price levels it empties. Rules that inspect liquidity or remove other orders add their own traversal work.
 
-Auction planning scans occupied prices and bitmap words in the crossed range. It chooses the largest executable quantity, then the smallest imbalance, then the price closest to the last trade or reference price. A remaining tie uses the lower price. Execution fills FIFO orders at that single auction price.
+Auction planning walks occupied prices in the crossed range. It chooses the largest executable quantity, then the smallest imbalance, then the price closest to the last trade or reference price. A remaining tie uses the lower price. Execution fills FIFO orders at that single auction price.
 
 See [matching engine](../src/engine/matching_engine.cpp).
 
@@ -51,7 +51,7 @@ Measured cost of `MatchingEngine::handle` per command on an Apple M6 (macOS 27.0
 | SweepWithFills | 35.35 |
 | ReplaceOrder | 47.68 |
 
-The CSV percentiles are percentiles of 32-command batch means, not single-command tail latency. See [results](../results/README.md) for the machine, Linux profile and the exact rows. The numbers are regenerated after any engine change.
+The CSV percentiles are percentiles of 32-command batch means, not single-command tail latency. The table was measured on 2026-11-17, before #49 gave `EventBuffer` fixed storage. See [results](../results/README.md) for the machine, Linux profile and the exact rows.
 
 ## Exchange metadata
 
@@ -70,10 +70,8 @@ See [order metadata](../src/engine/order_metadata.hpp) and [engine interface](..
 These costs apply after setup. Nothing grows afterwards. Hash-table operations use expected costs; a collision chain can take O(H), where H is the number of slots in that table.
 
 - I: configured instruments.
-- N: live orders.
 - P: ticks in one instrument's price band.
 - B: bitmap words in that band, ceil(P / 64).
-- W: bitmap words scanned word by word in a price range (auction planning only).
 - F: resting orders filled.
 - K: orders visited or returned.
 - L: price levels visited or returned.
@@ -88,9 +86,9 @@ These costs apply after setup. Nothing grows afterwards. Hash-table operations u
 | Read one side's total resting leaves | O(1) | Stored per-side sum |
 | Append or unlink a known order at a level | O(1) | Intrusive FIFO links |
 | Take or return a reserved pool slot | O(1) | Free-list head |
-| Rest an order | O(1) | One hash insertion, pool slot, and FIFO append |
+| Rest an order | O(1), or O(log64 P) when it opens a level | One hash insertion, pool slot, and FIFO append; a new level sets its bit in each bitmap layer |
 | Reduce a known order | O(1) | Pointer operation; the order keeps its FIFO position |
-| Remove a known order | O(1 + log64 P) | Pointer operation; the search runs only when the best level empties |
+| Remove a known order | O(1), or O(log64 P) when its level empties | Pointer operation; an empty level clears its bit in each bitmap layer, and an empty best level searches for the next price |
 | Find the next occupied price | O(log64 P) | At most two words per summary layer |
 
 ### Matching engine
@@ -103,12 +101,9 @@ These costs apply after setup. Nothing grows afterwards. Hash-table operations u
 | Find an order by exchange order ID | O(1) | One order ID map shared by every instrument |
 | Read live order count | O(1) | Stored counter |
 | Read depth into a caller buffer | O(1 + L log64 P) | No result-vector allocation |
-| Read orders at one price | O(1 + K) | Walks that level's FIFO |
-| Visit all live orders | O(N) | Excludes callback work |
 | Cancel a session's orders | O(1 + K log64 P) | Visits that session's list |
 | Match a simple aggressive order | O(1 + F + L log64 P) | Excludes extra rule-specific traversals |
-| Plan a crossed auction | O(1 + L + W) | Scans the occupancy words of the crossed range |
-| Query auction indication | O(1 + L + W) when crossed; O(1) otherwise | The uncrossed case reads the stored side totals |
+| Query auction indication | O(1 + L log64 P) when crossed; O(1) otherwise | Walks occupied levels in the crossed range; the uncrossed case reads the stored side totals |
 
 Order lookup by ID and symbol lookup can pay collision-chain costs. Removing an order from the shared ID map can also pay them.
 
