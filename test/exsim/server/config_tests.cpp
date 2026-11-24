@@ -11,6 +11,9 @@ using namespace exsim::server;
 
 namespace {
 const char* kMinimal = R"(
+[market_data]
+port = 16000
+
 [instrument AAPL]
 tick_size = 0.01
 min_price = 0.01
@@ -72,13 +75,14 @@ TEST_CASE(server_config_mdp, rejects_keys_of_the_other_market_data_protocol) {
     const std::string mdp =
         "[market_data]\nprotocol = mdp3\nport = 19001\nsnapshot_port = 19002\ninstrument_port = 19003\n"
         "replay_username = CME\nreplay_password = secret\nmarket_segment_id = 2\n";
-    const std::string instrument =
-        "[instrument ES]\ncme_security_id = 800001\nmin_price = 1\nmax_price = 100\nreference_price = 10\n";
+    const std::string instrument_and_user =
+        "[instrument ES]\ncme_security_id = 800001\nmin_price = 1\nmax_price = 100\nreference_price = 10\n"
+        "[user ALICE]\nsession_id = 1\n";
     ServerConfig config;
     std::string error;
-    REQUIRE(parse_config(mdp + instrument, config, error));
+    REQUIRE(parse_config(mdp + instrument_and_user, config, error));
     for (const auto itch_key : {"session = EXSIM\n", "retransmit_buffer = 16\n", "noii_interval_ms = 5\n"}) {
-        CHECK(!parse_config(mdp + itch_key + instrument, config, error));
+        CHECK(!parse_config(mdp + itch_key + instrument_and_user, config, error));
         CHECK(error.find("ignored by the selected protocol") != std::string::npos);
     }
     for (const auto mdp_key :
@@ -93,7 +97,7 @@ TEST_CASE(server_config_mdp, rejects_keys_of_the_other_market_data_protocol) {
 TEST_CASE(server_config_ilink, current_schema_fixture_and_missing_credentials) {
     ServerConfig config;
     std::string error;
-    REQUIRE(load_config("test/fixtures/ilink3-mdp.conf", config, error));
+    REQUIRE(load_config("config/cme.conf", config, error));
     REQUIRE_EQ(config.users.back().protocol, Protocol::Ilink3);
     CHECK_EQ(config.users.back().ilink_party_id, 1001u);
     CHECK_EQ(config.users.back().ilink_session, "AAA");
@@ -203,7 +207,7 @@ TEST_CASE(server_config, defaults_are_small) {
 TEST_CASE(server_config, example_file_parses) {
     ServerConfig cfg;
     std::string error;
-    REQUIRE(load_config("test/fixtures/exchange.conf", cfg, error));
+    REQUIRE(load_config("config/exchange.conf", cfg, error));
     CHECK_EQ(cfg.instruments.size(), 1u);
     CHECK_EQ(cfg.users.size(), 2u);
     CHECK_EQ(cfg.exchange.ouch_port, 15000);
@@ -342,6 +346,19 @@ TEST_CASE(server_config, rejects_legacy_listeners_and_protocols) {
     for (const auto protocol : {"fixp_sbe", "sbe"})
         CHECK(!parse_config(std::string(kMinimal) + "\n[user LEGACY]\nsession_id=7\nprotocol=" + protocol + "\n", cfg,
                             err));
+}
+
+// A config with no user or no feed destination would start an exchange no one
+// can trade on or watch. 0.0.0.0 stays legal for remote traders.
+TEST_CASE(server_config, requires_a_user_and_a_feed_port) {
+    ServerConfig cfg;
+    std::string err;
+    std::string text(kMinimal);
+    CHECK(!parse_config(text.substr(0, text.find("[user ALICE]")), cfg, err));
+    CHECK_EQ(err, "0: no [user] sections");
+    CHECK(!parse_config(text + "[market_data]\nport = 0\n", cfg, err));
+    CHECK_EQ(err, "0: market_data.port must be nonzero");
+    CHECK(parse_config(text + "[exchange]\nbind_address = 0.0.0.0\n", cfg, err));
 }
 
 TEST_CASE(server_config, rejects_a_nul_byte_anywhere) {

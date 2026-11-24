@@ -37,7 +37,7 @@
 // Keys of the other market data protocol are rejected because they would be
 // ignored. Prices are decimal dollars ("150.25"), stored with 4 implied
 // decimals. Trading-day times are "HH:MM[:SS[.fraction]]" local time; the end
-// may be "24:00". See test/fixtures/exchange.conf for a complete example.
+// may be "24:00". See config/exchange.conf for a complete example.
 
 #include "engine/instrument.hpp"
 #include "engine/matching_engine.hpp"

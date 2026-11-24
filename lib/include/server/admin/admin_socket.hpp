@@ -46,8 +46,8 @@ public:
     ~AdminSocket();
 
     // Creates the socket file; an existing path is refused and left alone.
-    // Call it before constructing the runtime, so a taken path fails before
-    // the journal is truncated, a listener opens or a feed packet goes out.
+    // Call it before runtime.start(), so a taken path fails before a
+    // listener opens, the journal is truncated or a feed packet goes out.
     // Returns "" or an error message.
     [[nodiscard]] std::string open(std::string path);
     // After runtime.start(): answers commands from now on. Returns "" or an error message.

@@ -131,7 +131,15 @@ public:
             users_.push_back(UserRuntime{&user});
             user_index_by_session_[user.session_id] = static_cast<std::uint16_t>(users_.size());
         }
-        if (!config_.journal_path.empty()) {
+    }
+
+    // Opens the journal the config names, if any, truncating the file. Call it
+    // once before the first command; commands before it are not journaled.
+    // The runtime calls it from start() after every listener is open, so a
+    // start refused for a busy port leaves the last run's journal alone.
+    // Throws if the file is refused (a symlink, or locked by another exchange).
+    void open_journal() {
+        if (!config_.journal_path.empty() && !journal_) {
             journal_.emplace(config_.journal_path, journal::JournalSetup{config_.engine.engine, config_.instruments});
         }
     }

@@ -417,6 +417,13 @@ struct Parser {
         if (cfg.instruments.empty()) {
             return fail("no [instrument] sections");
         }
+        if (cfg.users.empty()) {
+            return fail("no [user] sections");
+        }
+        // Port 0 turns the feed off in the runtime; a config has to name its destination.
+        if (cfg.market_data.port == 0) {
+            return fail("market_data.port must be nonzero");
+        }
         if (cfg.instruments.size() > cfg.engine.engine.max_instruments) {
             return fail("more instruments than engine.max_instruments");
         }

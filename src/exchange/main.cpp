@@ -71,7 +71,7 @@ int main(int argc, char** argv) {
             std::to_string(static_cast<unsigned long>(::getpid())) + std::to_string(exsim::common::monotonic_ns());
         config.market_data.session = session.substr(session.size() - 10);
         config.exchange.soup_session = config.market_data.session;
-        // Bound before the runtime exists: constructing it truncates the journal.
+        // Bound first, so a taken path fails before any listener opens or the journal is truncated.
         exsim::server::AdminSocket admin;
         const std::string& admin_path = config.exchange.admin_socket;
         if (!admin_path.empty() && !(error = admin.open(admin_path)).empty()) throw std::runtime_error(error);

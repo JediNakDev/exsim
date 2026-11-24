@@ -11,6 +11,9 @@ using namespace exsim::server;
 
 namespace {
 const char* kMinimalWithSmallPayload = R"(
+[market_data]
+port = 16000
+
 [instrument AAPL]
 tick_size = 0.01
 min_price = 0.01

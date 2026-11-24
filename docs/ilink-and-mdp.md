@@ -20,7 +20,7 @@ All orders and liquidity come from external clients. The exchanges start empty.
 
 ```sh
 make -j4 apps
-./build/release/exsim_exchanged --config test/fixtures/ilink3-mdp.conf
+./build/release/exsim_exchanged --config config/cme.conf
 ```
 
 Read the assigned listener ports from the ready line it prints at startup.

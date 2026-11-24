@@ -96,8 +96,8 @@ public:
     BasicServerRuntime(const BasicServerRuntime&) = delete;
     BasicServerRuntime& operator=(const BasicServerRuntime&) = delete;
 
-    // Opens every socket and sends the market-data start of day. Returns ""
-    // or an error message.
+    // Opens every socket, then the journal, and sends the market-data start of
+    // day. Returns "" or an error message.
     [[nodiscard]] std::string start() {
         if (net::ErrorCode error = poller_.open(); error != 0) return "poller: " + std::string(std::strerror(error));
         std::string failure;
@@ -105,6 +105,11 @@ public:
         if (!failure.empty()) return failure;
         failure = market_data_.open(config_, poller_, net::make_poll_token(kRetransmissionPollTag, 0));
         if (!failure.empty()) return failure;
+        try {
+            core_.open_journal();  // last: a start refused above leaves the old journal alone
+        } catch (const std::exception& error) {
+            return config_.journal_path + ": " + error.what();
+        }
         const auto now = core_.now();
         const md::PublishStatus started = market_data_.start(now, core_.engine(), core_.epoch_ns(now));
         if (started != md::PublishStatus::Ok) {

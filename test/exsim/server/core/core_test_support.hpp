@@ -32,6 +32,9 @@ inline const char* const kBaseConfig = R"(
 max_instruments = 4
 max_orders = 4096
 
+[market_data]
+port = 16000
+
 [instrument AAPL]
 tick_size = 0.01
 min_price = 0.01
@@ -219,7 +222,9 @@ struct HarnessWith {
         : server_config(config),
           sessions{recorder},
           market_data{recorder},
-          core(server_config, sessions, market_data, clock, options) {}
+          core(server_config, sessions, market_data, clock, options) {
+        core.open_journal();
+    }
 
     ServerConfig server_config;  // the core keeps a reference
     Recorder recorder;

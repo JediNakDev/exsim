@@ -4,10 +4,10 @@ One `exsim_exchanged` process runs one exchange. Build and start one from the re
 
 ```sh
 make -j4 apps
-./build/release/exsim_exchanged --config test/fixtures/exchange.conf
+./build/release/exsim_exchanged --config config/exchange.conf
 ```
 
-`--config PATH` is the only option; everything else, including the [admin socket](#runtime-commands), is in the config file. Every start creates empty books and a fresh market data session. External trading clients provide the orders. To run several exchanges, start several processes, each with its own config.
+`--config PATH` is the only option; everything else, including the [admin socket](#runtime-commands), is in the config file. [config/exchange.conf](../config/exchange.conf) shows every setting with its default. Every start creates empty books and a fresh market data session. External trading clients provide the orders. To run several exchanges, start several processes, each with its own config.
 
 ## Ready line
 
@@ -48,8 +48,8 @@ admin_socket = exsim.sock
 A relative path is relative to the config file, like the journal. Leave the key out for no admin socket. Replies are lines ending in `OK` or `ERR <message>`:
 
 ```sh
-echo 'phase AAPL continuous' | nc -U test/fixtures/exsim.sock
-echo 'fault user ALICE reject 1' | nc -U test/fixtures/exsim.sock
+echo 'phase AAPL continuous' | nc -U config/exsim.sock
+echo 'fault user ALICE reject 1' | nc -U config/exsim.sock
 ```
 
 A command is one line of at most 4096 bytes, ended by a newline or by closing the write side, and must arrive within 5 s of connecting. It runs on the exchange's event loop; an invalid command leaves the exchange running.
@@ -74,13 +74,13 @@ Configure TCP listeners with `ouch_port`, `fix_port`, and `ilink_port`. The read
 
 MDP uses `snapshot_port` and `instrument_port` for recovery feeds and optional `backup_port` for a redundant incremental feed. `retransmit_port` is then an authenticated TCP replay listener; `recoveryTransport` reports `tcp`. ITCH recovery remains UDP. See the [CME profile, credentials, limits, and sample config](ilink-and-mdp.md).
 
-Listeners bind `bind_address`, which traders must be able to reach. Give every feed destination a nonzero port. Running exchanges need distinct feed address and port pairs, including MDP snapshot, instrument, and backup destinations; nothing checks this across processes. A unicast feed sends to one destination address; multicast needs a working network path.
+Listeners bind `bind_address`, which traders must be able to reach. A config needs at least one `[user]` and a nonzero `[market_data] port`; MDP recovery feeds with port 0 are off. Running exchanges need distinct feed address and port pairs, including MDP snapshot, instrument, and backup destinations; nothing checks this across processes. A unicast feed sends to one destination address; multicast needs a working network path.
 
 ## Config files and disk state
 
 Config files are yours to keep next to your trading engine and in version control. They hold credentials, so keep them readable by their owner only. Books and sessions are not saved.
 
-Exchanges can use optional `[journal]` settings: `path`, `on_failure`, and `flush_interval_ms`. A relative `path` is relative to the config file. An exchange refuses a journal path whose last component is a symlink, and takes an exclusive lock on the file before truncating it, so a second running exchange that names the same journal fails to start and leaves the first one's history intact.
+Exchanges can use optional `[journal]` settings: `path`, `on_failure`, and `flush_interval_ms`. A relative `path` is relative to the config file. An exchange refuses a journal path whose last component is a symlink, and takes an exclusive lock on the file before truncating it, so a second running exchange that names the same journal fails to start and leaves the first one's history intact. The journal is opened last, after every listener, so a start refused for a busy port or a taken admin socket leaves the last run's journal alone.
 
 The legacy Exsim `fixp_sbe` protocol and `admin_port` are rejected; CME iLink 3 has its own FIXP/SBE gateway, and runtime commands use `admin_socket`.
 

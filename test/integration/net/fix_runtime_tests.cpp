@@ -43,7 +43,7 @@ std::string exchange_frame(Runtime& runtime, int fd, std::string_view frame) {
 TEST_CASE(fix_runtime, tcp_logon_orders_matching_and_logout) {
     exsim::server::ServerConfig config;
     std::string error;
-    REQUIRE(exsim::server::load_config("test/fixtures/exchange.conf", config, error));
+    REQUIRE(exsim::server::load_config("config/exchange.conf", config, error));
     config.exchange.ouch_port = 0;
     config.exchange.fix_port = 0;
     config.market_data.port = 0;

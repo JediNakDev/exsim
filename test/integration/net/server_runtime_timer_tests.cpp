@@ -33,7 +33,7 @@ using CountingRuntime = server::BasicServerRuntime<CountingOuchGateway>;
 server::ServerConfig ouch_config() {
     server::ServerConfig config;
     std::string error;
-    REQUIRE(server::load_config("test/fixtures/exchange.conf", config, error));
+    REQUIRE(server::load_config("config/exchange.conf", config, error));
     config.exchange.ouch_port = 0;
     config.market_data.port = 0;
     config.market_data.retransmit_port = 0;

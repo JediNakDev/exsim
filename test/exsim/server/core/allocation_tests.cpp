@@ -123,6 +123,7 @@ TEST_CASE(server_core_allocation, steady_state_allocates_nothing) {
     FakeClock clock;
     {
         CountingCore core(config, sessions, market_data, clock);
+        core.open_journal();
         Workload workload{sessions, clock, core};
         workload.run_one_round();  // warm-up: client flow and first journal flush
 

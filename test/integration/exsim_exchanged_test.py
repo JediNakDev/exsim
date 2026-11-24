@@ -20,7 +20,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 BUILD = ROOT / os.environ.get("EXSIM_BUILD", "build/release")
-CONFIG = (ROOT / "test/fixtures/exchange.conf").read_text()
+CONFIG = (ROOT / "config/exchange.conf").read_text()
 
 
 def unused_udp_port():
@@ -233,14 +233,20 @@ class ExsimExchangedTests(unittest.TestCase):
         self.assertIn("admin socket", self.refused(name="exchange"))
         self.assertIn("orders live=0", first.admin("status"))
 
-    def test_restart_refused_by_a_stale_admin_socket_keeps_the_journal(self):
+    def test_a_refused_restart_keeps_the_last_journal(self):
         text = config() + "\n[journal]\npath = run.journal\n"
-        crashed = self.start(text)
-        self.assertIn("HALTED", crashed.admin("phase AAPL halted"))
-        self.assertEqual(crashed.stop(), 0)
+        last = self.start(text)
+        self.assertIn("HALTED", last.admin("phase AAPL halted"))
+        self.assertEqual(last.stop(), 0)
         journal = (self.directory / "run.journal").read_bytes()
+        with socket.socket() as busy:
+            busy.bind(("127.0.0.1", 0))
+            busy.listen()
+            busy_port = text.replace("ouch_port = 0", f"ouch_port = {busy.getsockname()[1]}")
+            self.assertIn("listener", self.refused(busy_port, name="busy"))
+        self.assertEqual((self.directory / "run.journal").read_bytes(), journal)
         stale = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        stale.bind(str(crashed.socket))  # the file a kill -9 leaves behind
+        stale.bind(str(last.socket))  # the file a kill -9 leaves behind
         stale.close()
         self.assertIn("admin socket", self.refused(text))
         self.assertEqual((self.directory / "run.journal").read_bytes(), journal)

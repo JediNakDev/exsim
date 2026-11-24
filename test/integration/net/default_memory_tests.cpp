@@ -26,7 +26,7 @@ ilink_port = 0
 
 [market_data]
 address = 127.0.0.1
-port = 0
+port = 16000
 
 [instrument AAPL]
 tick_size = 0.01

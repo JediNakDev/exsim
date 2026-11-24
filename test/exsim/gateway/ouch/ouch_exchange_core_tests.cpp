@@ -30,6 +30,9 @@ heartbeat_interval_ms = 1000
 trading_day_start = 09:30
 trading_day_end = 16:00
 
+[market_data]
+port = 16000
+
 [engine]
 max_instruments = 4
 max_orders = 4096
