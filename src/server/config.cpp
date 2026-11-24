@@ -199,10 +199,6 @@ struct Parser {
             return (parse_uint(v, x.max_connections) && x.max_connections > 0) || bad_value(k, v);
         if (k == "heartbeat_interval_ms")
             return (parse_uint(v, x.heartbeat_interval_ms) && x.heartbeat_interval_ms > 0) || bad_value(k, v);
-        if (k == "soup_session") {
-            x.soup_session = std::string(v);
-            return true;
-        }
         if (k == "trading_day_start") return parse_day_time(v, x.trading_day_start_ns) || bad_value(k, v);
         if (k == "trading_day_end") return parse_day_time(v, x.trading_day_end_ns) || bad_value(k, v);
         return unknown_key(k);
@@ -260,10 +256,6 @@ struct Parser {
             return (parse_uint(v, m.max_payload) && m.max_payload >= md::kMinimumMaxPayload &&
                     m.max_payload <= md::kMaximumMaxPayload) ||
                    bad_value(k, v);
-        if (k == "session") {
-            m.session = std::string(v);
-            return true;
-        }
         if (k == "retransmit_buffer")
             return (parse_uint(v, m.retransmit_buffer) && m.retransmit_buffer > 0) || bad_value(k, v);
         if (k == "noii_interval_ms") return parse_uint(v, m.noii_interval_ms) || bad_value(k, v);
@@ -400,19 +392,13 @@ struct Parser {
         line_no = 0;
         const bool mdp = cfg.market_data.protocol == MarketDataProtocol::Mdp3;
         for (const auto& key : market_data_keys) {
-            const bool itch_only = key == "retransmit_buffer" || key == "noii_interval_ms" || key == "session";
+            const bool itch_only = key == "retransmit_buffer" || key == "noii_interval_ms";
             const bool mdp_only = key == "channel_id" || key == "book_depth" || key == "snapshot_port" ||
                                   key == "instrument_port" || key == "backup_port" || key == "snapshot_interval_ms" ||
                                   key == "instrument_interval_ms" || key == "replay_buffer_packets" ||
                                   key == "replay_username" || key == "replay_password";
             if ((mdp && itch_only) || (!mdp && mdp_only))
                 return fail("market_data." + key + " is ignored by the selected protocol");
-        }
-        if (cfg.exchange.soup_session.size() > 10 || !printable_ascii(cfg.exchange.soup_session)) {
-            return fail("exchange.soup_session must be at most 10 printable characters");
-        }
-        if (cfg.market_data.session.size() > 10 || !printable_ascii(cfg.market_data.session)) {
-            return fail("market_data.session must be at most 10 printable characters");
         }
         if (cfg.instruments.empty()) {
             return fail("no [instrument] sections");

@@ -7,7 +7,7 @@ make -j4 apps
 ./build/release/exsim_exchanged --config config/exchange.conf
 ```
 
-`--config PATH` is the only option; everything else, including the [admin socket](#runtime-commands), is in the config file. [config/exchange.conf](../config/exchange.conf) shows every setting with its default. Every start creates empty books and a fresh market data session. External trading clients provide the orders. To run several exchanges, start several processes, each with its own config.
+`--config PATH` is the only option; everything else, including the [admin socket](#runtime-commands), is in the config file. [config/exchange.conf](../config/exchange.conf) shows every setting with its default. Every start creates empty books and a fresh session name, shared by the MoldUDP64 feed and SoupBinTCP and shown as `session` in the ready line, so clients never mistake a restart for the previous run. External trading clients provide the orders. To run several exchanges, start several processes, each with its own config.
 
 ## Ready line
 
