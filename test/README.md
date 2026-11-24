@@ -33,6 +33,20 @@ On arm64, GCC 12, 13.1 to 13.3.0 and 14.1 to 14.2.0 can leave ASan fake stack fr
 
 Builds go to `build/<mode>/`. CI runs both suites on macOS and Ubuntu in release and debug modes, a ThreadSanitizer run on Ubuntu, a benchmark build, and a format check (`make format-check`, clang-format 18).
 
+## FIX interop check
+
+`interop/fix44_quickfix.py` runs a QuickFIX 1.16 initiator (Python bindings) against `exsim_exchanged` started from `interop/fix44_quickfix.conf`. QuickFIX validates every message against its own FIX44.xml. The check covers a refused Logon, Logon, orders, cancels and replaces, fills across two sessions, Heartbeat and TestRequest, ResendRequest in both directions, and Logout. It is optional and not in CI, because building QuickFIX takes a few minutes. On Ubuntu:
+
+```sh
+sudo apt install python3-venv python3-dev g++
+python3 -m venv output/quickfix
+output/quickfix/bin/pip install quickfix==1.16.0
+make -j4 apps
+output/quickfix/bin/python test/interop/fix44_quickfix.py
+```
+
+It prints PASS or FAIL and the folder with the QuickFIX logs. `EXSIM_BUILD` selects the build folder (default `build/release`).
+
 ## Isolation
 
 Each test case builds its own state and shares nothing with other cases, so the framework needs no fixtures or per-test setup. [Why not a library](../docs/architecture.md#why-not-a-library) says when to switch to one.
