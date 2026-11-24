@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: unit tests
         run: make -j4 unit MODE=${{ matrix.mode }} EXTRA_CXXFLAGS=-Werror
-      - name: API and exchange integration
+      - name: integration tests
         run: make -j4 integration MODE=${{ matrix.mode }} EXTRA_CXXFLAGS=-Werror
   tsan:
     name: ThreadSanitizer (ubuntu-24.04)
@@ -30,7 +30,7 @@ jobs:
         run: sudo sysctl vm.mmap_rnd_bits=28
       - name: unit tests
         run: make -j4 unit MODE=release EXTRA_CXXFLAGS='-fsanitize=thread -g' EXTRA_LDFLAGS=-fsanitize=thread BUILD=build/tsan
-      - name: API and exchange integration
+      - name: integration tests
         run: make -j4 integration MODE=release EXTRA_CXXFLAGS='-fsanitize=thread -g' EXTRA_LDFLAGS=-fsanitize=thread BUILD=build/tsan
   benchmarks:
     name: benchmark build (ubuntu-24.04)

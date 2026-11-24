@@ -5,7 +5,7 @@
 - Start with `README.md`, then `CONTEXT.md`, then the relevant source and tests.
 - Keep docs focused on topics that need more depth than the README.
 - Match the README's short, direct writing style. Do not add dated reports or long task histories.
-- Open review findings live in `TODO.md` and GitHub issues. A finding is fixed only when the code changed and a check proves it.
+- Open review findings live in GitHub issues. A finding is fixed only when the code changed and a check proves it.
 
 ## Keep it simple
 
