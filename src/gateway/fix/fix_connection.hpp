@@ -14,8 +14,9 @@
 // bound connection releases the binding first.
 // Logon: SenderCompID must be a configured FIX user (authenticated with the
 // optional Password(554)), TargetCompID the exchange CompID, EncryptMethod 0,
-// HeartBtInt <= settings.max_heartbeat_interval_seconds. A refused Logon is
-// answered with an unsequenced Logout (34=1, not stored) and disconnect.
+// HeartBtInt <= settings.max_heartbeat_interval_seconds. A refused Logon
+// closes the connection without a Logout: a Logout needs a MsgSeqNum, and the
+// session has none to give a peer it did not accept (clients count it).
 
 #include "engine/command.hpp"
 #include "gateway/fix/fix_common.hpp"
@@ -134,31 +135,16 @@ private:
         const std::uint64_t heartbeat_seconds = reader.required_uint(108);
         const char reset_sequence = reader.optional_char(141, "YN", 'N');
         const std::string_view password = reader.optional_text(554);
-        if (!reader.ok()) {
-            return refuse_logon(sender, reader.problem().description);
-        }
-        if (sequence == 0) {
-            return refuse_logon(sender, "MsgSeqNum(34) must be positive");
-        }
-        if (sequence > kMaxMsgSeqNum) {
-            return refuse_logon(sender, "MsgSeqNum(34) out of range");
-        }
-        if (encrypt_method != 0) {
-            return refuse_logon(sender, "EncryptMethod(98) must be 0");
-        }
-        if (heartbeat_seconds > this->settings_.max_heartbeat_interval_seconds) {
-            return refuse_logon(sender, "HeartBtInt(108) out of range");
-        }
-        if (target != directory_.exchange_comp_id()) {
-            return refuse_logon(sender, "invalid TargetCompID");
+        if (!reader.ok() || sequence == 0 || sequence > kMaxMsgSeqNum || encrypt_method != 0 ||
+            heartbeat_seconds > this->settings_.max_heartbeat_interval_seconds ||
+            target != directory_.exchange_comp_id()) {
+            return this->request_disconnect();
         }
         const server::UserConfig* config = context_->authenticate(sender, password, server::Protocol::Fix44);
         FixUserState<Sink>* user = config != nullptr ? directory_.find(config->session_id) : nullptr;
-        if (user == nullptr || user->comp_id() != sender) {
-            return refuse_logon(sender, "invalid SenderCompID or Password");
-        }
-        if (!context_->bind(user->session_id(), connection_id_)) {
-            return refuse_logon(sender, "already logged in");
+        // Wrong CompID or Password, or the user is already logged in.
+        if (user == nullptr || user->comp_id() != sender || !context_->bind(user->session_id(), connection_id_)) {
+            return this->request_disconnect();
         }
         user_ = user;
         session_bound_ = true;
@@ -170,8 +156,7 @@ private:
             }
             day.reset_sequence_numbers();
         } else if (day.store_exhausted()) {
-            refuse_logon(sender, "resend store exhausted; explicit session reset required");
-            return;
+            return this->request_disconnect();  // only a ResetSeqNumFlag(141)=Y Logon is accepted
         } else if (sequence < day.expected_inbound_seq()) {
             std::array<char, 96> text_buffer{};
             return this->send_logout_and_disconnect(
@@ -189,22 +174,6 @@ private:
             this->now_);
         this->enter_active(heartbeat_seconds);
         this->accept_logon_sequence(sequence);
-    }
-
-    void refuse_logon(std::string_view sender, std::string_view text) noexcept {
-        std::array<char, 512> buffer{};
-        fix44::Builder writer(buffer);
-        writer.field(35, '5');
-        writer.field(49, directory_.exchange_comp_id());
-        writer.field(56, sender.empty() ? std::string_view("UNKNOWN") : sender);
-        writer.uint_field(34, 1);
-        writer.timestamp_field(52, this->now_.realtime_ns);
-        writer.field(58, text);
-        const std::size_t size = writer.finish();
-        if (size != 0) {
-            this->write_unsequenced({buffer.data(), size});
-        }
-        this->request_disconnect();
     }
 
     void on_application_message(const FixInboundFrame& frame) noexcept {

@@ -44,42 +44,33 @@ TEST_CASE(gateway_fix_logon, reset_flag_echoed_and_sequences_restart) {
 
 namespace {
 
-std::string refusal(std::string_view target, std::string_view text) {
-    return with_pipes(fix_frame("35=5|49=EXSIM|56=" + std::string(target) + "|34=1|52=" + std::string(kStartTimestamp) +
-                                "|58=" + std::string(text) + "|"));
-}
-
-// Feeds one Logon and returns the output; the connection must refuse it.
-std::string refused_logon_output(FixTestExchange& exchange, std::string_view sender, std::string_view body,
-                                 std::string_view target = "EXSIM") {
+// Feeds one Logon that the connection must refuse: it closes without a reply.
+void check_logon_refused(FixTestExchange& exchange, std::string_view sender, std::string_view body,
+                         std::string_view target = "EXSIM") {
     FixTestConnection connection(exchange, std::string(sender));
     connection.feed(fix_frame("35=A|49=" + std::string(sender) + "|56=" + std::string(target) +
                               "|34=1|52=" + std::string(kStartTimestamp) + "|" + std::string(body)));
     CHECK(connection.connection().wants_disconnect());
     CHECK(connection.connection().user() == nullptr);
-    return with_pipes(connection.sink().bytes());
+    CHECK_EQ(with_pipes(connection.sink().bytes()), std::string());
 }
 
 }  // namespace
 
-TEST_CASE(gateway_fix_logon, refusals_answer_unsequenced_logout) {
+// A refused Logon gets no Logout. The session has no MsgSeqNum to give it, and
+// QuickFIX counts a Logout's MsgSeqNum, so a Logout with 34=1 made it reject the
+// next Logon reply (also 34=1) as "MsgSeqNum too low".
+TEST_CASE(gateway_fix_logon, refusals_close_without_reply) {
     FixTestExchange exchange;
-    CHECK_EQ(refused_logon_output(exchange, "CLIENT1", "98=0|108=30|554=wrong|"),
-             refusal("CLIENT1", "invalid SenderCompID or Password"));
-    CHECK_EQ(refused_logon_output(exchange, "CLIENT1", "98=0|108=30|"),
-             refusal("CLIENT1", "invalid SenderCompID or Password"));
-    CHECK_EQ(refused_logon_output(exchange, "NOBODY", "98=0|108=30|"),
-             refusal("NOBODY", "invalid SenderCompID or Password"));
-    CHECK_EQ(refused_logon_output(exchange, "OUCH01", "98=0|108=30|"),
-             refusal("OUCH01", "invalid SenderCompID or Password"));
-    CHECK_EQ(refused_logon_output(exchange, "CLIENT2", "98=0|108=30|", "OTHER"),
-             refusal("CLIENT2", "invalid TargetCompID"));
-    CHECK_EQ(refused_logon_output(exchange, "CLIENT2", "98=1|108=30|"),
-             refusal("CLIENT2", "EncryptMethod(98) must be 0"));
-    CHECK_EQ(refused_logon_output(exchange, "CLIENT2", "98=0|108=301|"),
-             refusal("CLIENT2", "HeartBtInt(108) out of range"));
-    CHECK_EQ(refused_logon_output(exchange, "CLIENT2", "98=0|"), refusal("CLIENT2", "required tag missing"));
-    CHECK_EQ(refused_logon_output(exchange, "CLIENT2", "98=0|108=x|"), refusal("CLIENT2", "incorrect data format"));
+    check_logon_refused(exchange, "CLIENT1", "98=0|108=30|554=wrong|");
+    check_logon_refused(exchange, "CLIENT1", "98=0|108=30|");
+    check_logon_refused(exchange, "NOBODY", "98=0|108=30|");
+    check_logon_refused(exchange, "OUCH01", "98=0|108=30|");
+    check_logon_refused(exchange, "CLIENT2", "98=0|108=30|", "OTHER");
+    check_logon_refused(exchange, "CLIENT2", "98=1|108=30|");
+    check_logon_refused(exchange, "CLIENT2", "98=0|108=301|");
+    check_logon_refused(exchange, "CLIENT2", "98=0|");
+    check_logon_refused(exchange, "CLIENT2", "98=0|108=x|");
     // Nothing was bound and no day state was touched.
     CHECK(!exchange.is_bound(1));
     CHECK(!exchange.is_bound(2));
@@ -91,11 +82,12 @@ TEST_CASE(gateway_fix_logon, second_login_refused_while_first_is_bound) {
     FixTestExchange exchange;
     FixTestConnection first(exchange, "CLIENT2");
     first.logon(30, false, {});
-    CHECK_EQ(refused_logon_output(exchange, "CLIENT2", "98=0|108=30|"), refusal("CLIENT2", "already logged in"));
+    check_logon_refused(exchange, "CLIENT2", "98=0|108=30|");
     CHECK(exchange.is_bound(2));
     CHECK(!first.connection().wants_disconnect());
     // The refused attempt did not consume the first connection's sequence numbers.
     CHECK_EQ(exchange.user(2).session_day_state().expected_inbound_seq(), 2u);
+    CHECK_EQ(exchange.user(2).session_day_state().next_outbound_seq(), 2u);
 }
 
 TEST_CASE(gateway_fix_logon, first_message_not_logon_disconnects_silently) {

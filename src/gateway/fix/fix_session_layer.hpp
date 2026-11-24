@@ -368,17 +368,6 @@ protected:
         send_session_reject(frame.sequence, problem.tag, frame.message_type, problem.reason, problem.description);
     }
 
-    // Writes a frame straight to the connection's sink (no day state yet).
-    void write_unsequenced(std::span<const char> frame) noexcept {
-        if (sink_ == nullptr) {
-            return;
-        }
-        if (char* destination = sink_->prepare(frame.size())) {
-            std::memcpy(destination, frame.data(), frame.size());
-            sink_->commit(frame.size());
-        }
-    }
-
     // The Logon (or Logon response) was accepted with MsgSeqNum `sequence`.
     // Equal to expected: consume it. Higher: hold a placeholder and recover.
     void accept_logon_sequence(std::uint64_t sequence) noexcept {
