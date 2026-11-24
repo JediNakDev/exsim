@@ -38,7 +38,7 @@ public:
         Node* node = free_list_;
         free_list_ = free_list_->next;
         // Constructing the member makes it the union's active member.
-        return std::construct_at(&node->value, std::forward<Args>(args)...);
+        return std::construct_at(std::addressof(node->value), std::forward<Args>(args)...);
     }
 
     void destroy(T* object) noexcept {
