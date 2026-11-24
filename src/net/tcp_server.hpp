@@ -112,7 +112,8 @@ public:
     void flush_pending(Handler& handler) noexcept;
 
     // From the loop's timer pass, with monotonic_ns(): watches the listener
-    // again once its pause after running out of descriptors has passed.
+    // again once its pause after running out of descriptors has passed, and
+    // closes connections still flushing at their close deadline.
     void on_timer(std::uint64_t now_ns) noexcept;
 
     // True for an accepted connection that is not closing.
@@ -176,8 +177,11 @@ public:
     // closes the socket and frees the slot. Best effort, not a guaranteed FIN:
     // input still arriving at close() (a flooding or concurrently sending
     // peer) makes the kernel send RST, which can drop queued bytes the peer
-    // has not read yet. Returns false for a stale or closing id.
+    // has not read yet. on_timer closes a connection still flushing after
+    // kCloseFlushTimeoutNs, so a peer that stops reading cannot hold its slot.
+    // Returns false for a stale or closing id.
     bool close_after_flush(ConnectionId id) noexcept;
+    static constexpr std::uint64_t kCloseFlushTimeoutNs = 5'000'000'000;
     // Closes immediately, dropping queued bytes. Returns false for a stale id.
     bool close_now(ConnectionId id) noexcept;
 
@@ -201,6 +205,7 @@ private:
         SlotState state = SlotState::Free;
         bool write_interest = false;
         bool queued_for_flush = false;
+        std::uint64_t close_deadline_ns = 0;  // Closing: on_timer closes it from here on
     };
 
     enum class AcceptOutcome : std::uint8_t { Accepted, Rejected, NothingPending, Failed };
@@ -281,6 +286,7 @@ private:
     std::uint32_t connection_count_ = 0;
     std::uint64_t rejected_connection_count_ = 0;
     std::uint64_t accept_paused_until_ns_ = 0;  // 0 = the listener is watched
+    std::uint32_t closing_count_ = 0;           // on_timer scans the slots only when nonzero
 };
 
 template <TcpServerHandler Handler>

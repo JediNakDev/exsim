@@ -67,15 +67,19 @@ TcpServer::AcceptOutcome TcpServer::accept_one(ConnectionId& id, Ipv4Endpoint& p
     return AcceptOutcome::Accepted;
 }
 void TcpServer::on_timer(std::uint64_t now_ns) noexcept {
-    if (accept_paused_until_ns_ == 0 || now_ns < accept_paused_until_ns_) return;
-    const ErrorCode error =
-        poller_.add(listener_.fd(), make_poll_token(token_tag_, kListenerSlotIndex), PollInterest::Read);
-    accept_paused_until_ns_ = error ? now_ns + kAcceptPauseNs : 0;
+    if (accept_paused_until_ns_ != 0 && now_ns >= accept_paused_until_ns_) {
+        const ErrorCode error =
+            poller_.add(listener_.fd(), make_poll_token(token_tag_, kListenerSlotIndex), PollInterest::Read);
+        accept_paused_until_ns_ = error ? now_ns + kAcceptPauseNs : 0;
+    }
+    for (std::uint32_t index = 0; closing_count_ != 0 && index < slots_.size(); ++index)
+        if (slots_[index].state == SlotState::Closing && now_ns >= slots_[index].close_deadline_ns) release_slot(index);
 }
 void TcpServer::release_slot(std::uint32_t index) noexcept {
     Slot& slot = slots_[index];
     poller_.remove(slot.connection.fd());
     slot.connection.close();
+    if (slot.state == SlotState::Closing) --closing_count_;
     slot.state = SlotState::Free;
     slot.write_interest = false;
     // Keep queued_for_flush until its existing queue entry is popped. A new
@@ -96,6 +100,8 @@ bool TcpServer::close_after_flush(ConnectionId id) noexcept {
     Slot* slot = open_slot(id);
     if (!slot) return false;
     slot->state = SlotState::Closing;
+    slot->close_deadline_ns = common::monotonic_ns() + kCloseFlushTimeoutNs;
+    ++closing_count_;
     queue_for_flush(id.slot);
     return true;
 }

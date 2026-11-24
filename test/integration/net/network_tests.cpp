@@ -466,6 +466,47 @@ TEST_CASE(net_server, graceful_close_with_unread_input_delivers_queued_output) {
     CHECK_EQ(received, expected.size());
     CHECK_EQ(server.connection_count(), 0U);
 }
+// A client that stops reading keeps a closing connection's output queued. Its
+// half-close must not wake every poll (a closing slot only waits to write),
+// and the timer pass frees the slot at its flush deadline.
+TEST_CASE(net_server, closing_slot_of_a_stalled_peer_stays_quiet_and_expires) {
+    Poller poller;
+    REQUIRE_EQ(poller.open(), 0);
+    TcpServerConfig config;
+    config.max_connections = 1;
+    config.send_buffer_capacity = 4 * 1024 * 1024;
+    config.socket_send_buffer_bytes = 4096;
+    TcpServer server(config, poller, 1);
+    REQUIRE_EQ(server.open(), 0);
+    Handler handler{server};
+    TcpClient client(65536, 1024);  // never reads
+    connect_client(client, server.listen_endpoint());
+    until([&] { return handler.opened == 1; }, [&] { pump(poller, server, handler); });
+    const auto id = handler.ids[0];
+    std::vector<char> output(config.send_buffer_capacity, 'x');
+    REQUIRE(server.send(id, output));
+    REQUIRE(server.close_after_flush(id));
+    server.flush_pending(handler);
+    REQUIRE(server.connection(id) != nullptr);  // still flushing
+    // Writes continue until the client's receive window is full; then only its half-close can wake the loop.
+    until([&] { return poller.wait(10) == 0; },
+          [&] {
+              for (const auto& event : poller.events()) server.handle_event(event, handler);
+          });
+    REQUIRE_EQ(shutdown(client.fd(), SHUT_WR), 0);
+    int wakeups = 0;
+    for (const auto end = monotonic_ns() + 100'000'000; monotonic_ns() < end;) {
+        if (poller.wait(10) > 0) ++wakeups;
+        for (const auto& event : poller.events()) server.handle_event(event, handler);
+        server.flush_pending(handler);
+    }
+    CHECK_LE(wakeups, 2);  // Linux reported EPOLLRDHUP on every wait before the fix
+    server.on_timer(monotonic_ns());
+    CHECK_EQ(server.connection_count(), 1U);
+    server.on_timer(monotonic_ns() + TcpServer::kCloseFlushTimeoutNs);
+    CHECK_EQ(server.connection_count(), 0U);
+    CHECK_EQ(handler.closed, 0U);  // an application close is not reported
+}
 TEST_CASE(net_tcp, broken_pipe_is_sigpipe_safe) {
     Pair pair;
     pair.accepted.close();
