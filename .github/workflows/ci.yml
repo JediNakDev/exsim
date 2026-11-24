@@ -53,6 +53,14 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y clang-19 libclang-rt-19-dev
       - name: fuzz
         run: make -j4 fuzz FUZZ_SECONDS=45 EXTRA_CXXFLAGS=-Werror
+      # The failing input (build/fuzz/<name>-crash-<sha1> and similar), to replay locally.
+      - name: keep the failing input
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-failure
+          path: build/fuzz/*-*
+          if-no-files-found: ignore
   format:
     name: format check (clang-format 18)
     runs-on: ubuntu-24.04

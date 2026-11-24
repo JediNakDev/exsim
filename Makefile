@@ -121,8 +121,9 @@ FUZZ_RUN := $(if $(FILTER),$(foreach name,$(FUZZ_NAMES),$(if $(findstring $(FILT
 .PHONY: fuzz fuzz-run
 $(FUZZ_NAMES:%=$(BUILD)/fuzz_%): $(BUILD)/fuzz_%: $(BUILD)/obj/fuzz/%.o $(LIB_OBJS)
 	$(CXX) $(LDFLAGS) $^ -o $@ $(LDLIBS)
+# build/fuzz always, so a BUILD= given here cannot link objects built without coverage or sanitizers.
 fuzz:
-	$(MAKE) MODE=fuzz CXX=$(FUZZ_CXX) fuzz-run
+	$(MAKE) MODE=fuzz CXX=$(FUZZ_CXX) BUILD=build/fuzz fuzz-run
 # The config harness starts from the example configs; the others from fuzz/seeds/<name>.
 fuzz-run: $(FUZZ_RUN:%=$(BUILD)/fuzz_%)
 	for name in $(FUZZ_RUN); do \
