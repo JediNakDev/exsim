@@ -158,6 +158,12 @@ inline ssize_t receive_some(int fd, char* data, std::size_t capacity) noexcept {
 
 inline bool is_would_block(ErrorCode error) noexcept { return error == EAGAIN || error == EWOULDBLOCK; }
 
+// Out of descriptors, Linux keeps the connection queued, so a level-triggered
+// listener stays readable and would wake every wait. A listener that hits this
+// stops watching for kAcceptPauseNs. (macOS drops the connection instead.)
+inline bool is_out_of_descriptors(ErrorCode error) noexcept { return error == EMFILE || error == ENFILE; }
+inline constexpr std::uint64_t kAcceptPauseNs = 100'000'000;
+
 }  // namespace exsim::net
 
 #endif

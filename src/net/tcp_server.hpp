@@ -13,6 +13,7 @@
 //           if (poll_token_tag(event.token) == kOrderEntryTag) server.handle_event(event, gateway);
 //       ...engine runs, replies are encoded with server.send() / reserve_send()...
 //       server.flush_pending(gateway);
+//       server.on_timer(monotonic_ns);  // in the loop's timer pass
 //   }
 //
 // The handler is any type with these members (static dispatch, no virtuals):
@@ -109,6 +110,10 @@ public:
     // connections whose send buffer overflowed; completes graceful closes.
     template <TcpServerHandler Handler>
     void flush_pending(Handler& handler) noexcept;
+
+    // From the loop's timer pass, with monotonic_ns(): watches the listener
+    // again once its pause after running out of descriptors has passed.
+    void on_timer(std::uint64_t now_ns) noexcept;
 
     // True for an accepted connection that is not closing.
     bool is_open(ConnectionId id) const noexcept {
@@ -275,6 +280,7 @@ private:
 
     std::uint32_t connection_count_ = 0;
     std::uint64_t rejected_connection_count_ = 0;
+    std::uint64_t accept_paused_until_ns_ = 0;  // 0 = the listener is watched
 };
 
 template <TcpServerHandler Handler>

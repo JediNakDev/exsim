@@ -53,8 +53,10 @@ public:
     // After runtime.start(): answers commands from now on. Returns "" or an error message.
     [[nodiscard]] std::string start(ServerRuntime& runtime);
     // Between polls: answers and drops a client that has not sent its line by
-    // its deadline. It is late by up to one poll wait (1 ms in exsim_exchanged).
-    void close_stalled_client(std::uint64_t now_ns) noexcept;
+    // its deadline, and watches the listener again once its pause after
+    // running out of descriptors has passed. It is late by up to one poll wait
+    // (1 ms in exsim_exchanged).
+    void on_timer(std::uint64_t now_ns) noexcept;
 
 private:
     static void on_readable(void* context) noexcept;
@@ -69,6 +71,7 @@ private:
     net::Socket listener_;
     net::Socket client_;
     std::uint64_t client_deadline_ns_ = 0;
+    std::uint64_t listener_paused_until_ns_ = 0;  // 0 = not paused
     std::string command_;
 };
 

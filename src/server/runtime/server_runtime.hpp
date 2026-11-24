@@ -128,7 +128,7 @@ public:
         if (const std::uint64_t now = common::monotonic_ns(); now >= next_timer_pass_ns_) {
             next_timer_pass_ns_ = now + std::uint64_t(options_.idle_poll_timeout_ms) * 1'000'000;
             core_.timer(clock_.day_ns());
-            (endpoint<Gateways>().run_timers(), ...);
+            (endpoint<Gateways>().run_timers(now), ...);
         }
         if (core_.has_disconnect_requests()) close_requested_sessions();
         if (!core_.shutdown_requested() &&

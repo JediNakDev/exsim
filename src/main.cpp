@@ -93,7 +93,7 @@ int main(int argc, char** argv) {
                 runtime.request_shutdown();
             }
             runtime.poll_once();
-            admin.close_stalled_client(exsim::common::monotonic_ns());
+            admin.on_timer(exsim::common::monotonic_ns());
         }
     } catch (const std::exception& error) {
         std::cerr << "exsim_exchanged: " << error.what() << '\n';

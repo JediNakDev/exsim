@@ -80,9 +80,11 @@ public:
     void handle_event(const net::PollEvent& event) noexcept { tcp_server_.handle_event(event, *this); }
     void flush() noexcept { tcp_server_.flush_pending(*this); }
 
-    // Once per loop iteration, over the open slots in slot order: delayed
-    // input, gateway timers, requested closes.
-    void run_timers() noexcept {
+    // Once per timer pass, with monotonic_ns(): the listener's accept pause,
+    // then over the open slots in slot order: delayed input, gateway timers,
+    // requested closes.
+    void run_timers(std::uint64_t now_ns) noexcept {
+        tcp_server_.on_timer(now_ns);
         if (open_connections_ == 0) return;
         const Timestamp now = core_.now();
         for (std::size_t word_index = 0; word_index < open_slot_word_count(); ++word_index) {
