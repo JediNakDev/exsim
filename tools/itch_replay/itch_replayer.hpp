@@ -12,8 +12,8 @@
 // finds the order.
 //
 // The replay builds one book. Given a stock, it takes that stock's locate
-// from its 'R' (Stock Directory) message and skips book messages for every
-// other locate; without one, every book message goes to the book.
+// from its first 'R' (Stock Directory) message and skips book messages for
+// every other locate; without one, every book message goes to the book.
 
 #include "reference_book.hpp"
 #include <engine/matching_engine.hpp>
@@ -29,7 +29,7 @@ namespace exsim::itch_replay {
 
 // Walks a NASDAQ ITCH 5.0 file, where each message follows its 2-byte
 // big-endian length, and calls on_message(message) for each one in order.
-// Returns false when the file ends inside a frame.
+// Returns false at an empty frame or when the file ends inside a frame.
 template <typename OnMessage>
 bool for_each_message(std::span<const char> file, OnMessage&& on_message) {
     std::size_t offset = 0;
@@ -37,7 +37,7 @@ bool for_each_message(std::span<const char> file, OnMessage&& on_message) {
         if (file.size() - offset < 2) return false;
         const std::size_t length = protocol::wire::load<2>(file.data() + offset);
         offset += 2;
-        if (file.size() - offset < length) return false;
+        if (length == 0 || file.size() - offset < length) return false;
         on_message(file.subspan(offset, length));
         offset += length;
     }
@@ -93,7 +93,7 @@ public:
         switch (message[0]) {
             case itch50::StockDirectory::type: {
                 itch50::StockDirectory m;
-                if (stock_ && itch50::decode(message, m) == protocol::Status::ok && m.stock == *stock_)
+                if (stock_ && locate_ == 0 && itch50::decode(message, m) == protocol::Status::ok && m.stock == *stock_)
                     locate_ = m.stock_locate;
                 return false;
             }
@@ -149,6 +149,8 @@ public:
 
     [[nodiscard]] const MatchingEngine& engine() const noexcept { return engine_; }
     [[nodiscard]] InstrumentId instrument() const noexcept { return instrument_; }
+    // False until an 'R' message names the replayed stock.
+    [[nodiscard]] bool stock_found() const noexcept { return locate_ != 0; }
     [[nodiscard]] const ReplayStats& stats() const noexcept { return stats_; }
 
 private:
@@ -213,7 +215,13 @@ private:
         command.price = price;
         command.qty = shares;
         command.force_priority_loss = true;
-        if (submit(command) && reference_) reference_->replace(old_ref, new_ref, price, shares);
+        if (submit(command)) {
+            if (reference_) reference_->replace(old_ref, new_ref, price, shares);
+        } else if (engine_.find_order(kSession, old_ref)) {
+            // 'U' retires the old reference even when the engine refuses the
+            // new order, for example a price outside the band.
+            reduce(old_ref, std::numeric_limits<Quantity>::max());
+        }
     }
 
     MatchingEngine engine_;

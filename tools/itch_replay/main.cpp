@@ -8,9 +8,11 @@
 //
 // The file is NASDAQ's format: each ITCH 5.0 message follows its 2-byte
 // big-endian length. Book messages (A, F, E, C, X, D, U) for SYMBOL's stock
-// locate, named by its R message, change the book; every other message is
-// skipped by its length. A file that ends inside a message is an error. The
-// replay book covers $0.0001 to $200; adds outside it are counted as rejected.
+// locate, named by its first R message, change the book; every other message
+// is skipped by its length. An empty message, a file that ends inside a
+// message, or no R message for SYMBOL is an error. The whole file is read
+// into memory. The replay book covers $0.0001 to $200; adds outside it are
+// counted as rejected, and a replace to a price outside it retires the order.
 
 #include "diff.hpp"
 #include "itch_replayer.hpp"
@@ -39,7 +41,10 @@ std::vector<char> read_file(const std::string& path) {
     auto size = in.tellg();
     in.seekg(0);
     std::vector<char> buf(static_cast<std::size_t>(size));
-    in.read(buf.data(), size);
+    if (!in.read(buf.data(), size)) {
+        std::cerr << "cannot read " << path << "\n";
+        std::exit(1);
+    }
     return buf;
 }
 
@@ -118,7 +123,11 @@ int main(int argc, char** argv) {
     std::cout << "best_bid=" << (bid ? std::to_string(*bid) : "-") << " best_ask=" << (ask ? std::to_string(*ask) : "-")
               << " live_orders=" << engine.live_order_count() << "\n";
     if (!complete) {
-        std::cerr << "the file ends inside a message\n";
+        std::cerr << "the file has an empty message or ends inside one\n";
+        return 1;
+    }
+    if (!synth && !replayer.stock_found()) {
+        std::cerr << "no R message names " << stock << "\n";
         return 1;
     }
     return (validate && mismatches > 0) ? 2 : 0;
