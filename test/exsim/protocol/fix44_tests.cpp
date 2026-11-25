@@ -27,8 +27,12 @@ TEST_CASE(proto_fix, builder_raw_fields_match_the_same_fields_built_one_by_one) 
     REQUIRE(n > 0);
     CHECK_EQ(std::string_view(raw, n), std::string_view(expected, reference.finish()));
 
-    char small[20];
+    char small[26];  // exactly "8=FIX.4.4|9=5|35=8|10=nnn|"
+    Builder fits(small);
+    REQUIRE(fits.field(35, '8'));
+    CHECK_EQ(fits.finish(), sizeof small);
     Builder tight(small);
+    REQUIRE(tight.field(35, '8'));
     CHECK(!tight.raw_fields("11=TOO-LONG\001"));
     CHECK_EQ(tight.finish(), 0u);
 }
