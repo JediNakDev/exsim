@@ -301,6 +301,7 @@ TEST_CASE(server_core_journal, header_preserves_full_instrument_identity_and_rec
     instrument.cme_symbol.fill('X');
     instrument.cme_maturity_date = 20301220;
     instrument.cme_contract_size = 50;
+    config.engine.engine.max_level_qty = 12345;  // replay must refuse the same orders
     journal::JournalWriter writer(file.path, {config.engine.engine, config.instruments});
     const auto header_size = file_size(file.path);
     REQUIRE(writer.flush());
@@ -312,6 +313,7 @@ TEST_CASE(server_core_journal, header_preserves_full_instrument_identity_and_rec
     REQUIRE(writer.flush());
     CHECK_EQ(file_size(file.path), before + 56);
     testsupport::JournalReader reader(file.path);
+    CHECK_EQ(reader.setup().engine.max_level_qty, std::uint64_t{12345});
     const auto& actual = reader.setup().instruments.front();
     CHECK(actual.symbol == instrument.symbol);
     CHECK_EQ(actual.tick_size, instrument.tick_size);

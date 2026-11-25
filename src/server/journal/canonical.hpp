@@ -3,9 +3,10 @@
 #include <server/journal/fields.hpp>
 #include <span>
 namespace exsim::server::journal {
-// Schema 2: tag followed by active fields, each an unsigned 64-bit big-endian
-// slot; signed prices use their two's-complement bit pattern.
-inline constexpr std::uint64_t kSchema = 2;
+// Schema 3 records max_level_qty after max_orders in the header. A record is
+// a tag followed by active fields, each an unsigned 64-bit big-endian slot;
+// signed prices use their two's-complement bit pattern.
+inline constexpr std::uint64_t kSchema = 3;
 inline void store64(unsigned char* p, std::uint64_t v) noexcept {
     for (unsigned i = 0; i < 8; ++i) p[i] = static_cast<unsigned char>(v >> (56 - 8 * i));
 }

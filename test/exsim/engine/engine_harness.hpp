@@ -9,6 +9,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <vector>
 
@@ -33,10 +34,12 @@ inline InstrumentConfig standard_instrument_config(const char* symbol = "TEST",
     return config;
 }
 
-inline EngineConfig small_engine_config(std::size_t max_orders = 1024) {
+inline EngineConfig small_engine_config(std::size_t max_orders = 1024,
+                                        std::uint64_t max_level_qty = std::numeric_limits<std::uint64_t>::max()) {
     EngineConfig config;
     config.max_instruments = 8;
     config.max_orders = max_orders;
+    config.max_level_qty = max_level_qty;
     return config;
 }
 
@@ -45,9 +48,13 @@ inline EngineConfig small_engine_config(std::size_t max_orders = 1024) {
 // events copy ts from their command.
 class Harness {
 public:
-    explicit Harness(Phase initial_phase = Phase::Continuous, std::size_t max_orders = 1024)
-        : engine_(small_engine_config(max_orders)) {
-        instrument_ = engine_.add_instrument(standard_instrument_config("TEST", initial_phase));
+    explicit Harness(Phase initial_phase = Phase::Continuous, std::size_t max_orders = 1024,
+                     std::uint64_t max_level_qty = std::numeric_limits<std::uint64_t>::max())
+        : engine_(small_engine_config(max_orders, max_level_qty)) {
+        InstrumentConfig config = standard_instrument_config("TEST", initial_phase);
+        // add_instrument refuses an order cap above the level cap.
+        if (config.max_order_qty > max_level_qty) config.max_order_qty = static_cast<Quantity>(max_level_qty);
+        instrument_ = engine_.add_instrument(config);
     }
 
     MatchingEngine& engine() { return engine_; }

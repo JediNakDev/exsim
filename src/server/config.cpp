@@ -467,6 +467,8 @@ struct Parser {
                 m.replay_password.size() > 128 || !printable_ascii(m.replay_username) ||
                 !printable_ascii(m.replay_password))
                 return fail("MDP requires printable replay_username and replay_password");
+            // MDP sends a level's quantity as Int32, whose null value is INT32_MAX.
+            cfg.engine.engine.max_level_qty = INT32_MAX - 1;
         }
         std::set<std::string> names;
         std::set<SessionId> sessions;
