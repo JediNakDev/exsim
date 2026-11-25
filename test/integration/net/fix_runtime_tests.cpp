@@ -41,9 +41,9 @@ std::string exchange_frame(Runtime& runtime, int fd, std::string_view frame) {
     REQUIRE(!output.empty());
     return output;
 }
-}  // namespace
 
-TEST_CASE(fix_runtime, tcp_logon_orders_matching_and_logout) {
+// Every configured user speaks FIX; all ports are ephemeral or off.
+exsim::server::ServerConfig fix_config() {
     exsim::server::ServerConfig config;
     std::string error;
     REQUIRE(exsim::server::load_config("config/exchange.conf", config, error));
@@ -52,10 +52,19 @@ TEST_CASE(fix_runtime, tcp_logon_orders_matching_and_logout) {
     config.market_data.port = 0;
     config.market_data.retransmit_port = 0;
     for (auto& user : config.users) user.protocol = exsim::server::Protocol::Fix44;
+    return config;
+}
+
+exsim::server::ServerRuntimeOptions fix_options() {
     exsim::server::ServerRuntimeOptions options;
     options.log = nullptr;
     options.day_time_at_start = fix_test::kSessionStartNs;
-    Runtime runtime(config, options);
+    return options;
+}
+}  // namespace
+
+TEST_CASE(fix_runtime, tcp_logon_orders_matching_and_logout) {
+    Runtime runtime(fix_config(), fix_options());
     REQUIRE(runtime.start().empty());
     CHECK_NE(runtime.listen_endpoint<exsim::server::runtime::FixGateway>().port,
              runtime.listen_endpoint<exsim::server::runtime::OuchGateway>().port);
@@ -73,7 +82,7 @@ TEST_CASE(fix_runtime, tcp_logon_orders_matching_and_logout) {
           std::string::npos);
     CHECK_EQ(runtime.core().engine().live_order_count(), 0u);
     CHECK(send(bob.fd(), "BOB", "5", 3, "").find("35=5|") != std::string::npos);
-    // Deliver peer EOF before destroying sessions that are still bound.
+    // Peer EOF unbinds both sessions.
     alice.close();
     bob.close();
     const auto deadline = exsim::common::monotonic_ns() + 2'000'000'000;
@@ -128,4 +137,15 @@ TEST_CASE(fix_runtime, shutdown_summary_counts_feed_send_failures_during_the_dra
     REQUIRE(line != std::string::npos);
     CHECK_GT(failures, 0u);
     CHECK_EQ(std::stoull(log.substr(line + kSummary.size())), failures);
+}
+
+// A test that fails a REQUIRE leaves with sessions still bound. Destroying the
+// runtime then ends them; it used to abort in the FixConnection destructor.
+TEST_CASE(fix_runtime, destroying_the_runtime_ends_bound_sessions) {
+    Runtime runtime(fix_config(), fix_options());
+    REQUIRE(runtime.start().empty());
+    auto alice = connect_fix(runtime);
+    const auto logon = fix_test::client_message("A", 1, "98=0|108=30|554=alice|", "ALICE");
+    CHECK(fix_test::with_pipes(exchange_frame(runtime, alice.fd(), logon)).find("35=A|") != std::string::npos);
+    CHECK_EQ(runtime.core().bound_connection_count(), 1u);
 }

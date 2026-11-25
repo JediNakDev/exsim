@@ -69,6 +69,28 @@ void pump(Poller& poller, TcpServer& server, Handler& handler) {
     for (const auto& event : poller.events()) server.handle_event(event, handler);
     server.flush_pending(handler);
 }
+// Reads until the server's FIN, checking each byte against `expected`, and
+// returns the byte count. The deadline restarts whenever bytes arrive: on a
+// loaded machine one pass can take seconds, so only a stalled transfer fails.
+std::size_t receive_until_eof(Poller& poller, TcpServer& server, Handler& handler, TcpClient& client,
+                              std::span<const char> expected) {
+    std::size_t received = 0;
+    for (auto deadline = monotonic_ns() + kTimeout;;) {
+        REQUIRE(monotonic_ns() < deadline);
+        pump(poller, server, handler);
+        const auto result = client.receive();
+        auto data = client.receive_buffer().readable();
+        REQUIRE(received + data.size() <= expected.size());
+        if (!data.empty()) {
+            REQUIRE_EQ(std::memcmp(data.data(), expected.data() + received, data.size()), 0);
+            deadline = monotonic_ns() + kTimeout;
+        }
+        received += data.size();
+        client.receive_buffer().consume(data.size());
+        if (result.status == ReceiveStatus::PeerClosed) return received;
+        REQUIRE(result.status != ReceiveStatus::Error);
+    }
+}
 void connect_client(TcpClient& client, Ipv4Endpoint remote) {
     const auto error = client.connect(remote);
     REQUIRE(error == 0 || error == EINPROGRESS);
@@ -412,21 +434,7 @@ TEST_CASE(net_server, backpressure_order_and_graceful_close) {
     REQUIRE(server.close_after_flush(id));
     CHECK(!server.is_open(id));
     CHECK(!queue(server, id, std::span("x", 1)));
-    std::size_t received = 0;
-    bool eof = false;
-    until([&] { return eof; },
-          [&] {
-              pump(poller, server, handler);
-              const auto result = client.receive();
-              auto data = client.receive_buffer().readable();
-              REQUIRE(received + data.size() <= expected.size());
-              if (!data.empty()) REQUIRE_EQ(std::memcmp(data.data(), expected.data() + received, data.size()), 0);
-              received += data.size();
-              client.receive_buffer().consume(data.size());
-              eof = result.status == ReceiveStatus::PeerClosed;
-              REQUIRE(result.status != ReceiveStatus::Error);
-          });
-    CHECK_EQ(received, expected.size());
+    CHECK_EQ(receive_until_eof(poller, server, handler, client, expected), expected.size());
     CHECK_EQ(server.connection_count(), 0U);
     CHECK_EQ(handler.closed, 0U);
 }
@@ -457,21 +465,7 @@ TEST_CASE(net_server, graceful_close_with_unread_input_delivers_queued_output) {
     // The closing connection no longer reads: these bytes stay unread.
     REQUIRE(client.send(std::span("heartbeat", 9)));
     REQUIRE(client.flush().status == FlushStatus::Complete);
-    std::size_t received = 0;
-    bool eof = false;
-    until([&] { return eof; },
-          [&] {
-              pump(poller, server, handler);
-              const auto result = client.receive();
-              auto data = client.receive_buffer().readable();
-              REQUIRE(received + data.size() <= expected.size());
-              if (!data.empty()) REQUIRE_EQ(std::memcmp(data.data(), expected.data() + received, data.size()), 0);
-              received += data.size();
-              client.receive_buffer().consume(data.size());
-              eof = result.status == ReceiveStatus::PeerClosed;
-              REQUIRE(result.status != ReceiveStatus::Error);
-          });
-    CHECK_EQ(received, expected.size());
+    CHECK_EQ(receive_until_eof(poller, server, handler, client, expected), expected.size());
     CHECK_EQ(server.connection_count(), 0U);
 }
 // A client that stops reading keeps a closing connection's output queued. Its
