@@ -5,6 +5,7 @@
 
 #include <array>
 #include <cstdio>
+#include <memory>
 #include <netinet/in.h>
 
 namespace {
@@ -84,7 +85,7 @@ TEST_CASE(fix_runtime, tcp_logon_orders_matching_and_logout) {
 // A FIX session that never answers the end-of-day Logout holds the drain open
 // while ITCH repeats End of Session every heartbeat to a broadcast address
 // (no SO_BROADCAST, so every send fails). The shutdown summary must count
-// those sends too.
+// those sends too, and nothing may send after it.
 TEST_CASE(fix_runtime, shutdown_summary_counts_feed_send_failures_during_the_drain) {
     exsim::server::ServerConfig config;
     std::string error;
@@ -94,36 +95,37 @@ TEST_CASE(fix_runtime, shutdown_summary_counts_feed_send_failures_during_the_dra
     config.market_data.address = "255.255.255.255";
     config.market_data.retransmit_port = 0;
     for (auto& user : config.users) user.protocol = exsim::server::Protocol::Fix44;
+    const std::unique_ptr<std::FILE, int (*)(std::FILE*)> log_file(std::tmpfile(), &std::fclose);
+    REQUIRE(log_file != nullptr);
     exsim::server::ServerRuntimeOptions options;
-    options.log = std::tmpfile();
-    REQUIRE(options.log != nullptr);
+    options.log = log_file.get();
     options.day_time_at_start = fix_test::kSessionStartNs;
     options.market_data.heartbeat_interval_ns = 1'000'000;
     options.end_of_day_drain_timeout_ns = 100'000'000;
-    {
-        Runtime runtime(config, options);
-        REQUIRE(runtime.start().empty());
-        auto alice = connect_fix(runtime);
-        const auto logon =
-            exchange_frame(runtime, alice.fd(), fix_test::client_message("A", 1, "98=0|108=30|554=alice|", "ALICE"));
-        REQUIRE(fix_test::with_pipes(logon).find("35=A|") != std::string::npos);
-        runtime.request_shutdown();
-        const auto deadline = exsim::common::monotonic_ns() + 2'000'000'000;
-        while (!runtime.finished() && exsim::common::monotonic_ns() < deadline) runtime.poll_once();
-        REQUIRE(runtime.finished());
-        std::string reply;
-        exsim::server::CoreAdmin(runtime.core()).execute_line("status", reply);
-        const auto at = reply.find(" send_failures=");
-        REQUIRE(at != std::string::npos);
-        const auto failures = std::stoull(reply.substr(at + std::string_view(" send_failures=").size()));
-        std::rewind(options.log);
-        std::string log(4096, '\0');
-        log.resize(std::fread(log.data(), 1, log.size(), options.log));
-        constexpr std::string_view kSummary = "exsim: market data UDP send failures: ";
-        const auto line = log.find(kSummary);
-        REQUIRE(line != std::string::npos);
-        CHECK_GT(failures, 0u);
-        CHECK_EQ(std::stoull(log.substr(line + kSummary.size())), failures);
-    }
-    std::fclose(options.log);
+    Runtime runtime(config, options);
+    REQUIRE(runtime.start().empty());
+    auto alice = connect_fix(runtime);
+    const auto logon =
+        exchange_frame(runtime, alice.fd(), fix_test::client_message("A", 1, "98=0|108=30|554=alice|", "ALICE"));
+    REQUIRE(fix_test::with_pipes(logon).find("35=A|") != std::string::npos);
+    runtime.request_shutdown();
+    const auto deadline = exsim::common::monotonic_ns() + 2'000'000'000;
+    while (!runtime.finished() && exsim::common::monotonic_ns() < deadline) runtime.poll_once();
+    REQUIRE(runtime.finished());
+    // Polling on after finished() spans several heartbeat intervals.
+    const auto finished_at = exsim::common::monotonic_ns();
+    while (exsim::common::monotonic_ns() - finished_at < 10'000'000) runtime.poll_once();
+    std::string reply;
+    exsim::server::CoreAdmin(runtime.core()).execute_line("status", reply);
+    const auto at = reply.find(" send_failures=");
+    REQUIRE(at != std::string::npos);
+    const auto failures = std::stoull(reply.substr(at + std::string_view(" send_failures=").size()));
+    std::rewind(log_file.get());
+    std::string log(4096, '\0');
+    log.resize(std::fread(log.data(), 1, log.size(), log_file.get()));
+    constexpr std::string_view kSummary = "exsim: market data UDP send failures: ";
+    const auto line = log.find(kSummary);
+    REQUIRE(line != std::string::npos);
+    CHECK_GT(failures, 0u);
+    CHECK_EQ(std::stoull(log.substr(line + kSummary.size())), failures);
 }

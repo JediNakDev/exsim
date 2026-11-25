@@ -119,8 +119,10 @@ public:
         return {};
     }
 
-    // One reactor iteration.
+    // One reactor iteration. Does nothing once finished(), so the shutdown
+    // summary stays the final count of market data send failures.
     void poll_once() noexcept {
+        if (finished_) return;
         const int timeout_ms = options_.busy_poll ? 0 : options_.idle_poll_timeout_ms;
         if (poller_.wait(timeout_ms) > 0) {
             for (const net::PollEvent& event : poller_.events()) route_event(event);
