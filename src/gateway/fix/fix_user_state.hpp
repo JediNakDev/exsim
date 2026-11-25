@@ -3,8 +3,9 @@
 
 // Day-lifetime state of one FIX user:
 // the ClOrdID token table, per-order records for OrderQty/AvgPx/OrdStatus
-// through replace chains, the ExecID counter, the session day state (MsgSeqNum
-// counters and resend store) and fault-injection counters.
+// through replace chains, the ExecID counter and the session day state (MsgSeqNum
+// counters and resend store). Pending reject and drop faults are counted by the
+// Context (ExchangeCore); the day state suppresses a dropped transmission.
 //
 // Inbound: FixConnection decodes and session-validates D/F/G/q into the
 // request structs below and calls submit_*; business rejects that need no
