@@ -492,7 +492,7 @@ TEST_CASE(net_server, closing_slot_of_a_stalled_peer_stays_quiet_and_expires) {
     until([&] { return handler.opened == 1; }, [&] { pump(poller, server, handler); });
     const auto id = handler.ids[0];
     std::vector<char> output(config.send_buffer_capacity, 'x');
-    REQUIRE(server.send(id, output));
+    REQUIRE(queue(server, id, output));
     const std::uint64_t before_close = monotonic_ns();
     REQUIRE(server.close_after_flush(id));
     const std::uint64_t after_close = monotonic_ns();
