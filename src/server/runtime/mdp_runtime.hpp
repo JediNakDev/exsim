@@ -91,6 +91,7 @@ public:
         publisher_.poll(now, settings_.heartbeat_interval_ns);
         if (!replay_) return;
         const auto monotonic = common::monotonic_ns(), epoch = common::realtime_ns();
+        replay_->on_timer(monotonic);
         for (auto& slot : slots_) {
             if (!slot->open) continue;
             slot->session.on_timer(monotonic, epoch);

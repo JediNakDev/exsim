@@ -51,8 +51,12 @@ std::string AdminSocket::start(ServerRuntime& runtime) {
     return {};
 }
 
-void AdminSocket::close_stalled_client(std::uint64_t now_ns) noexcept {
+void AdminSocket::on_timer(std::uint64_t now_ns) noexcept {
     if (client_.is_open() && now_ns >= client_deadline_ns_) reply_and_close("ERR no complete command within 5 s\n");
+    if (listener_paused_until_ns_ != 0 && now_ns >= listener_paused_until_ns_) {
+        const net::ErrorCode error = runtime_->watch_readable_fd(listener_.fd(), on_readable, this);
+        listener_paused_until_ns_ = error ? now_ns + net::kAcceptPauseNs : 0;
+    }
 }
 
 void AdminSocket::on_readable(void* context) noexcept {
@@ -63,7 +67,13 @@ void AdminSocket::on_readable(void* context) noexcept {
     }
     net::Ipv4Endpoint unused;
     // EAGAIN, or a client that already left: wait for the next one.
-    if (net::accept_connection(self.listener_.fd(), self.client_, unused) != 0) return;
+    if (const net::ErrorCode error = net::accept_connection(self.listener_.fd(), self.client_, unused); error != 0) {
+        if (net::is_out_of_descriptors(error)) {
+            self.runtime_->unwatch_readable_fd();
+            self.listener_paused_until_ns_ = common::monotonic_ns() + net::kAcceptPauseNs;
+        }
+        return;
+    }
     self.client_deadline_ns_ = common::monotonic_ns() + kCommandTimeoutNs;
     self.watch(self.client_.fd());
 }

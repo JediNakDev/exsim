@@ -1,3 +1,4 @@
+#include <common/clocks.hpp>
 #include <net/tcp_server.hpp>
 namespace exsim::net {
 TcpServer::TcpServer(const TcpServerConfig& config, Poller& poller, std::uint8_t tag)
@@ -31,6 +32,7 @@ void TcpServer::close() noexcept {
         poller_.remove(listener_.fd());
         listener_.close();
     }
+    accept_paused_until_ns_ = 0;
     for (std::uint32_t index = 0; index < slots_.size(); ++index) {
         if (slots_[index].state != SlotState::Free) release_slot(index);
         slots_[index].queued_for_flush = false;
@@ -41,6 +43,10 @@ void TcpServer::close() noexcept {
 TcpServer::AcceptOutcome TcpServer::accept_one(ConnectionId& id, Ipv4Endpoint& peer) noexcept {
     Socket accepted;
     int error = accept_connection(listener_.fd(), accepted, peer);
+    if (is_out_of_descriptors(error)) {
+        poller_.remove(listener_.fd());
+        accept_paused_until_ns_ = common::monotonic_ns() + kAcceptPauseNs;
+    }
     if (error) return is_would_block(error) ? AcceptOutcome::NothingPending : AcceptOutcome::Failed;
     if (!free_slot_count_) {
         ++rejected_connection_count_;
@@ -59,6 +65,12 @@ TcpServer::AcceptOutcome TcpServer::accept_one(ConnectionId& id, Ipv4Endpoint& p
     ++connection_count_;
     id = {index, slot.generation};
     return AcceptOutcome::Accepted;
+}
+void TcpServer::on_timer(std::uint64_t now_ns) noexcept {
+    if (accept_paused_until_ns_ == 0 || now_ns < accept_paused_until_ns_) return;
+    const ErrorCode error =
+        poller_.add(listener_.fd(), make_poll_token(token_tag_, kListenerSlotIndex), PollInterest::Read);
+    accept_paused_until_ns_ = error ? now_ns + kAcceptPauseNs : 0;
 }
 void TcpServer::release_slot(std::uint32_t index) noexcept {
     Slot& slot = slots_[index];

@@ -6,6 +6,10 @@
 #include "server/runtime/server_runtime.hpp"
 #include "test/framework/test.hpp"
 
+#include <arpa/inet.h>
+#include <fcntl.h>
+#include <netinet/in.h>
+#include <sys/resource.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/un.h>
@@ -105,6 +109,23 @@ struct AdminClient {
     }
 };
 
+// Lowers the soft RLIMIT_NOFILE to the lowest free descriptor, so the next
+// accept() fails with EMFILE; the destructor restores the limit. Open every
+// descriptor the test needs first.
+struct DescriptorLimit {
+    rlimit previous{};
+    DescriptorLimit() {
+        REQUIRE_EQ(::getrlimit(RLIMIT_NOFILE, &previous), 0);
+        const int lowest_free = ::open("/dev/null", O_RDONLY);
+        REQUIRE(lowest_free >= 0);
+        ::close(lowest_free);
+        rlimit lowered = previous;
+        lowered.rlim_cur = static_cast<rlim_t>(lowest_free);
+        REQUIRE_EQ(::setrlimit(RLIMIT_NOFILE, &lowered), 0);
+    }
+    ~DescriptorLimit() { ::setrlimit(RLIMIT_NOFILE, &previous); }
+};
+
 bool exists(const std::string& path) {
     struct stat info {};
     return ::lstat(path.c_str(), &info) == 0;
@@ -170,15 +191,61 @@ TEST_CASE(admin_socket, a_client_that_never_finishes_its_line_is_dropped_at_its_
     AdminClient stalled(exchange.path);
     stalled.send("sta");
     for (int iteration = 0; iteration < 20; ++iteration) exchange.runtime.poll_once();
-    exchange.admin.close_stalled_client(common::monotonic_ns());  // still within its 5 s
+    exchange.admin.on_timer(common::monotonic_ns());  // still within its 5 s
     AdminClient waiting(exchange.path);
     waiting.send("status\n");
     for (int iteration = 0; iteration < 20; ++iteration) exchange.runtime.poll_once();
     bool closed = false;
     CHECK_EQ(waiting.take(closed), "");
-    exchange.admin.close_stalled_client(common::monotonic_ns() + server::AdminSocket::kCommandTimeoutNs);
+    exchange.admin.on_timer(common::monotonic_ns() + server::AdminSocket::kCommandTimeoutNs);
     CHECK_EQ(stalled.reply(exchange.runtime), "ERR no complete command within 5 s\n");
     CHECK(waiting.reply(exchange.runtime).find("orders live=0") != std::string::npos);
+}
+
+// Out of descriptors, accept() fails. Linux leaves the client queued and the
+// listener readable, so the admin and order-entry listeners stop watching
+// instead of waking every poll, and accept again after a pause. (macOS drops
+// the client at the failed accept instead.)
+TEST_CASE(admin_socket, listeners_pause_while_out_of_descriptors_and_accept_afterwards) {
+    server::ServerRuntimeOptions options;
+    options.idle_poll_timeout_ms = 20;
+    AdminExchange exchange(options);
+    const auto connect_trader = [&] {
+        net::Socket trader(::socket(AF_INET, SOCK_STREAM, 0));
+        REQUIRE(trader.is_open());
+        sockaddr_in address{};
+        address.sin_family = AF_INET;
+        address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        address.sin_port = htons(exchange.runtime.listen_endpoint<server::runtime::OuchGateway>().port);
+        REQUIRE_EQ(::connect(trader.fd(), reinterpret_cast<const sockaddr*>(&address), sizeof address), 0);
+        return trader;
+    };
+    AdminClient queued_admin(exchange.path);
+    queued_admin.send("status\n");
+    const net::Socket queued_trader = connect_trader();
+    int iterations = 0;
+    {
+        DescriptorLimit limit;
+        for (const auto end = common::monotonic_ns() + 200'000'000; common::monotonic_ns() < end; ++iterations) {
+            exchange.runtime.poll_once();
+            exchange.admin.on_timer(common::monotonic_ns());  // as main does
+        }
+    }
+    // About one per 20 ms wait, plus one per re-armed listener after each
+    // 100 ms pause. Linux returned at once every time before the fix.
+    CHECK_LE(iterations, 20);
+    auto& ouch = exchange.runtime.endpoint<server::runtime::OuchGateway>();
+    CHECK_EQ(ouch.transport_connection_count(), 0u);
+    // The admin listener comes back from main's timer call, the order-entry one
+    // from the runtime's timer pass. On Linux the queued clients go first.
+    exchange.admin.on_timer(common::monotonic_ns() + net::kAcceptPauseNs);
+    AdminClient admin(exchange.path);
+    admin.send("status\n");
+    CHECK(admin.reply(exchange.runtime).find("orders live=0") != std::string::npos);
+    const net::Socket trader = connect_trader();
+    const auto deadline = common::monotonic_ns() + 2'000'000'000;
+    while (ouch.transport_connection_count() == 0 && common::monotonic_ns() < deadline) exchange.runtime.poll_once();
+    CHECK_GE(ouch.transport_connection_count(), 1u);
 }
 
 TEST_CASE(admin_socket, refuses_a_taken_path_and_removes_only_its_own_file) {
