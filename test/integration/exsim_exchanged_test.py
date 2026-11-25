@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import resource
 import select
 import signal
 import socket
@@ -82,7 +83,7 @@ class Trader:
 class Exchange:
     """One exsim_exchanged child. `ready` is its ready line, or None if it exited during startup."""
 
-    def __init__(self, directory, text, name, hangup=None):
+    def __init__(self, directory, text, name, preexec=None):
         # The fixture's relative admin socket resolves next to this config, not the working directory.
         self.config = Path(directory) / f"{name}.conf"
         self.config.write_text(text.replace("admin_socket = exsim.sock", f"admin_socket = {name}.sock"))
@@ -91,9 +92,9 @@ class Exchange:
         self.process = subprocess.Popen(
             [str(BUILD / "exsim_exchanged"), "--config", str(self.config)],
             stdout=subprocess.PIPE, stderr=self.stderr, text=True,
-            # Exec keeps an ignored SIGHUP. The SIGHUP tests set it, so they also work
-            # under nohup; every other child keeps the suite's own.
-            preexec_fn=None if hangup is None else lambda: signal.signal(signal.SIGHUP, hangup))
+            # `preexec` runs in the child before exec. Exec keeps an ignored SIGHUP, so the SIGHUP
+            # tests set it there and also work under nohup; every other child keeps the suite's own.
+            preexec_fn=preexec)
         if not select.select([self.process.stdout], [], [], 10)[0]:
             self.process.kill()
             raise AssertionError("exchange startup timed out")
@@ -137,13 +138,13 @@ class ExsimExchangedTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.directory = Path(temporary.name)
 
-    def launch(self, text=None, name="exchange", hangup=None):
-        exchange = Exchange(self.directory, text or config(), name, hangup)
+    def launch(self, text=None, name="exchange", preexec=None):
+        exchange = Exchange(self.directory, text or config(), name, preexec)
         self.addCleanup(exchange.close)
         return exchange
 
-    def start(self, text=None, name="exchange", hangup=None):
-        exchange = self.launch(text, name, hangup)
+    def start(self, text=None, name="exchange", preexec=None):
+        exchange = self.launch(text, name, preexec)
         self.assertIsNotNone(exchange.ready, exchange.errors())
         return exchange
 
@@ -218,13 +219,13 @@ class ExsimExchangedTests(unittest.TestCase):
 
     def test_int_term_and_hup_stop_cleanly_and_remove_the_admin_socket(self):
         for stop_signal in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
-            exchange = self.start(hangup=signal.SIG_DFL)
+            exchange = self.start(preexec=lambda: signal.signal(signal.SIGHUP, signal.SIG_DFL))
             self.assertTrue(exchange.socket.exists())
             self.assertEqual(exchange.stop(stop_signal), 0)
             self.assertFalse(exchange.socket.exists())
 
     def test_hup_inherited_as_ignored_keeps_running_like_nohup(self):
-        exchange = self.start(hangup=signal.SIG_IGN)
+        exchange = self.start(preexec=lambda: signal.signal(signal.SIGHUP, signal.SIG_IGN))
         exchange.process.send_signal(signal.SIGHUP)
         # A loop that took the SIGHUP stops on its next pass, so it answers at most one command.
         for _ in range(2):
@@ -327,6 +328,21 @@ class ExsimExchangedTests(unittest.TestCase):
         (self.directory / "linked.journal").symlink_to(outside)
         self.refused(config() + "\n[journal]\npath = linked.journal\n")
         self.assertEqual(outside.read_text(), "sentinel")
+
+    def test_a_failed_journal_write_exits_with_1_and_says_so(self):
+        def small_files():
+            signal.signal(signal.SIGXFSZ, signal.SIG_IGN)  # a write past the limit fails with EFBIG
+            resource.setrlimit(resource.RLIMIT_FSIZE, (512, 512))  # the header fits, the records do not
+
+        text = config() + "\n[journal]\npath = full.journal\nflush_interval_ms = 0\n"
+        exchange = self.start(text, preexec=small_files)
+        trader = Trader(exchange.ready["orderEntryPort"], "ALICE", "alice")
+        self.addCleanup(trader.close)
+        for number in range(10):
+            trader.order(f"FULL{number}", b"B")
+        self.assertEqual(exchange.stop(), 1)
+        journal = self.directory / "full.journal"
+        self.assertIn(f"exsim_exchanged: journal {journal} failed; it is incomplete", exchange.errors())
 
     def test_shared_journal_allows_one_running_exchange_and_keeps_its_history(self):
         journal = self.directory / "shared.journal"
