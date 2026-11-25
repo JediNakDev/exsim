@@ -3,6 +3,7 @@
 #include "test/exsim/gateway/fix/fix_test_support.hpp"
 #include "test/framework/test.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstdio>
 #include <memory>
@@ -40,7 +41,11 @@ std::string exchange_frame(Runtime& runtime, int fd, std::string_view frame) {
             output.append(buffer.data(), static_cast<std::size_t>(size));
         else if (size < 0)
             REQUIRE(exsim::net::is_would_block(errno));
-        if (output.find("\00110=") != std::string::npos && output.back() == '\001') return output;
+        // Whole only when the buffer ends with the trailer: SOH, "10=", three digits, SOH.
+        if (const auto trailer = output.rfind("\00110=");
+            trailer != std::string::npos && output.size() == trailer + 8 && output.back() == '\001' &&
+            std::all_of(output.end() - 4, output.end() - 1, [](char c) { return c >= '0' && c <= '9'; }))
+            return output;
         if (deadline == 0 || size > 0)
             deadline = exsim::common::monotonic_ns() + 2'000'000'000;
         else if (pass_started >= deadline)
