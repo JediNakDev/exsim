@@ -1,3 +1,4 @@
+#include "server/admin/core_admin.hpp"
 #include "server/runtime/server_runtime.hpp"
 #include "test/exsim/gateway/fix/fix_test_support.hpp"
 #include "test/exsim/gateway/ilink/ilink_test_support.hpp"
@@ -216,6 +217,32 @@ TEST_CASE(mdp_runtime, fix_orders_udp_redundancy_snapshots_and_tcp_recovery) {
     const auto deadline = common::monotonic_ns() + 4000000000;
     while (!runtime.finished() && common::monotonic_ns() < deadline) runtime.poll_once();
     CHECK(runtime.finished());
+}
+
+// Broadcast without SO_BROADCAST fails on both macOS and Linux, so every MDP
+// feed send fails; status shows the count while the exchange runs.
+TEST_CASE(mdp_runtime, status_counts_udp_send_failures) {
+    Feeds feeds;
+    for (const bool broadcast : {false, true}) {
+        server::ServerConfig config;
+        std::string error;
+        REQUIRE(server::parse_config(feeds.config_text(), config, error));
+        if (broadcast) config.market_data.address = "255.255.255.255";
+        server::ServerRuntimeOptions options;
+        options.log = nullptr;
+        server::ServerRuntime runtime(config, options);
+        REQUIRE(runtime.start().empty());
+        runtime.poll_once();
+        std::string reply;
+        server::CoreAdmin(runtime.core()).execute_line("status", reply);
+        const auto at = reply.find(" send_failures=");
+        REQUIRE(at != std::string::npos);
+        const auto failures = std::stoull(reply.substr(at + std::string_view(" send_failures=").size()));
+        if (broadcast)
+            CHECK_GT(failures, 0u);
+        else
+            CHECK_EQ(failures, 0u);
+    }
 }
 
 TEST_CASE(ilink_runtime, private_fills_correlate_with_mdp_and_replay_over_real_sockets) {

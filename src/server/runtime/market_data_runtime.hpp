@@ -21,6 +21,7 @@
 #include "md/packet_faults.hpp"
 
 #include <cstdint>
+#include <cstdio>
 #include <span>
 #include <string>
 #include <variant>
@@ -68,6 +69,9 @@ public:
     }
     void on_shutdown(Timestamp now) {
         std::visit([&](auto& runtime) { runtime.on_shutdown(now); }, runtime_);
+        // status shows the count while running; this covers runs without an admin socket.
+        if (const std::uint64_t failures = send_failure_count())
+            std::fprintf(stderr, "market data UDP send failures: %llu\n", static_cast<unsigned long long>(failures));
     }
 
     // ---- recovery -----------------------------------------------------------------
@@ -88,6 +92,10 @@ public:
     }
     [[nodiscard]] md::PublishStatus stop_reason() const noexcept {
         return std::visit([](const auto& runtime) { return runtime.stop_reason(); }, runtime_);
+    }
+    // Feed datagrams (and ITCH recovery replies) the socket did not send whole.
+    [[nodiscard]] std::uint64_t send_failure_count() const noexcept {
+        return std::visit([](const auto& runtime) { return runtime.send_failure_count(); }, runtime_);
     }
     [[nodiscard]] md::PublisherState state() const noexcept {
         return std::visit([](const auto& runtime) { return runtime.state(); }, runtime_);
