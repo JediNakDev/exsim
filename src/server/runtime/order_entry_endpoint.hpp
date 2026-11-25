@@ -80,9 +80,9 @@ public:
     void handle_event(const net::PollEvent& event) noexcept { tcp_server_.handle_event(event, *this); }
     void flush() noexcept { tcp_server_.flush_pending(*this); }
 
-    // Once per timer pass, with monotonic_ns(): the listener's accept pause,
-    // then over the open slots in slot order: delayed input, gateway timers,
-    // requested closes.
+    // Once per timer pass, with monotonic_ns(): the server's accept pause and
+    // close deadlines, then over the open slots in slot order: delayed input,
+    // gateway timers, requested closes.
     void run_timers(std::uint64_t now_ns) noexcept {
         tcp_server_.on_timer(now_ns);
         if (open_connections_ == 0) return;

@@ -28,8 +28,10 @@ namespace {
 ErrorCode change(int poll_fd, int operation, int fd, std::uint64_t token, PollInterest interest) noexcept {
     epoll_event event{};
     event.data.u64 = token;
-    event.events = EPOLLRDHUP;
-    if (static_cast<unsigned>(interest) & 1) event.events |= EPOLLIN;
+    // EPOLLRDHUP only with read interest: level-triggered, a peer's half-close
+    // would wake every wait for a socket that only waits to write. EPOLLHUP
+    // and EPOLLERR are always reported.
+    if (static_cast<unsigned>(interest) & 1) event.events |= EPOLLIN | EPOLLRDHUP;
     if (static_cast<unsigned>(interest) & 2) event.events |= EPOLLOUT;
     return epoll_ctl(poll_fd, operation, fd, &event) < 0 ? errno : 0;
 }
