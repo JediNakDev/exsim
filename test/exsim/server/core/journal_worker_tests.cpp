@@ -40,13 +40,19 @@ struct CountingJournalWriter {
         return true;
     }
     bool flush() noexcept {
-        probe->writer_inside_flush.store(true, std::memory_order_release);
-        while (probe->stall_flush.load(std::memory_order_acquire)) std::this_thread::yield();
+        probe->writer_inside_flush = true;
+        probe->writer_inside_flush.notify_one();
+        probe->stall_flush.wait(true);  // sleeps until release_flush
         probe->flush_requests.fetch_add(1, std::memory_order_relaxed);
         return true;
     }
     std::shared_ptr<Probe> probe;
 };
+
+void release_flush(Probe& probe) {
+    probe.stall_flush = false;
+    probe.stall_flush.notify_one();
+}
 
 using TestJournalWorker = server::runtime::JournalWorker<CountingJournalWriter, 1024>;
 
@@ -54,19 +60,21 @@ using TestJournalWorker = server::runtime::JournalWorker<CountingJournalWriter, 
 
 TEST_CASE(journal_worker, destructor_drains_accepted_entries_and_joins) {
     const auto probe = new_probe();
+    probe->stall_flush = true;
     std::optional<TestJournalWorker> worker;
     worker.emplace("unused", server::journal::JournalSetup{});
-    // A new thread can wait long on a loaded machine; the shutdown wait is
-    // for a running writer, so start the test once the writer has run.
-    REQUIRE(worker->append(Command{}));
-    while (probe->appended_commands.load() == 0) std::this_thread::yield();
-    for (int index = 1; index < 1000; ++index) REQUIRE(worker->append(Command{}));
+    // Hold the writer inside a flush while the entries queue, so the shutdown
+    // wait times draining them, not how soon a loaded machine starts a thread.
     REQUIRE(worker->flush());
+    probe->writer_inside_flush.wait(false);
+    for (int index = 0; index < 1000; ++index) REQUIRE(worker->append(Command{}));
+    REQUIRE(worker->flush());
+    release_flush(*probe);
     const auto started = std::chrono::steady_clock::now();
     worker.reset();
     const auto elapsed = std::chrono::steady_clock::now() - started;
     CHECK_EQ(probe->appended_commands.load(), 1000u);
-    CHECK_EQ(probe->flush_requests.load(), 2u);  // the requested flush and the final one
+    CHECK_EQ(probe->flush_requests.load(), 3u);  // the held flush, the requested one and the final one
     CHECK(elapsed < std::chrono::milliseconds(100));  // joined on the writer's signal, not the timeout
 }
 
@@ -76,12 +84,12 @@ TEST_CASE(journal_worker, ring_holds_capacity_minus_one_entries_then_fails) {
     {
         TestJournalWorker worker("unused", server::journal::JournalSetup{});
         REQUIRE(worker.flush());
-        while (!probe->writer_inside_flush.load(std::memory_order_acquire)) std::this_thread::yield();
+        probe->writer_inside_flush.wait(false);
         std::size_t accepted = 0;
         while (worker.append(Command{})) ++accepted;
         CHECK_EQ(accepted, 1023u);
         CHECK(!worker.healthy());
-        probe->stall_flush = false;
+        release_flush(*probe);
     }
 }
 
@@ -91,13 +99,13 @@ TEST_CASE(journal_worker, stalled_writer_is_abandoned_after_the_shutdown_wait) {
     std::optional<TestJournalWorker> worker;
     worker.emplace("unused", server::journal::JournalSetup{});
     REQUIRE(worker->flush());
-    while (!probe->writer_inside_flush.load(std::memory_order_acquire)) std::this_thread::yield();
+    probe->writer_inside_flush.wait(false);
     const auto started = std::chrono::steady_clock::now();
     worker.reset();
     const auto elapsed = std::chrono::steady_clock::now() - started;
     CHECK(elapsed >= std::chrono::milliseconds(100));
     CHECK(elapsed < std::chrono::milliseconds(1000));
-    probe->stall_flush = false;  // the detached writer finishes on the state it owns
+    release_flush(*probe);  // the detached writer finishes on the state it owns
     while (probe->flush_requests.load() < 2) std::this_thread::yield();
 }
 
