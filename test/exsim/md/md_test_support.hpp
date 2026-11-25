@@ -140,7 +140,7 @@ inline void set_command_time(Command& command, Timestamp ts) { command.timestamp
 // Also compares the ITCH trading state of each instrument.
 inline std::string book_difference(const MatchingEngine& engine, const md::ItchBookBuilder& builder,
                                    std::size_t instrument_count, std::size_t max_orders) {
-    const testsupport::LevelOrders engine_fifos(testsupport::live_orders(engine));
+    std::optional<testsupport::LevelOrders> engine_fifos;  // scanned at the first FIFO comparison
     std::vector<LevelInfo> engine_levels(max_orders + 1), builder_levels(max_orders + 1);
     std::vector<OrderId> engine_ids(max_orders + 1), builder_ids(max_orders + 1);
     for (std::size_t index = 1; index <= instrument_count; ++index) {
@@ -163,8 +163,9 @@ inline std::string book_difference(const MatchingEngine& engine, const md::ItchB
                     return where + " level " + std::to_string(level) + " builder " + std::to_string(b.price) + "x" +
                            std::to_string(b.qty) + "/" + std::to_string(b.order_count) + " engine " +
                            std::to_string(e.price) + "x" + std::to_string(e.qty) + "/" + std::to_string(e.order_count);
+                if (!engine_fifos) engine_fifos.emplace(testsupport::live_orders(engine));
                 const std::size_t engine_fifo =
-                    engine_fifos.level_orders(id, side, e.price, engine_ids.data(), engine_ids.size());
+                    engine_fifos->level_orders(id, side, e.price, engine_ids.data(), engine_ids.size());
                 const std::size_t builder_fifo =
                     builder.level_orders(id, side, e.price, builder_ids.data(), builder_ids.size());
                 if (engine_fifo != builder_fifo ||
