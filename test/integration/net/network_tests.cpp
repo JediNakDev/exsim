@@ -467,8 +467,8 @@ TEST_CASE(net_server, graceful_close_with_unread_input_delivers_queued_output) {
     CHECK_EQ(server.connection_count(), 0U);
 }
 // A client that stops reading keeps a closing connection's output queued. Its
-// half-close must not wake every poll (a closing slot only waits to write),
-// and the timer pass frees the slot at its flush deadline.
+// half-close must not wake the loop (a closing slot only waits to write), and
+// the timer pass frees the slot at its flush deadline.
 TEST_CASE(net_server, closing_slot_of_a_stalled_peer_stays_quiet_and_expires) {
     Poller poller;
     REQUIRE_EQ(poller.open(), 0);
@@ -485,25 +485,33 @@ TEST_CASE(net_server, closing_slot_of_a_stalled_peer_stays_quiet_and_expires) {
     const auto id = handler.ids[0];
     std::vector<char> output(config.send_buffer_capacity, 'x');
     REQUIRE(server.send(id, output));
+    const std::uint64_t before_close = monotonic_ns();
     REQUIRE(server.close_after_flush(id));
+    const std::uint64_t after_close = monotonic_ns();
     server.flush_pending(handler);
     REQUIRE(server.connection(id) != nullptr);  // still flushing
-    // Writes continue until the client's receive window is full; then only its half-close can wake the loop.
+    // Writes continue until the client's receive window is full.
     until([&] { return poller.wait(10) == 0; },
           [&] {
               for (const auto& event : poller.events()) server.handle_event(event, handler);
           });
     REQUIRE_EQ(shutdown(client.fd(), SHUT_WR), 0);
-    int wakeups = 0;
-    for (const auto end = monotonic_ns() + 100'000'000; monotonic_ns() < end;) {
-        if (poller.wait(10) > 0) ++wakeups;
-        for (const auto& event : poller.events()) server.handle_event(event, handler);
+    // A late ACK may still bring write readiness; any other event is the
+    // half-close, which Linux reported on every wait before the fix.
+    int other_events = 0;
+    for (int wait = 0; wait < 20; ++wait) {
+        REQUIRE(poller.wait(10) >= 0);
+        for (const auto& event : poller.events()) {
+            if (!event.writable) ++other_events;
+            server.handle_event(event, handler);
+        }
         server.flush_pending(handler);
     }
-    CHECK_LE(wakeups, 2);  // Linux reported EPOLLRDHUP on every wait before the fix
-    server.on_timer(monotonic_ns());
+    CHECK_EQ(other_events, 0);
+    // close_after_flush set the deadline between these two readings.
+    server.on_timer(before_close + TcpServer::kCloseFlushTimeoutNs - 1);
     CHECK_EQ(server.connection_count(), 1U);
-    server.on_timer(monotonic_ns() + TcpServer::kCloseFlushTimeoutNs);
+    server.on_timer(after_close + TcpServer::kCloseFlushTimeoutNs);
     CHECK_EQ(server.connection_count(), 0U);
     CHECK_EQ(handler.closed, 0U);  // an application close is not reported
 }
