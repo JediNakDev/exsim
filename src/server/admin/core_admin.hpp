@@ -45,6 +45,7 @@ template <typename MarketData>
 concept MarketDataPublisherState = requires(const MarketData& market_data) {
     { market_data.state() } -> std::same_as<md::PublisherState>;
     { market_data.stop_reason() } -> std::same_as<md::PublishStatus>;
+    { market_data.send_failure_count() } -> std::convertible_to<std::uint64_t>;
 };
 
 template <class Core>
@@ -282,6 +283,7 @@ private:
         if constexpr (MarketDataPublisherState<MarketData>) {
             market_data_state_line += std::string(md_state_text(market_data.state()));
             market_data_state_line += " stop_reason=" + std::string(md_status_text(market_data.stop_reason()));
+            market_data_state_line += " send_failures=" + std::to_string(market_data.send_failure_count());
         } else {
             market_data_state_line += "unavailable";
         }

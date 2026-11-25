@@ -35,7 +35,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <cstdio>
 #include <span>
 #include <string>
 
@@ -136,9 +135,6 @@ public:
         if (publisher_.state() == md::PublisherState::Stopped) {
             (void)publisher_.end_session(now);
         }
-        if (send_failure_count())
-            std::fprintf(stderr, "ITCH UDP send failures: %llu\n",
-                         static_cast<unsigned long long>(send_failure_count()));
     }
 
     // ---- retransmission ----------------------------------------------------------

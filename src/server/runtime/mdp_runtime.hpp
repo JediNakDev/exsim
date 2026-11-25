@@ -133,6 +133,7 @@ public:
     [[nodiscard]] md::PublisherState state() const noexcept { return publisher_.state(); }
     [[nodiscard]] md::PublishStatus stop_reason() const noexcept { return publisher_.stop_reason(); }
     [[nodiscard]] std::uint64_t next_sequence() const noexcept { return publisher_.next_sequence(); }
+    [[nodiscard]] std::uint64_t send_failure_count() const noexcept { return send_failures_; }
     [[nodiscard]] std::uint32_t recovery_connection_count() const noexcept {
         return replay_ ? replay_->connection_count() : 0;
     }
@@ -158,9 +159,12 @@ private:
             replay_->close_now(slot.id);
         slot.open = false;
     }
+    void send_datagram(std::span<const char> packet, net::Ipv4Endpoint endpoint) noexcept {
+        if (endpoint.port && sender_.send_to(packet, endpoint) != static_cast<ssize_t>(packet.size())) ++send_failures_;
+    }
     void send_incremental(std::span<const char> packet) noexcept {
-        if (incremental_.port) (void)sender_.send_to(packet, incremental_);
-        if (backup_.port) (void)sender_.send_to(packet, backup_);
+        send_datagram(packet, incremental_);
+        send_datagram(packet, backup_);
     }
     void send_packet(std::span<const char> packet, md::MdpStream stream) noexcept {
         if (stream == md::MdpStream::Incremental) {
@@ -169,14 +173,14 @@ private:
             else
                 faults_.submit(packet, [this](std::span<const char> released) { send_incremental(released); });
         } else {
-            const auto endpoint = stream == md::MdpStream::Snapshot ? snapshot_ : instrument_;
-            if (endpoint.port) (void)sender_.send_to(packet, endpoint);
+            send_datagram(packet, stream == md::MdpStream::Snapshot ? snapshot_ : instrument_);
         }
     }
     MarketDataRuntimeSettings settings_;
     md::PacketFaultInjector faults_;
     md::MdpPublisher<PacketSink> publisher_;
     net::UdpSender sender_;
+    std::uint64_t send_failures_ = 0;
     net::Ipv4Endpoint incremental_{}, backup_{}, snapshot_{}, instrument_{};
     std::unique_ptr<net::TcpServer> replay_;
     std::vector<std::unique_ptr<Slot>> slots_;
