@@ -530,9 +530,15 @@ private:
     }
 
     // ResendRequest, TestRequest and Heartbeat are answered on arrival even
-    // when early, so both sides can recover at the same time.
+    // when early, so both sides can recover at the same time. One that fails
+    // the SendingTime checks is held unanswered; process_in_order rejects it.
     bool service_early(const FixInboundFrame& frame) noexcept {
         FixFieldReader reader(*frame.parser);
+        const std::uint64_t sending_time = reader.required_timestamp(52);
+        const bool original_after_sending = frame.possible_duplicate && reader.required_timestamp(122) > sending_time;
+        if (!reader.ok() || original_after_sending) {
+            return false;
+        }
         if (frame.message_type == "2") {
             const std::uint64_t begin = reader.required_uint(7);
             const std::uint64_t end = reader.required_uint(16);

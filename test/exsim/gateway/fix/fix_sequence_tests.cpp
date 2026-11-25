@@ -5,6 +5,7 @@
 
 #include "test/exsim/gateway/fix/fix_test_support.hpp"
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -240,6 +241,42 @@ TEST_CASE(gateway_fix_sequence, early_resend_request_is_serviced_and_gap_request
     CHECK_EQ(expected_inbound(exchange), 5u);
     CHECK(client.drain().empty());
     CHECK_EQ(client.connection().counters().resend_requests_serviced, 1u);
+}
+
+// An early session message gets the same SendingTime checks as one in order:
+// failing them, it is held unanswered and rejected when its turn comes.
+TEST_CASE(gateway_fix_sequence, early_resend_request_without_sending_time_is_rejected_in_turn) {
+    FixTestExchange exchange;
+    FixTestConnection client(exchange, "CLIENT2");
+    client.logon(30, false, {});
+    client.feed(fix_frame("35=2|49=CLIENT2|56=EXSIM|34=3|7=1|16=0|"));
+    auto messages = client.drain();
+    REQUIRE_EQ(messages.size(), std::size_t{1});  // only our ResendRequest for the gap
+    CHECK_EQ(messages[0].type(), std::string("2"));
+    CHECK_EQ(client.connection().counters().resend_requests_serviced, 0u);
+    client.send_at("0", 2, "");
+    messages = client.drain();
+    REQUIRE_EQ(messages.size(), std::size_t{1});
+    CHECK_EQ(messages[0].type(), std::string("3"));
+    CHECK_EQ(messages[0].get(373), std::string("1"));
+    CHECK_EQ(expected_inbound(exchange), 4u);
+}
+
+TEST_CASE(gateway_fix_sequence, early_heartbeat_with_bad_sending_time_keeps_the_probe) {
+    for (const auto header : {"", "52=bad|", "52=20261103-09:30:00.000|43=Y|",
+                              "52=20261103-09:30:00.000|43=Y|122=20261103-09:31:00.000|"}) {
+        FixTestExchange exchange;
+        FixTestConnection client(exchange, "CLIENT2");
+        client.logon(10, false, {});
+        client.tick(15 * fix::kNanosecondsPerSecond);
+        const auto messages = client.drain();
+        const auto probe = std::find_if(messages.begin(), messages.end(),
+                                        [](const ParsedFixMessage& message) { return message.type() == "1"; });
+        REQUIRE(probe != messages.end());
+        client.feed(fix_frame("35=0|49=CLIENT2|56=EXSIM|34=" + std::to_string(client.next_sequence + 3) + "|" + header +
+                              "112=" + probe->get(112) + "|"));
+        CHECK(client.connection().test_request_outstanding());
+    }
 }
 
 TEST_CASE(gateway_fix_sequence, high_logout_is_answered) {
