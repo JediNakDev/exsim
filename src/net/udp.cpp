@@ -32,19 +32,13 @@ ErrorCode UdpSender::multicast_options(std::uint8_t ttl, bool loop, std::uint32_
         return errno;
     return 0;
 }
-ErrorCode UdpReceiver::open(Ipv4Endpoint local, bool reuse) noexcept {
+ErrorCode UdpReceiver::open(Ipv4Endpoint local) noexcept {
     Socket next;
     int error = open_udp_socket(next);
     if (error) return error;
-    if (reuse && (error = set_reuse_address(next.fd(), true))) return error;
     if ((error = bind_ipv4(next.fd(), local))) return error;
     socket_ = std::move(next);
     return 0;
-}
-ErrorCode UdpReceiver::join_multicast(std::uint32_t group, std::uint32_t interface_address) noexcept {
-    if (!is_ipv4_multicast_address(group)) return EINVAL;
-    const ip_mreq request{{htonl(group)}, {htonl(interface_address)}};
-    return setsockopt(fd(), IPPROTO_IP, IP_ADD_MEMBERSHIP, &request, sizeof(request)) < 0 ? errno : 0;
 }
 ssize_t UdpReceiver::receive_from(std::span<char> bytes, Ipv4Endpoint& peer) noexcept {
     sockaddr_in address{};

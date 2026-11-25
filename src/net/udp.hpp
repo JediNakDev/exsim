@@ -17,10 +17,9 @@ private:
 };
 class UdpReceiver {
 public:
-    ErrorCode open(Ipv4Endpoint local, bool reuse = false) noexcept;
+    ErrorCode open(Ipv4Endpoint local) noexcept;
     void close() noexcept { socket_.close(); }
     int fd() const noexcept { return socket_.fd(); }
-    ErrorCode join_multicast(std::uint32_t group, std::uint32_t interface_address = kIpv4AnyAddress) noexcept;
     // Oversize datagrams are consumed and return -1/EMSGSIZE rather than
     // exposing a truncated packet as a valid protocol frame.
     ssize_t receive_from(std::span<char> bytes, Ipv4Endpoint& peer) noexcept;

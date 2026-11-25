@@ -19,9 +19,6 @@ namespace exsim::md {
 
 inline constexpr std::size_t kMoldHeaderSize = 20;        // session(10) sequence(8) count(2)
 inline constexpr std::size_t kMoldMessageLengthSize = 2;  // per-message length prefix
-inline constexpr std::size_t kMoldRequestSize = 20;       // session(10) sequence(8) count(2)
-inline constexpr std::uint16_t kMoldEndOfSessionCount = 0xFFFF;
-inline constexpr std::uint16_t kMoldMaxMessagesPerPacket = 65534;  // PacketBuilder limit
 
 // Largest ITCH 5.0 message this simulator emits (Net Order Imbalance 'I').
 inline constexpr std::size_t kMaxItchMessageSize = 50;

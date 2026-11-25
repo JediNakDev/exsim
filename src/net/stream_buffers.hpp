@@ -16,7 +16,7 @@
 //   inbound:  receive_from(fd) appends at the tail -> framer reads readable()
 //             and consume()s whole messages -> unread partial bytes are moved
 //             to the front only when the tail runs short (no allocation).
-//   outbound: codec encodes via reserve()/commit() or append() -> flush_to(fd)
+//   outbound: codec encodes via reserve()/commit() -> flush_to(fd)
 //             sends what the socket accepts; the rest stays queued until the
 //             socket is writable again.
 
@@ -117,17 +117,12 @@ public:
 
     // Zero-copy append: returns exactly `max_bytes` of contiguous space at the
     // end of the queue; encode into it, then commit() the bytes actually used.
-    // Returns an empty span and sets overflowed() when the bytes do not fit.
+    // Returns an empty span when the bytes do not fit, without moving the
+    // queued bytes: a paused replay retries until enough is sent.
     std::span<char> reserve(std::size_t max_bytes) noexcept {
-        if (overflowed_) {
-            return {};
-        }
         if (capacity_ - write_offset_ < max_bytes) {
+            if (capacity_ - (write_offset_ - read_offset_) < max_bytes) return {};
             compact();
-            if (capacity_ - write_offset_ < max_bytes) {
-                overflowed_ = true;
-                return {};
-            }
         }
         return {storage_.get() + write_offset_, max_bytes};
     }
@@ -137,31 +132,10 @@ public:
         write_offset_ += bytes;
     }
 
-    // Copies `bytes` to the end of the queue. On overflow nothing is queued,
-    // overflowed() becomes true and the call returns false.
-    bool append(std::span<const char> bytes) noexcept {
-        if (overflowed_) return false;
-        const std::span<char> space = reserve(bytes.size());
-        if (space.size() != bytes.size()) {
-            return false;
-        }
-        if (!bytes.empty()) {
-            std::memcpy(space.data(), bytes.data(), bytes.size());
-        }
-        commit(bytes.size());
-        return true;
-    }
-
     std::span<const char> pending() const noexcept {
         return {storage_.get() + read_offset_, write_offset_ - read_offset_};
     }
-    std::size_t pending_bytes() const noexcept { return write_offset_ - read_offset_; }
     bool has_pending() const noexcept { return write_offset_ != read_offset_; }
-    std::size_t capacity() const noexcept { return capacity_; }
-
-    // Sticky once set: the outbound stream lost bytes, so further appends
-    // fail until clear(); the owner should drop the connection.
-    bool overflowed() const noexcept { return overflowed_; }
 
     // One send() of the pending bytes. A short send means the socket buffer
     // is full, so the rest waits for write readiness (status Blocked).
@@ -170,7 +144,6 @@ public:
     void clear() noexcept {
         read_offset_ = 0;
         write_offset_ = 0;
-        overflowed_ = false;
     }
 
 private:
@@ -188,7 +161,6 @@ private:
     std::size_t capacity_;
     std::size_t read_offset_ = 0;
     std::size_t write_offset_ = 0;
-    bool overflowed_ = false;
 };
 
 }  // namespace exsim::net

@@ -141,7 +141,7 @@ TEST_CASE(md_receiver, reordered_packets_are_buffered_and_gap_requested) {
     CHECK_EQ(fixture.receiver.buffered_messages(), 2u);
     CHECK(fixture.receiver.gap_open());
     REQUIRE_EQ(fixture.requests.size(), 1u);
-    CHECK_EQ(fixture.requests[0].size(), md::kMoldRequestSize);
+    CHECK_EQ(fixture.requests[0].size(), md::kMoldHeaderSize);
     const auto request = fixture.request(0);
     CHECK_EQ(hex_of(request.session), hex_of(hex_bytes("45 58 53 49 4D 20 20 20 20 20")));
     CHECK_EQ(request.sequence, 1u);

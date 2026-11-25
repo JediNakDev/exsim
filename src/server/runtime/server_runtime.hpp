@@ -184,7 +184,6 @@ public:
     // ---- access (server thread, or after it stopped) ---------------------------
     [[nodiscard]] Core& core() noexcept { return core_; }
     [[nodiscard]] const Core& core() const noexcept { return core_; }
-    [[nodiscard]] runtime::MarketDataRuntime& market_data() noexcept { return market_data_; }
     [[nodiscard]] const ServerConfig& config() const noexcept { return config_; }
     template <class Gateway>
     [[nodiscard]] Endpoint<Gateway>& endpoint() noexcept {

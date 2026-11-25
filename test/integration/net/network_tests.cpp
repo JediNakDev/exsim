@@ -1,6 +1,9 @@
+#include <arpa/inet.h>
 #include <fcntl.h>
+#include <netinet/in.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <array>
 #include <cstdio>
 #include <cstring>
@@ -26,6 +29,15 @@ void until(Predicate predicate, Step step) {
     }
     REQUIRE(done);
 }
+// Queues non-empty `bytes` the way the gateways do; false for a stale or
+// closing connection, or when the bytes do not fit.
+bool queue(TcpServer& server, ConnectionId id, std::span<const char> bytes) {
+    const std::span<char> space = server.reserve_send_if_room(id, bytes.size());
+    if (space.empty()) return false;
+    std::ranges::copy(bytes, space.begin());
+    server.commit_send(id, bytes.size());
+    return true;
+}
 struct Handler {
     TcpServer& server;
     std::array<ConnectionId, 128> ids{};
@@ -48,7 +60,7 @@ struct Handler {
                 if (data[index] == '\n') count = index + 1;
         }
         bytes += count;
-        if (echo) server.send(id, data.first(count));
+        if (echo && count != 0) queue(server, id, data.first(count));
         if (consume) buffer.consume(count);
     }
 };
@@ -189,13 +201,12 @@ TEST_CASE(net_buffers, compaction_overflow_and_single_byte_capacity) {
     tiny.consume(1);
     CHECK_EQ(tiny.writable_tail().size(), 1U);
     SendBuffer send(4);
-    CHECK(send.append(std::span("abcd", 4)));
-    CHECK(!send.append(std::span("e", 1)));
-    CHECK(send.overflowed());
-    CHECK_EQ(send.pending_bytes(), 4U);
-    CHECK(!send.append({}));
+    REQUIRE_EQ(send.reserve(4).size(), 4U);
+    send.commit(4);
+    CHECK(send.reserve(1).empty());
+    CHECK_EQ(send.pending().size(), 4U);
     send.clear();
-    CHECK(send.append(std::span("ok", 2)));
+    CHECK_EQ(send.reserve(2).size(), 2U);
 }
 TEST_CASE(net_server, echo_and_split_frames) {
     Poller poller;
@@ -217,12 +228,12 @@ TEST_CASE(net_server, echo_and_split_frames) {
     CHECK_EQ(handler.bytes, 0U);
     REQUIRE(client.send(std::span("lo\nx", 4)));
     client.flush();
-    until([&] { return client.connection().receive_buffer().size() == 6; },
+    until([&] { return client.receive_buffer().size() == 6; },
           [&] {
               pump(poller, server, handler);
               client.receive();
           });
-    auto data = client.connection().receive_buffer().readable();
+    auto data = client.receive_buffer().readable();
     CHECK_EQ(std::string_view(data.data(), data.size()), "hello\n");
     CHECK_EQ(server.connection(handler.ids[0])->receive_buffer().size(), 1U);
 }
@@ -240,15 +251,14 @@ TEST_CASE(net_server, connection_limit_and_rejection) {
         clients.emplace_back(1024, 1024);
         connect_client(clients.back(), server.listen_endpoint());
     }
-    until([&] { return handler.opened == 32 && server.rejected_connection_count() == 1; },
-          [&] { pump(poller, server, handler); });
-    CHECK_EQ(server.connection_count(), 32U);
+    // The 33rd connection is accepted and closed at once: its client sees EOF.
     bool eof = false;
-    until([&] { return eof; },
+    until([&] { return handler.opened == 32 && eof; },
           [&] {
-              eof = clients.back().receive().status == ReceiveStatus::PeerClosed;
               pump(poller, server, handler);
+              eof = eof || clients.back().receive().status == ReceiveStatus::PeerClosed;
           });
+    CHECK_EQ(server.connection_count(), 32U);
 }
 TEST_CASE(net_server, stale_id_event_and_flush_entry_after_reuse) {
     Poller poller;
@@ -262,7 +272,7 @@ TEST_CASE(net_server, stale_id_event_and_flush_entry_after_reuse) {
     connect_client(first, server.listen_endpoint());
     until([&] { return handler.opened == 1; }, [&] { pump(poller, server, handler); });
     const auto old = handler.ids[0];
-    REQUIRE(server.send(old, std::span("discard", 7)));
+    REQUIRE(queue(server, old, std::span("discard", 7)));
     REQUIRE(server.close_now(old));
     TcpClient second;
     connect_client(second, server.listen_endpoint());
@@ -275,19 +285,19 @@ TEST_CASE(net_server, stale_id_event_and_flush_entry_after_reuse) {
     const auto current = handler.ids[1];
     CHECK_EQ(old.slot, current.slot);
     CHECK_NE(old.generation, current.generation);
-    CHECK(!server.send(old, std::span("bad", 3)));
+    CHECK(!queue(server, old, std::span("bad", 3)));
     CHECK(!server.close_now(old));
     CHECK(server.connection(old) == nullptr);
     server.handle_event({make_poll_token(3, (std::uint64_t{old.generation} << 32) | old.slot), true, true, true, true},
                         handler);
-    REQUIRE(server.send(current, std::span("new", 3)));
+    REQUIRE(queue(server, current, std::span("new", 3)));
     server.flush_pending(handler);
-    until([&] { return second.connection().receive_buffer().size() == 3; },
+    until([&] { return second.receive_buffer().size() == 3; },
           [&] {
               second.receive();
               pump(poller, server, handler);
           });
-    CHECK_EQ(std::string_view(second.connection().receive_buffer().readable().data(), 3), "new");
+    CHECK_EQ(std::string_view(second.receive_buffer().readable().data(), 3), "new");
 }
 TEST_CASE(net_server, peer_close_and_reset) {
     for (bool reset : {false, true}) {
@@ -310,29 +320,22 @@ TEST_CASE(net_server, peer_close_and_reset) {
         CHECK_EQ(server.connection_count(), 0U);
     }
 }
-TEST_CASE(net_server, receive_and_send_exhaustion) {
-    for (bool inbound : {true, false}) {
-        Poller poller;
-        REQUIRE_EQ(poller.open(), 0);
-        TcpServerConfig config;
-        config.receive_buffer_capacity = 4;
-        config.send_buffer_capacity = 4;
-        TcpServer server(config, poller, 1);
-        REQUIRE_EQ(server.open(), 0);
-        Handler handler{server};
-        handler.consume = false;
-        TcpClient client;
-        connect_client(client, server.listen_endpoint());
-        until([&] { return handler.opened == 1; }, [&] { pump(poller, server, handler); });
-        if (inbound) {
-            REQUIRE(client.send(std::span("full", 4)));
-            client.flush();
-        } else {
-            CHECK(!server.send(handler.ids[0], std::span("large", 5)));
-        }
-        until([&] { return handler.closed == 1; }, [&] { pump(poller, server, handler); });
-        CHECK_EQ(handler.reason, inbound ? CloseReason::ReceiveBufferFull : CloseReason::SendBufferOverflow);
-    }
+TEST_CASE(net_server, receive_exhaustion) {
+    Poller poller;
+    REQUIRE_EQ(poller.open(), 0);
+    TcpServerConfig config;
+    config.receive_buffer_capacity = 4;
+    TcpServer server(config, poller, 1);
+    REQUIRE_EQ(server.open(), 0);
+    Handler handler{server};
+    handler.consume = false;
+    TcpClient client;
+    connect_client(client, server.listen_endpoint());
+    until([&] { return handler.opened == 1; }, [&] { pump(poller, server, handler); });
+    REQUIRE(client.send(std::span("full", 4)));
+    client.flush();
+    until([&] { return handler.closed == 1; }, [&] { pump(poller, server, handler); });
+    CHECK_EQ(handler.reason, CloseReason::ReceiveBufferFull);
 }
 TEST_CASE(net_server, reserve_if_room_refuses_without_overflowing) {
     Poller poller;
@@ -351,17 +354,17 @@ TEST_CASE(net_server, reserve_if_room_refuses_without_overflowing) {
     std::memcpy(first.data(), "abcdef", 6);
     server.commit_send(id, 6);
     // Four more bytes do not fit: refused, but nothing queued is lost and the
-    // connection stays open (reserve_send would mark it overflowed).
+    // connection stays open.
     CHECK(server.reserve_send_if_room(id, 4).empty());
-    CHECK(!server.connection(id)->send_buffer().overflowed());
+    CHECK_EQ(server.connection(id)->send_buffer().pending().size(), 6U);
     std::size_t received = 0;
     until([&] { return received == 6; },
           [&] {
               pump(poller, server, handler);
               (void)client.receive();
-              received = client.connection().receive_buffer().size();
+              received = client.receive_buffer().size();
           });
-    CHECK_EQ(std::string_view(client.connection().receive_buffer().readable().data(), 6), "abcdef");
+    CHECK_EQ(std::string_view(client.receive_buffer().readable().data(), 6), "abcdef");
     auto second = server.reserve_send_if_room(id, 8);
     REQUIRE_EQ(second.size(), 8U);
     server.commit_send(id, 8);
@@ -385,36 +388,41 @@ TEST_CASE(net_server, backpressure_order_and_graceful_close) {
     std::vector<char> expected(config.send_buffer_capacity);
     for (std::size_t index = 0; index < expected.size(); ++index) expected[index] = static_cast<char>(index % 113);
     const auto id = handler.ids[0];
-    auto output = server.reserve_send(id, expected.size());
+    auto output = server.reserve_send_if_room(id, expected.size());
     REQUIRE_EQ(output.size(), expected.size());
     std::memcpy(output.data(), expected.data(), expected.size());
     server.commit_send(id, expected.size());
     server.flush_pending(handler);
     REQUIRE(server.connection(id) != nullptr);
     CHECK(server.connection(id)->send_buffer().has_pending());
-    const auto sent = expected.size() - server.connection(id)->send_buffer().pending_bytes();
+    const auto sent = expected.size() - server.connection(id)->send_buffer().pending().size();
     REQUIRE(sent > 0);
+    // One byte more than the freed prefix does not fit: refused without moving
+    // the queued bytes.
+    const char* queued = server.connection(id)->send_buffer().pending().data();
+    CHECK(server.reserve_send_if_room(id, sent + 1).empty());
+    CHECK(server.connection(id)->send_buffer().pending().data() == queued);
     const auto original_size = expected.size();
     expected.resize(original_size + sent);
     for (std::size_t index = original_size; index < expected.size(); ++index)
         expected[index] = static_cast<char>(index % 113);
     // Refill the freed prefix, forcing send-buffer compaction after a short write.
-    REQUIRE(server.send(id, std::span(expected).subspan(original_size)));
+    REQUIRE(queue(server, id, std::span(expected).subspan(original_size)));
     REQUIRE_EQ(shutdown(client.fd(), SHUT_WR), 0);
     REQUIRE(server.close_after_flush(id));
     CHECK(!server.is_open(id));
-    CHECK(!server.send(id, std::span("x", 1)));
+    CHECK(!queue(server, id, std::span("x", 1)));
     std::size_t received = 0;
     bool eof = false;
     until([&] { return eof; },
           [&] {
               pump(poller, server, handler);
               const auto result = client.receive();
-              auto data = client.connection().receive_buffer().readable();
+              auto data = client.receive_buffer().readable();
               REQUIRE(received + data.size() <= expected.size());
               if (!data.empty()) REQUIRE_EQ(std::memcmp(data.data(), expected.data() + received, data.size()), 0);
               received += data.size();
-              client.connection().receive_buffer().consume(data.size());
+              client.receive_buffer().consume(data.size());
               eof = result.status == ReceiveStatus::PeerClosed;
               REQUIRE(result.status != ReceiveStatus::Error);
           });
@@ -442,7 +450,7 @@ TEST_CASE(net_server, graceful_close_with_unread_input_delivers_queued_output) {
     const auto id = handler.ids[0];
     std::vector<char> expected(config.send_buffer_capacity);
     for (std::size_t index = 0; index < expected.size(); ++index) expected[index] = static_cast<char>(index % 101);
-    REQUIRE(server.send(id, expected));
+    REQUIRE(queue(server, id, expected));
     REQUIRE(server.close_after_flush(id));
     server.flush_pending(handler);
     REQUIRE(server.connection(id) != nullptr);  // still flushing: the client has not read yet
@@ -455,11 +463,11 @@ TEST_CASE(net_server, graceful_close_with_unread_input_delivers_queued_output) {
           [&] {
               pump(poller, server, handler);
               const auto result = client.receive();
-              auto data = client.connection().receive_buffer().readable();
+              auto data = client.receive_buffer().readable();
               REQUIRE(received + data.size() <= expected.size());
               if (!data.empty()) REQUIRE_EQ(std::memcmp(data.data(), expected.data() + received, data.size()), 0);
               received += data.size();
-              client.connection().receive_buffer().consume(data.size());
+              client.receive_buffer().consume(data.size());
               eof = result.status == ReceiveStatus::PeerClosed;
               REQUIRE(result.status != ReceiveStatus::Error);
           });
@@ -484,7 +492,7 @@ TEST_CASE(net_server, closing_slot_of_a_stalled_peer_stays_quiet_and_expires) {
     until([&] { return handler.opened == 1; }, [&] { pump(poller, server, handler); });
     const auto id = handler.ids[0];
     std::vector<char> output(config.send_buffer_capacity, 'x');
-    REQUIRE(server.send(id, output));
+    REQUIRE(queue(server, id, output));
     const std::uint64_t before_close = monotonic_ns();
     REQUIRE(server.close_after_flush(id));
     const std::uint64_t after_close = monotonic_ns();
@@ -564,11 +572,13 @@ TEST_CASE(net_udp, unicast_reply_and_truncation) {
 TEST_CASE(net_udp, multicast_loopback) {
     UdpReceiver receiver;
     UdpSender sender;
-    int error = receiver.open({kIpv4AnyAddress, 0}, true);
+    int error = receiver.open({kIpv4AnyAddress, 0});
     Ipv4Endpoint destination{};
     constexpr std::uint32_t group = 0xEFFF2A01;
     if (!error) error = local_endpoint(receiver.fd(), destination);
-    if (!error) error = receiver.join_multicast(group, kIpv4LoopbackAddress);
+    const ip_mreq membership{{htonl(group)}, {htonl(kIpv4LoopbackAddress)}};
+    if (!error && setsockopt(receiver.fd(), IPPROTO_IP, IP_ADD_MEMBERSHIP, &membership, sizeof(membership)) < 0)
+        error = errno;
     if (!error) error = sender.open();
     if (!error) error = sender.multicast_options(1, true, kIpv4LoopbackAddress);
     if (error) {
@@ -633,11 +643,11 @@ TEST_CASE(net_tcp, client_buffer_exhaustion_and_reconnect) {
               REQUIRE(error == 0 || is_would_block(error));
           });
     REQUIRE_EQ(send_some(accepted.fd(), "full", 4), 4);
-    until([&] { return client.connection().receive_buffer().size() == 4; }, [&] { client.receive(); });
+    until([&] { return client.receive_buffer().size() == 4; }, [&] { client.receive(); });
     CHECK_EQ(client.receive().status, ReceiveStatus::BufferFull);
     CHECK(!client.connected());
     CHECK_EQ(client.fd(), -1);
-    CHECK_EQ(client.connection().receive_buffer().size(), 4U);
+    CHECK_EQ(client.receive_buffer().size(), 4U);
 }
 TEST_CASE(net_server, reopen_and_foreign_events) {
     Poller poller;
@@ -651,7 +661,7 @@ TEST_CASE(net_server, reopen_and_foreign_events) {
     connect_client(client, server.listen_endpoint());
     until([&] { return handler.opened == 1; }, [&] { pump(poller, server, handler); });
     const auto old = handler.ids[0];
-    REQUIRE(server.send(old, std::span("queued", 6)));
+    REQUIRE(queue(server, old, std::span("queued", 6)));
     server.close();
     CHECK_EQ(server.connection_count(), 0U);
     REQUIRE_EQ(server.open(), 0);

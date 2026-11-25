@@ -11,7 +11,7 @@
 //       poller.wait(timeout_ms);   // 0 = busy poll
 //       for (const PollEvent& event : poller.events())
 //           if (poll_token_tag(event.token) == kOrderEntryTag) server.handle_event(event, gateway);
-//       ...engine runs, replies are encoded with server.send() / reserve_send()...
+//       ...engine runs, replies are encoded with reserve_send_if_room() / commit_send()...
 //       server.flush_pending(gateway);
 //       server.on_timer(monotonic_ns);  // in the loop's timer pass
 //   }
@@ -22,8 +22,8 @@
 //   void on_connection_data(ConnectionId, ReceiveBuffer& received);  // consume() whole messages
 //   void on_connection_closed(ConnectionId, CloseReason, ErrorCode);
 //
-// Inside a callback the handler may call send(), close_now() or
-// close_after_flush() on any connection.
+// Inside a callback the handler may call reserve_send_if_room(),
+// commit_send(), close_now() or close_after_flush() on any connection.
 //
 // on_connection_closed reports the closes the application did not ask for
 // (peer close, socket error, buffer limits). Closes the application requests
@@ -35,9 +35,8 @@
 //
 // No allocation after construction: slots, buffers and queues are sized from
 // TcpServerConfig. Connections beyond max_connections are accepted and closed
-// at once (counted in rejected_connection_count()); a connection that queues
-// more than send_buffer_capacity outbound bytes is disconnected instead of
-// growing its buffer. The Poller must outlive the server.
+// at once. Output that does not fit send_buffer_capacity is refused, and the
+// caller decides what to do. The Poller must outlive the server.
 
 #include <cstddef>
 #include <cstdint>
@@ -54,7 +53,7 @@ struct TcpServerConfig {
     Ipv4Endpoint listen_endpoint = loopback_endpoint(0);  // port 0 = the OS picks a free port
     std::uint32_t max_connections = 64;
     std::size_t receive_buffer_capacity = 64 * 1024;  // per connection; must hold the largest inbound message
-    std::size_t send_buffer_capacity = 1024 * 1024;   // per connection; queued outbound bytes beyond this disconnect
+    std::size_t send_buffer_capacity = 1024 * 1024;   // per connection; output beyond this is refused
     int listen_backlog = 128;
     int socket_send_buffer_bytes = 0;     // SO_SNDBUF of accepted sockets, 0 = OS default
     int socket_receive_buffer_bytes = 0;  // SO_RCVBUF of accepted sockets, 0 = OS default
@@ -69,10 +68,9 @@ struct ConnectionId {
 };
 
 enum class CloseReason : std::uint8_t {
-    PeerClosed,          // orderly shutdown by the peer
-    ConnectionError,     // recv/send/poller failure; the ErrorCode says which (ECONNRESET, EPIPE, ...)
-    ReceiveBufferFull,   // the handler left the receive buffer full: an inbound message exceeds its capacity
-    SendBufferOverflow,  // more than send_buffer_capacity bytes queued: the peer reads too slowly
+    PeerClosed,         // orderly shutdown by the peer
+    ConnectionError,    // recv/send/poller failure; the ErrorCode says which (ECONNRESET, EPIPE, ...)
+    ReceiveBufferFull,  // the handler left the receive buffer full: an inbound message exceeds its capacity
 };
 
 template <class Handler>
@@ -106,8 +104,8 @@ public:
     void handle_event(const PollEvent& event, Handler& handler) noexcept;
 
     // Sends the queued bytes of every connection written to since the last
-    // call; keeps write interest registered while bytes remain; disconnects
-    // connections whose send buffer overflowed; completes graceful closes.
+    // call; keeps write interest registered while bytes remain; completes
+    // graceful closes.
     template <TcpServerHandler Handler>
     void flush_pending(Handler& handler) noexcept;
 
@@ -122,46 +120,14 @@ public:
                slots_[id.slot].generation == id.generation;
     }
 
-    // Queues bytes for the next flush_pending(). Returns false for a stale or
-    // closing connection, and on send-buffer overflow (the connection is then
-    // disconnected by the next flush_pending() with SendBufferOverflow).
-    bool send(ConnectionId id, std::span<const char> bytes) noexcept {
-        Slot* slot = open_slot(id);
-        if (slot == nullptr) {
-            return false;
-        }
-        const bool queued = slot->connection.send_buffer().append(bytes);
-        queue_for_flush(id.slot);
-        return queued;
-    }
-
     // Zero-copy send: encode into the returned `max_bytes` span, then
-    // commit_send() the bytes used. Empty span = stale/closing connection or
-    // overflow (handled as in send()).
-    std::span<char> reserve_send(ConnectionId id, std::size_t max_bytes) noexcept {
-        Slot* slot = open_slot(id);
-        if (slot == nullptr) {
-            return {};
-        }
-        const std::span<char> space = slot->connection.send_buffer().reserve(max_bytes);
-        if (space.empty()) {
-            queue_for_flush(id.slot);
-        }
-        return space;
-    }
-    // Like reserve_send(), but bytes that do not fit leave the connection
-    // usable: the caller chooses between waiting for the socket to drain
-    // (a paused replay) and closing the connection itself.
+    // commit_send() the bytes used. Empty span = stale or closing connection,
+    // or bytes that do not fit. The connection stays usable: the caller
+    // chooses between waiting for the socket to drain (a paused replay) and
+    // closing the connection itself.
     std::span<char> reserve_send_if_room(ConnectionId id, std::size_t max_bytes) noexcept {
         Slot* slot = open_slot(id);
-        if (slot == nullptr) {
-            return {};
-        }
-        SendBuffer& buffer = slot->connection.send_buffer();
-        if (buffer.capacity() - buffer.pending_bytes() < max_bytes) {
-            return {};
-        }
-        return buffer.reserve(max_bytes);
+        return slot == nullptr ? std::span<char>{} : slot->connection.send_buffer().reserve(max_bytes);
     }
     void commit_send(ConnectionId id, std::size_t bytes) noexcept {
         Slot* slot = open_slot(id);
@@ -192,7 +158,6 @@ public:
     }
 
     std::uint32_t connection_count() const noexcept { return connection_count_; }  // open + closing
-    std::uint64_t rejected_connection_count() const noexcept { return rejected_connection_count_; }
 
 private:
     enum class SlotState : std::uint8_t { Free, Open, Closing };
@@ -284,7 +249,6 @@ private:
     std::size_t flush_queue_count_ = 0;
 
     std::uint32_t connection_count_ = 0;
-    std::uint64_t rejected_connection_count_ = 0;
     std::uint64_t accept_paused_until_ns_ = 0;  // 0 = the listener is watched
     std::uint32_t closing_count_ = 0;           // on_timer scans the slots only when nonzero
 };

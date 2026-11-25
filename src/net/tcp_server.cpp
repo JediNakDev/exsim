@@ -49,7 +49,6 @@ TcpServer::AcceptOutcome TcpServer::accept_one(ConnectionId& id, Ipv4Endpoint& p
     }
     if (error) return is_would_block(error) ? AcceptOutcome::NothingPending : AcceptOutcome::Failed;
     if (!free_slot_count_) {
-        ++rejected_connection_count_;
         return AcceptOutcome::Rejected;
     }
     if ((error = set_tcp_no_delay(accepted.fd(), config_.tcp_no_delay))) return AcceptOutcome::Failed;
@@ -119,7 +118,6 @@ void TcpServer::finish_graceful_close(std::uint32_t index) noexcept {
 }
 TcpServer::FlushOutcome TcpServer::flush_slot(std::uint32_t index) noexcept {
     Slot& slot = slots_[index];
-    if (slot.connection.send_buffer().overflowed()) return {true, CloseReason::SendBufferOverflow, ENOBUFS};
     const auto flushed = slot.connection.flush();
     if (flushed.status == FlushStatus::Error) return {true, CloseReason::ConnectionError, flushed.error};
     if (flushed.status == FlushStatus::Complete && slot.state == SlotState::Closing) {

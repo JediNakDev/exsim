@@ -85,7 +85,7 @@ TEST_CASE(md_allocation, steady_state_feed_allocates_nothing) {
 
     constexpr std::size_t kPayload = 512;
     FixedPacketQueue feed_queue(256, kPayload);
-    FixedPacketQueue request_queue(64, md::kMoldRequestSize);
+    FixedPacketQueue request_queue(64, md::kMoldHeaderSize);
     FixedPacketQueue response_queue(64, kPayload);
     md::PacketFaultInjector injector(kPayload, 16);
     md::PacketFaultConfig faults;

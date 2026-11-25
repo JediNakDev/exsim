@@ -33,7 +33,7 @@ ErrorCode TcpClient::connect(Ipv4Endpoint remote) noexcept {
     if ((error = set_tcp_no_delay(socket.fd(), true))) return error;
     error = start_connect(socket.fd(), remote);
     if (error && error != EINPROGRESS) return error;
-    connection_.attach(std::move(socket));
+    socket_ = std::move(socket);
     connecting_ = error == EINPROGRESS;
     connected_ = !connecting_;
     return error;
@@ -53,22 +53,18 @@ ErrorCode TcpClient::complete_connect() noexcept {
 }
 ReceiveResult TcpClient::receive() noexcept {
     if (!connected_) return {ReceiveStatus::Error, ENOTCONN, 0};
-    const auto received = connection_.receive();
+    const auto received = receive_buffer_.receive_from(socket_.fd());
     // Keep final received bytes available until the caller consumes them.
     if (received.status == ReceiveStatus::PeerClosed || received.status == ReceiveStatus::Error ||
         received.status == ReceiveStatus::BufferFull) {
-        connection_.disconnect();
+        socket_.close();
         connected_ = false;
     }
     return received;
 }
 FlushResult TcpClient::flush() noexcept {
     if (!connected_) return {FlushStatus::Error, ENOTCONN, 0};
-    if (connection_.send_buffer().overflowed()) {
-        close();
-        return {FlushStatus::Error, ENOBUFS, 0};
-    }
-    const auto flushed = connection_.flush();
+    const auto flushed = send_buffer_.flush_to(socket_.fd());
     if (flushed.status == FlushStatus::Error) close();
     return flushed;
 }

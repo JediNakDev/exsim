@@ -2,8 +2,8 @@
 #define EXSIM_NET_TCP_CONNECTION_HPP
 
 // One TCP stream: the socket plus its fixed-capacity receive and send
-// buffers. Used by every TcpServer slot and by TcpClient; the buffers are
-// allocated once and reused across reconnects.
+// buffers. Used by every TcpServer slot; the buffers are allocated once and
+// reused across connections.
 
 #include <cstddef>
 #include <net/socket.hpp>
@@ -30,9 +30,6 @@ public:
         receive_buffer_.clear();
         send_buffer_.clear();
     }
-
-    // Disconnect while retaining final inbound bytes for the framer.
-    void disconnect() noexcept { socket_.close(); }
 
     int fd() const noexcept { return socket_.fd(); }
 
