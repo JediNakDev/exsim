@@ -11,6 +11,28 @@ TEST_CASE(proto_fix, builder_rejects_zero_tag) {
     CHECK_EQ(builder.finish(), 0u);
 }
 
+TEST_CASE(proto_fix, builder_raw_fields_match_the_same_fields_built_one_by_one) {
+    char raw[128], expected[128];
+    Builder builder(raw);
+    REQUIRE(builder.field(35, '8'));
+    const std::string_view body =
+        "11=A\001"
+        "38=100\001";
+    REQUIRE(builder.raw_fields(body));
+    REQUIRE(builder.uint_field(14, 0));
+    Builder reference(expected);
+    REQUIRE(reference.field(35, '8') && reference.field(11, "A") && reference.field(38, "100") &&
+            reference.uint_field(14, 0));
+    const std::size_t n = builder.finish();
+    REQUIRE(n > 0);
+    CHECK_EQ(std::string_view(raw, n), std::string_view(expected, reference.finish()));
+
+    char small[20];
+    Builder tight(small);
+    CHECK(!tight.raw_fields("11=TOO-LONG\001"));
+    CHECK_EQ(tight.finish(), 0u);
+}
+
 TEST_CASE(proto_fix, decimal_boundaries) {
     exsim::Price p{};
     CHECK(parse_price("0.0001", p));

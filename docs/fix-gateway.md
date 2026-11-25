@@ -89,7 +89,6 @@ arrival order and allow session timer/recovery work. No socket reactor or standa
 CLI is included in this component.
 
 The existing codec handles application decode/encode, framing and semantic field
-reads. A local frame writer is restricted to PossDup rebuilds because the codec's
-Builder has no raw-field splice operation; original application body bytes are
-copied intact. Raw header scans are only used for malformed messages the codec
+reads. PossDup rebuilds use the codec's Builder and copy the original application
+body bytes intact with `raw_fields`. Raw header scans are only used for malformed messages the codec
 rejects, to recover reference sequence/type and the duplicate tag for Reject(3).
