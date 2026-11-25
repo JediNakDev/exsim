@@ -95,6 +95,11 @@ int main(int argc, char** argv) {
             runtime.poll_once();
             admin.on_timer(exsim::common::monotonic_ns());
         }
+        // A harness that checks the exit status must not take an incomplete journal for a whole one.
+        if (runtime.core().journal_state() == exsim::server::JournalState::Failed) {
+            std::cerr << "exsim_exchanged: journal " << config.journal_path << " failed; it is incomplete\n";
+            return 1;
+        }
     } catch (const std::exception& error) {
         std::cerr << "exsim_exchanged: " << error.what() << '\n';
         return 1;
