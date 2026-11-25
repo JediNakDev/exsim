@@ -2,6 +2,7 @@
 #define EXSIM_PROTOCOL_SOUPBINTCP_HPP
 // Length includes the type byte, excludes the two-byte length itself. Data
 // payload views borrow the input; the session layer supplies sequence state.
+// Login reply decoders live in test/exsim/protocol/soupbintcp_client_codec.hpp.
 #include "wire.hpp"
 #include <algorithm>
 namespace exsim::protocol::soupbintcp {
@@ -79,15 +80,6 @@ inline Status decode(const char* p, std::size_t n, LoginRequest& m) noexcept {
         m.password[i] = p[9 + i];
         m.session[i] = p[19 + i];
     }
-    return Status::ok;
-}
-inline Status decode(const char* p, std::size_t n, LoginAccepted& m) noexcept {
-    Packet pkt;
-    auto s = decode(p, n, pkt);
-    if (s != Status::ok) return s;
-    if (pkt.type != 'A') return Status::invalid_type;
-    if (!wire::numeric({p + 13, 20}, m.sequence)) return Status::invalid_field;
-    for (unsigned i = 0; i < 10; ++i) m.session[i] = p[3 + i];
     return Status::ok;
 }
 // feed consumes only through the next complete frame. A returned payload is
@@ -168,14 +160,6 @@ Status decode(const char* p, std::size_t n, ControlPacket<T>&) noexcept {
     Packet packet;
     auto status = decode(p, n, packet);
     return status != Status::ok ? status : packet.type == T ? Status::ok : Status::invalid_type;
-}
-inline Status decode(const char* p, std::size_t n, LoginRejected& m) noexcept {
-    Packet packet;
-    auto status = decode(p, n, packet);
-    if (status != Status::ok) return status;
-    if (packet.type != 'J') return Status::invalid_type;
-    m.reason = packet.payload[0];
-    return Status::ok;
 }
 }  // namespace exsim::protocol::soupbintcp
 #endif

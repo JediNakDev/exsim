@@ -1,7 +1,7 @@
 #include "moldudp64_reader.hpp"
 #include "../../framework/test.hpp"
 #include <protocol/moldudp64.hpp>
-#include <protocol/soupbintcp.hpp>
+#include "test/exsim/protocol/soupbintcp_client_codec.hpp"
 #include <random>
 #include <type_traits>
 using exsim::protocol::Status;

@@ -1,6 +1,6 @@
 #ifndef TEST_EXSIM_PROTOCOL_FIX44_DECODE_HPP
 #define TEST_EXSIM_PROTOCOL_FIX44_DECODE_HPP
-#include <protocol/fix44.hpp>
+#include "test/exsim/protocol/fix44_client_codec.hpp"
 
 namespace exsim::protocol::fix44 {
 template <std::size_t N>
