@@ -32,6 +32,7 @@ JournalWriter::JournalWriter(const std::string& path, const JournalSetup& setup)
     add(header, kSchema);
     add(header, setup.engine.max_instruments);
     add(header, setup.engine.max_orders);
+    add(header, setup.engine.max_level_qty);
     add(header, setup.instruments.size());
     for (const auto& i : setup.instruments) {
         if (!valid_instrument_config(i)) throw std::invalid_argument("instrument config");

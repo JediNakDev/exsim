@@ -291,9 +291,9 @@ class ExsimExchangedTests(unittest.TestCase):
         self.assertIn("journal state=ok", exchange.admin("status"))
         self.assertEqual(exchange.stop(), 0)
         data = (self.directory / "run.journal").read_bytes()
-        self.assertEqual(struct.unpack("!QQ", data[:16]), (0x455853494D4A4E4C, 2))
-        count = struct.unpack("!Q", data[32:40])[0]
-        offset = 48 + 108 * count
+        self.assertEqual(struct.unpack("!QQ", data[:16]), (0x455853494D4A4E4C, 3))
+        count = struct.unpack("!Q", data[40:48])[0]
+        offset = 56 + 108 * count
         tags = []
         while offset < len(data) - 24:
             sequence, size, tag = struct.unpack("!QQQ", data[offset:offset + 24])

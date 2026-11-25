@@ -47,6 +47,7 @@ inline JournalReader::JournalReader(const std::string& path) {
         throw std::runtime_error("journal magic/schema");
     setup_.engine.max_instruments = get();
     setup_.engine.max_orders = get();
+    setup_.engine.max_level_qty = get();
     (void)required_event_capacity(setup_.engine);
     auto count = get();
     if (count > setup_.engine.max_instruments || count > (bytes_.size() - offset_) / 108)

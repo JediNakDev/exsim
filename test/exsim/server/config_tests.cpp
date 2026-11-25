@@ -4,6 +4,8 @@
 #include "../../framework/test.hpp"
 
 #include <algorithm>
+#include <cstdint>
+#include <limits>
 #include <string>
 
 using namespace exsim;
@@ -35,6 +37,7 @@ TEST_CASE(server_config_mdp, fixture_and_cme_identity) {
     CHECK_EQ(config.market_data.book_depth, 10);
     CHECK_EQ(config.instruments[0].cme_security_id, 800001);
     CHECK_EQ(std::string_view(config.instruments[0].cme_symbol.data(), 19), "ES-SIMULATED-FUTURE");
+    CHECK_EQ(config.engine.engine.max_level_qty, std::uint64_t{INT32_MAX - 1});
 }
 
 TEST_CASE(server_config_mdp, rejects_invalid_profile_without_truncating) {
@@ -217,6 +220,7 @@ TEST_CASE(server_config, minimal_uses_defaults) {
     CHECK(cfg.users[0].cancel_on_disconnect);
     CHECK(cfg.exchange.name == "EXSIM");
     CHECK(cfg.users[0].username == "ALICE");
+    CHECK_EQ(cfg.engine.engine.max_level_qty, std::numeric_limits<std::uint64_t>::max());  // ITCH has no level total
 }
 
 // Large capacity is an explicit config choice: the defaults stay small

@@ -37,6 +37,11 @@ struct EngineConfig {
     // Live (resting) orders across all instruments. A few megabytes at the
     // default; set `[engine] max_orders` for larger books.
     std::size_t max_orders = 1u << 16;
+    // Most quantity that may rest at one price on one side. A new or replaced
+    // order that would rest past it is rejected with CapacityExceeded, and an
+    // instrument whose max_order_qty exceeds it is refused. The server lowers
+    // it for a feed whose level quantity field is narrower.
+    std::uint64_t max_level_qty = std::numeric_limits<std::uint64_t>::max();
 };
 
 // Conservative bound for ANY command, including all-instrument phase changes.

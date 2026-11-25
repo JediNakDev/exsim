@@ -57,6 +57,11 @@ public:
     [[nodiscard]] const PriceLevel* price_level(Side side, std::int32_t tick) const noexcept {
         return (side == Side::BUY ? bid_ladder_ : ask_ladder_)[static_cast<std::size_t>(tick)];
     }
+    // Sum of leaves at `tick`, 0 when the level is empty.
+    [[nodiscard]] std::uint64_t level_volume(Side side, std::int32_t tick) const noexcept {
+        const PriceLevel* level = price_level(side, tick);
+        return level == nullptr ? 0 : level->total_volume;
+    }
     // Nearest occupied tick at or after `from` in the given direction. `from`
     // may be one step outside the ladder, which finds nothing.
     [[nodiscard]] std::optional<std::int32_t> next_tick(Side side, std::int32_t from, bool ascending) const noexcept;

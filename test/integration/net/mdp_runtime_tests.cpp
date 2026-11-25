@@ -110,7 +110,7 @@ void expect_template(const std::vector<char>& bytes, unsigned id, unsigned schem
     CHECK_EQ(message.header.template_id, id);
     CHECK_EQ(message.header.schema_id, schema);
 }
-void fix_exchange(int fd, std::string_view message, const Pump& pump) {
+std::string fix_exchange(int fd, std::string_view message, const Pump& pump) {
     send_text(fd, message);
     std::string response;
     const auto deadline = common::monotonic_ns() + 2000000000;
@@ -126,7 +126,7 @@ void fix_exchange(int fd, std::string_view message, const Pump& pump) {
         if (protocol::fix44::frame_size(std::span(response), size) == protocol::Status::ok && size <= response.size()) {
             REQUIRE(response.find("35=3\1") == std::string::npos);
             REQUIRE(response.find("35=5\1") == std::string::npos);
-            return;
+            return response;
         }
     }
     FAIL("FIX response timeout");
@@ -282,5 +282,45 @@ TEST_CASE(ilink_runtime, private_fills_correlate_with_mdp_and_replay_over_real_s
     runtime.request_shutdown();
     const auto stopped = common::monotonic_ns() + 4000000000;
     while (!runtime.finished() && common::monotonic_ns() < stopped) runtime.poll_once();
+    CHECK(runtime.finished());
+}
+
+// A level total past MDP's Int32 quantity would stop the feed and end the
+// trading day for every session, so the engine refuses the order instead.
+TEST_CASE(mdp_runtime, an_order_past_the_level_quantity_limit_is_rejected_and_the_exchange_keeps_running) {
+    Feeds feeds;
+    std::string text = feeds.config_text();
+    const std::string_view small_qty = "max_order_qty = 1000\n";
+    const auto qty = text.find(small_qty);
+    REQUIRE(qty != std::string::npos);
+    text.replace(qty, small_qty.size(), "max_order_qty = 1100000000\n");
+    server::ServerConfig config;
+    std::string error;
+    REQUIRE(server::parse_config(text, config, error));
+    server::ServerRuntimeOptions options;
+    options.log = nullptr;
+    options.day_time_at_start = fix_test::kSessionStartNs;
+    server::ServerRuntime runtime(config, options);
+    REQUIRE(runtime.start().empty());
+    const Pump pump = [&] { runtime.poll_once(); };
+    auto alice = connect_port(runtime.listen_endpoint<server::runtime::FixGateway>().port);
+    fix_exchange(alice.fd(), fix_test::client_message("A", 1, "98=0|108=30|554=alice|", "ALICE"), pump);
+    fix_exchange(
+        alice.fd(),
+        fix_test::client_message("D", 2, fix_test::new_order_fields("B1", "1", 1100000000, "150", "ES"), "ALICE"),
+        pump);
+    const std::string rejected = fix_exchange(
+        alice.fd(),
+        fix_test::client_message("D", 3, fix_test::new_order_fields("B2", "1", 1100000000, "150", "ES"), "ALICE"),
+        pump);
+    CHECK(rejected.find("11=B2\1") != std::string::npos);
+    CHECK(rejected.find("39=8\1") != std::string::npos);
+    CHECK(rejected.find("58=CAPACITY_EXCEEDED\1") != std::string::npos);
+    for (int pass = 0; pass < 20; ++pass) pump();
+    CHECK_EQ(runtime.core().engine().live_order_count(), 1u);
+    CHECK(!runtime.core().shutdown_requested());
+    runtime.request_shutdown();
+    const auto deadline = common::monotonic_ns() + 4000000000;
+    while (!runtime.finished() && common::monotonic_ns() < deadline) runtime.poll_once();
     CHECK(runtime.finished());
 }

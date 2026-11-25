@@ -103,9 +103,12 @@ Sequence.
 `replay_buffer_packets` bounds the MDP packet ring. TCP replay accepts one
 range of at most 2000 packets per connection, up to four concurrent
 connections, and queues at most 4 MiB per connection. Requests outside the
-retained range or exceeding limits receive logout. An aggregate MBP level
-that cannot fit the schema's signed 32-bit quantity stops publication and
-causes exchange shutdown rather than a truncated update.
+retained range or exceeding limits receive logout. MDP sends a level's
+quantity as Int32, whose null value is INT32_MAX, so an MDP exchange keeps
+each price level at or below INT32_MAX - 1: a new or replaced order that
+would rest past it is rejected with CapacityExceeded. An update that still
+cannot be encoded stops publication and shuts the exchange down rather than
+send a truncated update.
 
 Books, UUIDs, IDs, and recovery history disappear on process exit. A restart
 starts empty, emits ChannelReset, and requires new session negotiation.

@@ -124,6 +124,7 @@ struct MatchingEngine::Impl {
     // ---- configuration --------------------------------------------------
     std::size_t max_instruments;
     std::uint32_t max_orders;
+    std::uint64_t max_level_qty;
 
     // ---- state ----------------------------------------------------------
     // Order pool, level pool and OrderId map that every instrument book draws from.
@@ -199,6 +200,7 @@ struct MatchingEngine::Impl {
 MatchingEngine::Impl::Impl(const EngineConfig& config)
     : max_instruments(config.max_instruments),
       max_orders(static_cast<std::uint32_t>(config.max_orders)),
+      max_level_qty(config.max_level_qty),
       order_storage(max_orders),
       instrument_by_symbol(max_instruments),
       metadata(std::make_unique<OrderMetadata[]>(std::size_t{max_orders} + 1)),
@@ -594,6 +596,13 @@ void MatchingEngine::Impl::on_new_order(const NewOrder& cmd, EventBuffer& out) {
     if (live_count >= max_orders) [[unlikely]] {
         return reject_new_order(cmd, RejectReason::CapacityExceeded, out);
     }
+    // An order that can rest must leave its level within max_level_qty. Same-side
+    // volume at the limit means the order cannot cross, so it would rest in full;
+    // at an empty level any valid order fits (add_instrument).
+    if (!is_market && !is_immediate && cmd.qty > max_level_qty - book.order_book.level_volume(cmd.side, limit_tick))
+        [[unlikely]] {
+        return reject_new_order(cmd, RejectReason::CapacityExceeded, out);
+    }
 
     IncomingOrder order{cmd, next_order_id++, limit_tick};
     emit_accepted(order, cmd.ts, out);
@@ -744,6 +753,12 @@ void MatchingEngine::Impl::on_replace(const ReplaceOrder& cmd, EventBuffer& out)
     }
 
     // Priority lost: leave the book, take a new OrderId, re-enter as an aggressor.
+    // The new leaves must fit the target level, which no longer counts the old leaves.
+    const std::uint64_t level_qty =
+        book.order_book.level_volume(side, new_tick) - (new_tick == old_tick ? old_leaves_qty : 0);
+    if (new_leaves_qty > max_level_qty - level_qty) [[unlikely]] {
+        return reject_replace(cmd, RejectReason::CapacityExceeded, old_order_id, instrument, out);
+    }
     const NewOrderData data{
         .instrument = instrument,
         .session = session,
@@ -811,15 +826,11 @@ UncrossPlan MatchingEngine::Impl::plan_uncross(const InstrumentBook& book) const
     }
     const std::int32_t low_tick = order_book.best_ask_tick();
     const std::int32_t high_tick = order_book.best_bid_tick();
-    auto volume_at = [&](Side side, std::int32_t tick) -> std::uint64_t {
-        const Level* level = order_book.price_level(side, tick);
-        return level == nullptr ? 0 : level->total_volume;
-    };
     // Walk occupied prices through the book's bitmap hierarchy.
     std::uint64_t buy_qty_at_or_above = 0;
     for (auto tick = order_book.next_tick(Side::BUY, low_tick, true); tick && *tick <= high_tick;
          tick = order_book.next_tick(Side::BUY, *tick + 1, true)) {
-        buy_qty_at_or_above += volume_at(Side::BUY, *tick);
+        buy_qty_at_or_above += order_book.level_volume(Side::BUY, *tick);
     }
 
     const Price reference = book.has_last_trade_price ? book.last_trade_price : book.config.reference_price;
@@ -833,7 +844,7 @@ UncrossPlan MatchingEngine::Impl::plan_uncross(const InstrumentBook& book) const
     while (bid || ask) {
         const std::int32_t tick = bid && ask ? std::min(*bid, *ask) : (bid ? *bid : *ask);
         if (tick > high_tick) break;
-        sell_qty_at_or_below += volume_at(Side::SELL, tick);
+        sell_qty_at_or_below += order_book.level_volume(Side::SELL, tick);
         const std::uint64_t volume = std::min(buy_qty_at_or_above, sell_qty_at_or_below);
         const std::uint64_t imbalance = buy_qty_at_or_above >= sell_qty_at_or_below
                                             ? buy_qty_at_or_above - sell_qty_at_or_below
@@ -856,7 +867,7 @@ UncrossPlan MatchingEngine::Impl::plan_uncross(const InstrumentBook& book) const
             plan.buy_qty = buy_qty_at_or_above;
             plan.sell_qty = sell_qty_at_or_below;
         }
-        buy_qty_at_or_above -= volume_at(Side::BUY, tick);
+        buy_qty_at_or_above -= order_book.level_volume(Side::BUY, tick);
         if (bid && *bid == tick) bid = order_book.next_tick(Side::BUY, tick + 1, true);
         if (ask && *ask == tick) ask = order_book.next_tick(Side::SELL, tick + 1, true);
     }
@@ -1013,6 +1024,9 @@ InstrumentId MatchingEngine::add_instrument(const InstrumentConfig& config) {
         return 0;
     }
     if (!valid_instrument_config(config)) return 0;
+    // on_new_order checks the level before matching, which is exact only when one
+    // full-size order fits an empty level.
+    if (config.max_order_qty > impl.max_level_qty) return 0;
     const std::uint64_t tick_count =
         static_cast<std::uint64_t>((config.max_price - config.min_price) / config.tick_size) + 1;
     if (tick_count > engine::kMaxLadderTicks) {
