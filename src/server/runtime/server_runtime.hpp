@@ -66,7 +66,7 @@ struct ServerRuntimeOptions {
     std::optional<Timestamp> day_time_at_start;
     std::uint64_t end_of_day_drain_timeout_ns = 3'000'000'000;  // wait for logouts and flushes
     runtime::MarketDataRuntimeSettings market_data{};
-    std::FILE* log = stderr;  // startup listener reporting only; nullptr = silent
+    std::FILE* log = stderr;  // listeners at startup, feed send failures at shutdown; nullptr = silent
 };
 
 template <class... Gateways>
@@ -302,6 +302,15 @@ private:
         if (!core_.journal_drained()) {
             if (now < drain_deadline_ns_) return;
             core_.abort_journal();
+        }
+        // status shows the count while running; this covers runs without an
+        // admin socket. Printed last: ITCH repeats End of Session during the drain.
+        market_data_.flush();
+        if (const std::uint64_t failures = market_data_.send_failure_count();
+            failures != 0 && options_.log != nullptr) {
+            std::fprintf(options_.log, "exsim: market data UDP send failures: %llu\n",
+                         static_cast<unsigned long long>(failures));
+            std::fflush(options_.log);
         }
         finished_ = true;
     }
