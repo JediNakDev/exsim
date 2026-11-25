@@ -1,12 +1,13 @@
 #ifndef EXSIM_ITCH_REPLAY_SYNTHETIC_HPP
 #define EXSIM_ITCH_REPLAY_SYNTHETIC_HPP
 
-// Deterministic ITCH 5.0 stream generator. Emits wire-format bytes for
-// A / E / X / D / U messages so the replayer's parse path is exercised
-// end-to-end. The mix mirrors a realistic exchange tape: ~70% adds at
-// session start, then 60% cancels / deletes during steady state, 10%
-// executes, 5% replaces. All adds are non-marketable by construction
-// (buys below current best ask, sells above current best bid).
+// Deterministic ITCH 5.0 stream generator. Emits A / E / X / D / U
+// messages framed as in a NASDAQ file (each after its 2-byte big-endian
+// length), so the replayer's frame walk and parse path are exercised
+// end-to-end. About 5% of the messages are seed adds; after that each
+// message is an add (50%), delete (25%), partial cancel (15%), execute (7%)
+// or replace (3%). All adds are non-marketable by construction (buys below
+// mid - half_spread, sells above mid + half_spread).
 
 #include <common/types.hpp>
 #include <cstdint>
@@ -43,7 +44,7 @@ private:
     void warmup_book(std::vector<char>& out) {
         // Seed ~5% of total budget with adds on both sides.
         std::size_t seed_n = std::max<std::size_t>(64, n_ / 20);
-        for (std::size_t i = 0; i < seed_n && out.size() / 32 < n_; ++i) {
+        for (std::size_t i = 0; i < seed_n && emitted_ < n_; ++i) {
             emit_add(out);
         }
     }
@@ -92,7 +93,7 @@ private:
         // The stock symbol (offsets 24..31) is left zero rather than spaces.
         write_be32(buf + 32, static_cast<std::uint32_t>(p));
 
-        out.insert(out.end(), buf, buf + 36);
+        append_frame(out, buf, 36);
         live_refs_.push_back(ref);
         side_of_[ref] = s;
         ++emitted_;
@@ -114,7 +115,7 @@ private:
         ts_ += 100;
         write_be48(buf + 5, ts_);
         write_be64(buf + 11, pop_random_ref());
-        out.insert(out.end(), buf, buf + 19);
+        append_frame(out, buf, 19);
         ++emitted_;
     }
 
@@ -129,7 +130,7 @@ private:
         write_be64(buf + 11, ref);
         std::uniform_int_distribution<std::uint32_t> q(10, 100);
         write_be32(buf + 19, q(rng_));
-        out.insert(out.end(), buf, buf + 23);
+        append_frame(out, buf, 23);
         ++emitted_;
     }
 
@@ -144,7 +145,7 @@ private:
         std::uniform_int_distribution<std::uint32_t> q(10, 50);
         write_be32(buf + 19, q(rng_));
         write_be64(buf + 23, ts_);  // match number
-        out.insert(out.end(), buf, buf + 31);
+        append_frame(out, buf, 31);
         ++emitted_;
     }
 
@@ -168,12 +169,17 @@ private:
         write_be64(buf + 19, new_ref);
         write_be32(buf + 27, qty_d(rng_));
         write_be32(buf + 31, static_cast<std::uint32_t>(p));
-        out.insert(out.end(), buf, buf + 35);
+        append_frame(out, buf, 35);
         live_refs_.push_back(new_ref);
         side_of_[new_ref] = s;
         ++emitted_;
     }
 
+    static void append_frame(std::vector<char>& out, const char* message, std::size_t size) {
+        out.push_back(static_cast<char>(size >> 8));
+        out.push_back(static_cast<char>(size & 0xFF));
+        out.insert(out.end(), message, message + size);
+    }
     static void write_be32(char* p, std::uint32_t v) {
         p[0] = char((v >> 24) & 0xFF);
         p[1] = char((v >> 16) & 0xFF);
