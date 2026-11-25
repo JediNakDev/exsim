@@ -3,6 +3,7 @@
 #include "test/exsim/gateway/fix/fix_test_support.hpp"
 #include "test/framework/test.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstdio>
 #include <memory>
@@ -24,26 +25,36 @@ exsim::net::Socket connect_fix(Runtime& runtime) {
     return socket;
 }
 
+// Sends `frame` and polls until a whole FIX message arrives. The deadline is set
+// after the first pass (which may only accept the connection) and restarts
+// whenever bytes arrive. Only a pass that starts after it and receives nothing
+// fails the test, so a descheduled thread does not.
 std::string exchange_frame(Runtime& runtime, int fd, std::string_view frame) {
     REQUIRE_EQ(exsim::net::send_some(fd, frame.data(), frame.size()), static_cast<ssize_t>(frame.size()));
     std::string output;
     std::array<char, 8192> buffer{};
-    const auto deadline = exsim::common::monotonic_ns() + 2'000'000'000;
-    while (exsim::common::monotonic_ns() < deadline) {
+    for (std::uint64_t deadline = 0;;) {
+        const auto pass_started = exsim::common::monotonic_ns();
         runtime.poll_once();
         const auto size = ::recv(fd, buffer.data(), buffer.size(), 0);
         if (size > 0)
             output.append(buffer.data(), static_cast<std::size_t>(size));
         else if (size < 0)
             REQUIRE(exsim::net::is_would_block(errno));
-        if (output.find("\00110=") != std::string::npos && output.back() == '\001') return output;
+        // Whole only when the buffer ends with the trailer: SOH, "10=", three digits, SOH.
+        if (const auto trailer = output.rfind("\00110=");
+            trailer != std::string::npos && output.size() == trailer + 8 && output.back() == '\001' &&
+            std::all_of(output.end() - 4, output.end() - 1, [](char c) { return c >= '0' && c <= '9'; }))
+            return output;
+        if (deadline == 0 || size > 0)
+            deadline = exsim::common::monotonic_ns() + 2'000'000'000;
+        else if (pass_started >= deadline)
+            FAIL("no whole FIX message before the deadline");
     }
-    REQUIRE(!output.empty());
-    return output;
 }
-}  // namespace
 
-TEST_CASE(fix_runtime, tcp_logon_orders_matching_and_logout) {
+// Every configured user speaks FIX; all ports are ephemeral or off.
+exsim::server::ServerConfig fix_config() {
     exsim::server::ServerConfig config;
     std::string error;
     REQUIRE(exsim::server::load_config("config/exchange.conf", config, error));
@@ -52,10 +63,19 @@ TEST_CASE(fix_runtime, tcp_logon_orders_matching_and_logout) {
     config.market_data.port = 0;
     config.market_data.retransmit_port = 0;
     for (auto& user : config.users) user.protocol = exsim::server::Protocol::Fix44;
+    return config;
+}
+
+exsim::server::ServerRuntimeOptions fix_options() {
     exsim::server::ServerRuntimeOptions options;
     options.log = nullptr;
     options.day_time_at_start = fix_test::kSessionStartNs;
-    Runtime runtime(config, options);
+    return options;
+}
+}  // namespace
+
+TEST_CASE(fix_runtime, tcp_logon_orders_matching_and_logout) {
+    Runtime runtime(fix_config(), fix_options());
     REQUIRE(runtime.start().empty());
     CHECK_NE(runtime.listen_endpoint<exsim::server::runtime::FixGateway>().port,
              runtime.listen_endpoint<exsim::server::runtime::OuchGateway>().port);
@@ -73,7 +93,7 @@ TEST_CASE(fix_runtime, tcp_logon_orders_matching_and_logout) {
           std::string::npos);
     CHECK_EQ(runtime.core().engine().live_order_count(), 0u);
     CHECK(send(bob.fd(), "BOB", "5", 3, "").find("35=5|") != std::string::npos);
-    // Deliver peer EOF before destroying sessions that are still bound.
+    // Peer EOF unbinds both sessions.
     alice.close();
     bob.close();
     const auto deadline = exsim::common::monotonic_ns() + 2'000'000'000;
@@ -128,4 +148,15 @@ TEST_CASE(fix_runtime, shutdown_summary_counts_feed_send_failures_during_the_dra
     REQUIRE(line != std::string::npos);
     CHECK_GT(failures, 0u);
     CHECK_EQ(std::stoull(log.substr(line + kSummary.size())), failures);
+}
+
+// A test that fails a REQUIRE leaves with sessions still bound. Destroying the
+// runtime then ends them; it used to abort in the FixConnection destructor.
+TEST_CASE(fix_runtime, destroying_the_runtime_ends_bound_sessions) {
+    Runtime runtime(fix_config(), fix_options());
+    REQUIRE(runtime.start().empty());
+    auto alice = connect_fix(runtime);
+    const auto logon = fix_test::client_message("A", 1, "98=0|108=30|554=alice|", "ALICE");
+    CHECK(fix_test::with_pipes(exchange_frame(runtime, alice.fd(), logon)).find("35=A|") != std::string::npos);
+    CHECK_EQ(runtime.core().bound_connection_count(), 1u);
 }

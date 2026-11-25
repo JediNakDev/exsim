@@ -68,6 +68,10 @@ public:
         }
     }
 
+    // Ends any session still open, so a runtime destroyed before its shutdown
+    // finished unbinds every connection from its user.
+    ~OrderEntryEndpoint() { close_all_now(); }
+
     OrderEntryEndpoint(const OrderEntryEndpoint&) = delete;
     OrderEntryEndpoint& operator=(const OrderEntryEndpoint&) = delete;
 
