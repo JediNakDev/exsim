@@ -12,7 +12,7 @@ CXXFLAGS += -Wno-interference-size
 # Once a thread has no free frame of one size, each call needing that size scans the full table (about 7 us) and stack
 # use after return in those frames goes undetected. Those releases turn the check off. x86-64 builds, as in CI, fixed
 # releases and 13.3.1 or 14.2.1 snapshots (which may hold the fix) keep it. The unit test fails on one without the fix.
-ifneq ($(filter aarch64-%,$(shell $(CXX) -dumpmachine)),)
+ifneq ($(filter aarch64%,$(shell $(CXX) -dumpmachine)),)
 ifneq ($(filter 12.% 13.1.% 13.2.% 13.3.0 14.1.% 14.2.0,$(shell $(CXX) -dumpfullversion)),)
 ASAN_USE_AFTER_RETURN := --param=asan-use-after-return=0
 endif
