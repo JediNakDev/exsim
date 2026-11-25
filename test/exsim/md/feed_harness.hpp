@@ -26,6 +26,7 @@
 
 #include <deque>
 #include <limits>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -62,8 +63,10 @@ struct BoundaryCheckingHandler {
     std::string first_failure{};
 
     std::uint64_t builder_digest() {
-        return book_digest(*builder, *builder, instrument_count, level_buffer, id_buffer,
-                           [this](InstrumentId id) { return builder->trading_state(id); });
+        return book_digest(
+            *builder, instrument_count, level_buffer, id_buffer,
+            [this](InstrumentId id) { return builder->trading_state(id); },
+            [this](auto... args) { return builder->level_orders(args...); });
     }
 
     void on_message(std::uint64_t sequence, std::span<const char> message) {
@@ -197,9 +200,14 @@ public:
     }
 
     std::uint64_t engine_digest() {
-        return book_digest(engine, testsupport::LevelOrders(testsupport::live_orders(engine)),
-                           engine.instrument_count(), engine_level_buffer_, engine_id_buffer_,
-                           [this](InstrumentId id) { return md::itch_trading_state(engine.phase(id)); });
+        std::optional<testsupport::LevelOrders> fifos;  // scanned at the first FIFO lookup
+        return book_digest(
+            engine, engine.instrument_count(), engine_level_buffer_, engine_id_buffer_,
+            [this](InstrumentId id) { return md::itch_trading_state(engine.phase(id)); },
+            [&](auto... args) {
+                if (!fifos) fifos.emplace(testsupport::live_orders(engine));
+                return fifos->level_orders(args...);
+            });
     }
 
     void register_boundary(std::size_t command_index) {

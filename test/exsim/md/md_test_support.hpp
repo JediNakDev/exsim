@@ -179,12 +179,12 @@ inline std::string book_difference(const MatchingEngine& engine, const md::ItchB
 }
 
 // Order-sensitive 64-bit digest of every level (price, qty, count, FIFO ids)
-// and trading state. `fifos.level_orders()` lists a level's IDs: the builder
-// itself, or a testsupport::LevelOrders of the engine. `trading_state_of(id)`
-// gives the ITCH state character.
-template <class Book, class Fifos, class TradingState>
-std::uint64_t book_digest(const Book& book, const Fifos& fifos, std::size_t instrument_count,
-                          std::vector<LevelInfo>& levels, std::vector<OrderId>& ids, TradingState trading_state_of) {
+// and trading state. `trading_state_of(id)` gives the ITCH state character, and
+// `level_orders_of(id, side, price, out, capacity)` writes a level's IDs and
+// returns how many.
+template <class Book, class TradingState, class LevelOrdersOf>
+std::uint64_t book_digest(const Book& book, std::size_t instrument_count, std::vector<LevelInfo>& levels,
+                          std::vector<OrderId>& ids, TradingState trading_state_of, LevelOrdersOf level_orders_of) {
     std::uint64_t hash = 1469598103934665603ULL;
     auto mix = [&](std::uint64_t value) {
         for (int shift = 0; shift < 64; shift += 8) {
@@ -202,7 +202,7 @@ std::uint64_t book_digest(const Book& book, const Fifos& fifos, std::size_t inst
                 mix(static_cast<std::uint64_t>(levels[level].price));
                 mix(levels[level].qty);
                 mix(levels[level].order_count);
-                const std::size_t fifo = fifos.level_orders(id, side, levels[level].price, ids.data(), ids.size());
+                const std::size_t fifo = level_orders_of(id, side, levels[level].price, ids.data(), ids.size());
                 for (std::size_t order = 0; order < fifo; ++order) mix(ids[order]);
             }
         }
