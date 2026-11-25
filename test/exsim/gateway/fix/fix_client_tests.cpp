@@ -164,7 +164,7 @@ TEST_CASE(gateway_fix_client, heartbeats_and_test_requests_both_directions) {
 TEST_CASE(gateway_fix_client, client_recovers_dropped_exchange_messages) {
     ConnectedClient connected;
     auto& client = connected.wire.client();
-    connected.exchange.user(1).drop_out_transmissions(1);
+    connected.exchange.drop_next_outbound_messages(1, 1);
     const auto now = connected.exchange.fix_time();
     CHECK(client.send_new_order_single(make_new_order_single("B1", exsim::Side::BUY, 100, 150 * kDollar), now));
     CHECK(client.send_new_order_single(make_new_order_single("B2", exsim::Side::BUY, 100, 150 * kDollar), now));

@@ -189,17 +189,18 @@ public:
     const InstrumentConfig* instrument(InstrumentId id) const noexcept { return engine_.instrument(id); }
 
     // Stamps, runs the engine, dispatches to every distinct session once.
-    void submit(const Command& command) noexcept {
+    server::SubmitResult submit(const Command& command) noexcept {
         Command stamped = command;
         stamp(stamped, now_);
         events_.clear();
         if (engine_.handle(stamped, events_) != HandleResult::Applied) {
             ++insufficient_output_count_;
-            return;
+            return server::SubmitResult::OutputCapacityExceeded;
         }
         ++submitted_command_count_;
         last_command_ = stamped;
         dispatch(std::span<const Event>(events_.begin(), events_.size()));
+        return server::SubmitResult::Applied;
     }
 
     Timestamp now() const noexcept { return now_; }

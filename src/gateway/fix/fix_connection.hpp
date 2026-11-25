@@ -44,9 +44,11 @@ concept FixGatewayContext =
         context.unbind(session, connection);
         { const_context.find_instrument(symbol) } -> std::convertible_to<InstrumentId>;
         { const_context.instrument(instrument) } -> std::convertible_to<const InstrumentConfig*>;
-        context.submit(command);
+        { context.submit(command) } -> std::same_as<server::SubmitResult>;
         { const_context.now() } -> std::convertible_to<Timestamp>;
         { const_context.realtime_ns() } -> std::convertible_to<std::uint64_t>;
+        { context.consume_injected_reject(session) } -> std::same_as<bool>;
+        { context.consume_drop_out(session) } -> std::same_as<bool>;
     };
 
 template <FixGatewayContext Context, ByteSink Sink>

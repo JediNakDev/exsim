@@ -62,7 +62,6 @@
 #include <memory>
 #include <span>
 #include <string_view>
-#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -153,7 +152,7 @@ class OuchConnection;
 // fault queries. server::ExchangeCore satisfies it. unbind triggers
 // cancel-on-disconnect when the user is configured for it; submit stamps the
 // command, runs the engine and dispatches the batch to the sessions before
-// returning. submit returns void (always applied) or server::SubmitResult.
+// returning, and returns a server::SubmitResult.
 template <class Context>
 concept OuchServerContext =
     requires(Context& context, const Context& const_context, std::string_view text, SessionId session,
@@ -163,8 +162,7 @@ concept OuchServerContext =
         context.unbind(session, connection);
         { const_context.find_instrument(symbol) } -> std::same_as<InstrumentId>;
         { const_context.instrument(instrument) } -> std::same_as<const InstrumentConfig*>;
-        requires std::is_void_v<decltype(context.submit(command))> ||
-                     std::same_as<decltype(context.submit(command)), server::SubmitResult>;
+        { context.submit(command) } -> std::same_as<server::SubmitResult>;
         { const_context.now() } -> std::same_as<Timestamp>;
         { const_context.phase_left_by_batch(instrument) } -> std::same_as<Phase>;
         { context.consume_injected_reject(session) } -> std::same_as<bool>;
@@ -179,20 +177,15 @@ inline constexpr char kCommandApplied = '\0';
 // reports it did not apply (outside the trading day: 'C'), else kCommandApplied.
 template <class Context>
 [[nodiscard]] char submit_to_engine(Context& context, const Command& command) noexcept {
-    if constexpr (std::is_void_v<decltype(context.submit(command))>) {
-        context.submit(command);
-        return kCommandApplied;
-    } else {
-        switch (context.submit(command)) {
-            case server::SubmitResult::Applied:
-            case server::SubmitResult::Deferred: return kCommandApplied;
-            case server::SubmitResult::OutsideTradingDay:
-            case server::SubmitResult::ExchangeShutDown: return kOuchRejectExchangeClosed;
-            case server::SubmitResult::OutputCapacityExceeded:
-            case server::SubmitResult::DeferredQueueFull: return kOuchRejectOther;
-        }
-        return kOuchRejectOther;
+    switch (context.submit(command)) {
+        case server::SubmitResult::Applied:
+        case server::SubmitResult::Deferred: return kCommandApplied;
+        case server::SubmitResult::OutsideTradingDay:
+        case server::SubmitResult::ExchangeShutDown: return kOuchRejectExchangeClosed;
+        case server::SubmitResult::OutputCapacityExceeded:
+        case server::SubmitResult::DeferredQueueFull: return kOuchRejectOther;
     }
+    return kOuchRejectOther;
 }
 
 // ============================================================================

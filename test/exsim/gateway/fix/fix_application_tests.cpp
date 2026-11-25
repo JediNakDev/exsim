@@ -259,7 +259,7 @@ TEST_CASE(gateway_fix_application, new_order_rejects_goldens) {
 TEST_CASE(gateway_fix_application, market_closed_and_injected_rejects) {
     TwoClients clients(exsim::Phase::Closed);
     clients.buyer.send("D", new_order_fields("B1", "1", 50, "149"));
-    clients.exchange.user(1).inject_new_order_rejects(1);
+    clients.exchange.inject_gateway_rejects(1, 1);
     clients.buyer.send("D", new_order_fields("B2", "1", 50, "149"));
     const auto messages = clients.buyer.drain();
     REQUIRE_EQ(messages.size(), std::size_t{2});
@@ -446,7 +446,7 @@ TEST_CASE(gateway_fix_application, cancel_on_disconnect_is_stored_for_recovery) 
 
 TEST_CASE(gateway_fix_application, drop_out_stores_without_transmitting) {
     TwoClients clients;
-    clients.exchange.user(1).drop_out_transmissions(1);
+    clients.exchange.drop_next_outbound_messages(1, 1);
     clients.buyer.send("D", new_order_fields("B1", "1", 10, "149"));
     clients.buyer.send("D", new_order_fields("B2", "1", 10, "149"));
     auto messages = clients.buyer.drain();

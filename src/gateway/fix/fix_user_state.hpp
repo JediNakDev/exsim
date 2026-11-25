@@ -28,7 +28,6 @@
 #include <memory>
 #include <span>
 #include <string_view>
-#include <type_traits>
 #include <vector>
 
 namespace exsim::gateway::fix {
@@ -151,10 +150,6 @@ public:
         return token_id == 0 ? nullptr : &records_[token_id];
     }
 
-    // Fault injection without an ExchangeCore (standalone contexts).
-    void inject_new_order_rejects(std::uint32_t count) noexcept { injected_new_order_rejects_ = count; }
-    void drop_out_transmissions(std::uint32_t count) noexcept { day_.suppress_application_transmissions(count); }
-
     template <class Context>
     void submit_new_order(const FixNewOrderRequest& request, Context& ctx) noexcept {
         const FixTime now{ctx.now(), ctx.realtime_ns()};
@@ -173,15 +168,7 @@ public:
         record.side = request.side;
         record.limit_price = request.has_price ? request.price : 0;
         record.order_qty = request.order_qty <= UINT32_MAX ? static_cast<Quantity>(request.order_qty) : 0;
-        bool injected = false;
-        if constexpr (requires { ctx.consume_injected_reject(session_id_); }) {
-            injected = ctx.consume_injected_reject(session_id_);
-        }
-        if (injected_new_order_rejects_ > 0) {
-            --injected_new_order_rejects_;
-            injected = true;
-        }
-        if (injected) {
+        if (ctx.consume_injected_reject(session_id_)) {
             return reject_new_order_at_gateway(request, 99, "injected", now, ctx);
         }
         const InstrumentId instrument =
@@ -348,23 +335,16 @@ public:
 private:
     template <class Context>
     static std::string_view submit_command(Context& ctx, const Command& command) noexcept {
-        if constexpr (std::is_void_v<decltype(ctx.submit(command))>) {
-            ctx.submit(command);
-            return {};
-        } else {
-            const server::SubmitResult result = ctx.submit(command);
-            return result == server::SubmitResult::Applied || result == server::SubmitResult::Deferred
-                       ? std::string_view{}
-                       : server::to_string(result);
-        }
+        const server::SubmitResult result = ctx.submit(command);
+        return result == server::SubmitResult::Applied || result == server::SubmitResult::Deferred
+                   ? std::string_view{}
+                   : server::to_string(result);
     }
 
     template <class Context>
     void prepare_application_fault(Context& ctx) noexcept {
-        if constexpr (requires { ctx.consume_drop_out(session_id_); }) {
-            if (ctx.consume_drop_out(session_id_)) {
-                day_.suppress_application_transmissions(1);
-            }
+        if (ctx.consume_drop_out(session_id_)) {
+            day_.suppress_application_transmissions(1);
         }
     }
 
@@ -767,7 +747,6 @@ private:
     std::unique_ptr<FixOrderRecord[]> records_;  // index = token id; written on first use
     FixSessionDayState<Sink> day_;
     std::uint64_t next_execution_id_ = 1;
-    std::uint32_t injected_new_order_rejects_ = 0;
 };
 
 // All FIX users of the server, built at setup. The server's session table

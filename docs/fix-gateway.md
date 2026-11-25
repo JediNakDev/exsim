@@ -32,11 +32,10 @@ templates.
 - `begin_logout(text, ctx)` starts the exchange-initiated Logout handshake.
 - Context supplies authenticate, bind/unbind, instrument lookups, submit, now/realtime_ns.
 - Connection IDs use `server::ConnectionId`, with packing from net IDs owned by the server.
-- `submit` may return void (standalone contexts) or `server::SubmitResult` (ExchangeCore).
-- Applied/Deferred mean success; other results receive protocol application rejections.
-- Optional Context `consume_injected_reject(session)` and `consume_drop_out(session)`
+- `submit` returns `server::SubmitResult`. Applied/Deferred mean success; other
+  results receive protocol application rejections.
+- Context `consume_injected_reject(session)` and `consume_drop_out(session)`
   connect ExchangeCore admin faults directly to gateway application reports.
-- Local `inject_new_order_rejects`/`drop_out_transmissions` support standalone contexts.
 - `FixClient<Handler, Sink>(handler, FixClientSettings)` owns client day state.
 - `connect(sink, reset, FixTime)` sends Logon; `on_data`, `on_timer`, `logout`,
   `on_disconnected` supply the client transport lifecycle.
