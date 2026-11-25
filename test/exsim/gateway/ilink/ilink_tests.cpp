@@ -352,6 +352,65 @@ TEST_CASE(ilink_session, cancel_on_disconnect_store_overflow_and_keepalive) {
     CHECK(bob.connection.wants_close());
 }
 
+// A full history store refuses Establish on its UUID; a new UUID restarts
+// history, keeps the full one retransmittable and reports later fills.
+TEST_CASE(ilink_session, store_overflow_recovers_by_negotiating_a_new_uuid) {
+    auto config = ilink_test::config();
+    config.engine.store_messages_per_session = 2;
+    Exchange exchange(config);
+    Client alice(exchange, 1);
+    alice.login();
+    alice.send(order(alice.user_config(), 1, 1, "ONE"));
+    alice.send(order(alice.user_config(), 2, 2, "TWO"));
+    alice.send(order(alice.user_config(), 3, 3, "THREE"));
+    CHECK(alice.connection.wants_close());
+    alice.connection.on_closed(exchange.core);
+    CHECK_EQ(exchange.core.engine().live_order_count(), 3u);
+    Client same_uuid(exchange, 1, 101);
+    same_uuid.send(establishment(same_uuid.user_config(), same_uuid.uuid, exchange.auth_time(), 4));
+    const auto refused = frames(same_uuid.memory);
+    REQUIRE_EQ(refused.size(), 1u);
+    CHECK_EQ(refused[0].id(), 505);
+    same_uuid.connection.on_closed(exchange.core);
+    Client next(exchange, 1, 102);
+    next.uuid += 100;
+    next.send(negotiation(next.user_config(), next.uuid, exchange.auth_time()));
+    next.send(establishment(next.user_config(), next.uuid, exchange.auth_time(), 1));
+    const auto handshake = frames(next.memory);
+    REQUIRE_EQ(handshake.size(), 2u);
+    REQUIRE_EQ(handshake[0].id(), 501);
+    CHECK_EQ(wire::get(handshake[0].view(), schema::NegotiationResponse501::PreviousUUID), alice.uuid);
+    CHECK_EQ(wire::get(handshake[0].view(), schema::NegotiationResponse501::PreviousSeqNo), 2u);
+    REQUIRE_EQ(handshake[1].id(), 504);
+    CHECK_EQ(wire::get(handshake[1].view(), schema::EstablishmentAck504::PreviousUUID), alice.uuid);
+    CHECK_EQ(wire::get(handshake[1].view(), schema::EstablishmentAck504::PreviousSeqNo), 2u);
+    next.memory.clear();
+    using R = schema::RetransmitRequest508;
+    wire::Root<R> request;
+    request.set(R::UUID, next.uuid);
+    request.set(R::LastUUID, alice.uuid);
+    request.set(R::FromSeqNo, 1);
+    request.set(R::MsgCount, 2);
+    request.set(R::RequestTimestamp, exchange.clock.realtime_ns());
+    next.send(request);
+    const auto previous = frames(next.memory);
+    REQUIRE_EQ(previous.size(), 3u);
+    CHECK_EQ(previous[0].id(), 509);
+    for (std::uint32_t sequence = 1; sequence <= 2; ++sequence) {
+        REQUIRE_EQ(previous[sequence].id(), 522);
+        CHECK_EQ(wire::get(previous[sequence].view(), schema::ExecutionReportNew522::UUID), alice.uuid);
+        CHECK_EQ(wire::get(previous[sequence].view(), schema::ExecutionReportNew522::SeqNum), sequence);
+    }
+    next.memory.clear();
+    Client bob(exchange, 2);
+    bob.login();
+    bob.send(order(bob.user_config(), 1, 1, "SELL", 2, 4));
+    const auto fill = frames(next.memory);
+    REQUIRE_EQ(fill.size(), 1u);
+    CHECK_EQ(fill[0].id(), 525);
+    CHECK_EQ(wire::get(fill[0].view(), schema::ExecutionReportTradeOutright525::UUID), next.uuid);
+}
+
 TEST_CASE(ilink_orders, mass_cancel_fragments_list_every_affected_order) {
     Exchange exchange;
     Client alice(exchange, 1);

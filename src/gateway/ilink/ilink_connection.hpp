@@ -152,9 +152,9 @@ private:
                    firm = wire::get(message, M::Firm);
         auto* candidate = users_.credentials(access, session, firm);
         const auto epoch = core.realtime_ns();
-        bool valid = !established_ && uuid && uuid != UINT64_MAX && candidate && !candidate->output_failed &&
-                     wire::valid_text(message, M::AccessKeyID) && wire::valid_text(message, M::Session) &&
-                     wire::valid_text(message, M::Firm) &&
+        bool valid = !established_ && uuid && uuid != UINT64_MAX && candidate &&
+                     (negotiate || !candidate->output_failed) && wire::valid_text(message, M::AccessKeyID) &&
+                     wire::valid_text(message, M::Session) && wire::valid_text(message, M::Firm) &&
                      (timestamp > epoch ? timestamp - epoch : epoch - timestamp) <= 60000000000 &&
                      timestamp > candidate->last_auth_timestamp &&
                      (!candidate->reserved_by || candidate->reserved_by == id_) && (!user_ || user_ == candidate);
