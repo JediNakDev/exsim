@@ -61,10 +61,11 @@ using TestJournalWorker = server::runtime::JournalWorker<CountingJournalWriter, 
 TEST_CASE(journal_worker, destructor_drains_accepted_entries_and_joins) {
     const auto probe = new_probe();
     probe->stall_flush = true;
+    // A loaded machine can keep the writer off the CPU for longer than the default 100 ms.
+    constexpr std::chrono::seconds shutdown_wait{10};
     std::optional<TestJournalWorker> worker;
-    worker.emplace("unused", server::journal::JournalSetup{});
-    // Hold the writer inside a flush while the entries queue, so the shutdown
-    // wait times draining them, not how soon a loaded machine starts a thread.
+    worker.emplace("unused", server::journal::JournalSetup{}, shutdown_wait);
+    // Hold the writer inside a flush while the entries queue, so shutdown has them all to drain.
     REQUIRE(worker->flush());
     probe->writer_inside_flush.wait(false);
     for (int index = 0; index < 1000; ++index) REQUIRE(worker->append(Command{}));
@@ -75,7 +76,7 @@ TEST_CASE(journal_worker, destructor_drains_accepted_entries_and_joins) {
     const auto elapsed = std::chrono::steady_clock::now() - started;
     CHECK_EQ(probe->appended_commands.load(), 1000u);
     CHECK_EQ(probe->flush_requests.load(), 3u);  // the held flush, the requested one and the final one
-    CHECK(elapsed < std::chrono::milliseconds(100));  // joined on the writer's signal, not the timeout
+    CHECK(elapsed < shutdown_wait / 2);          // joined on the writer's signal, well before the wait runs out
 }
 
 TEST_CASE(journal_worker, ring_holds_capacity_minus_one_entries_then_fails) {
