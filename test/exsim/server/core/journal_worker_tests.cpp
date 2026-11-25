@@ -7,6 +7,8 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <memory>
+#include <optional>
 #include <string>
 #include <thread>
 
@@ -14,23 +16,36 @@ using namespace exsim;
 
 namespace {
 
-std::atomic<std::uint64_t> appended_commands{0};
-std::atomic<std::uint64_t> flush_requests{0};
-std::atomic<bool> stall_flush{false};
-std::atomic<bool> writer_inside_flush{false};
+// What one test's writer did. The writer keeps its Probe alive, so a writer
+// abandoned by one test's shutdown wait cannot change what a later test reads.
+struct Probe {
+    std::atomic<std::uint64_t> appended_commands{0};
+    std::atomic<std::uint64_t> flush_requests{0};
+    std::atomic<bool> stall_flush{false};
+    std::atomic<bool> writer_inside_flush{false};
+};
+
+// The worker constructs its writer on the test thread; the writer takes this.
+std::shared_ptr<Probe> next_probe;
+
+std::shared_ptr<Probe> new_probe() {
+    next_probe = std::make_shared<Probe>();
+    return next_probe;
+}
 
 struct CountingJournalWriter {
-    CountingJournalWriter(const std::string&, const server::journal::JournalSetup&) {}
+    CountingJournalWriter(const std::string&, const server::journal::JournalSetup&) : probe(next_probe) {}
     bool append(const Command&) noexcept {
-        appended_commands.fetch_add(1, std::memory_order_relaxed);
+        probe->appended_commands.fetch_add(1, std::memory_order_relaxed);
         return true;
     }
     bool flush() noexcept {
-        writer_inside_flush.store(true, std::memory_order_release);
-        while (stall_flush.load(std::memory_order_acquire)) std::this_thread::yield();
-        flush_requests.fetch_add(1, std::memory_order_relaxed);
+        probe->writer_inside_flush.store(true, std::memory_order_release);
+        while (probe->stall_flush.load(std::memory_order_acquire)) std::this_thread::yield();
+        probe->flush_requests.fetch_add(1, std::memory_order_relaxed);
         return true;
     }
+    std::shared_ptr<Probe> probe;
 };
 
 using TestJournalWorker = server::runtime::JournalWorker<CountingJournalWriter, 1024>;
@@ -38,66 +53,65 @@ using TestJournalWorker = server::runtime::JournalWorker<CountingJournalWriter, 
 }  // namespace
 
 TEST_CASE(journal_worker, destructor_drains_accepted_entries_and_joins) {
-    appended_commands = 0;
-    flush_requests = 0;
-    stall_flush = false;
+    const auto probe = new_probe();
+    std::optional<TestJournalWorker> worker;
+    worker.emplace("unused", server::journal::JournalSetup{});
+    // A new thread can wait long on a loaded machine; the shutdown wait is
+    // for a running writer, so start the test once the writer has run.
+    REQUIRE(worker->append(Command{}));
+    while (probe->appended_commands.load() == 0) std::this_thread::yield();
+    for (int index = 1; index < 1000; ++index) REQUIRE(worker->append(Command{}));
+    REQUIRE(worker->flush());
     const auto started = std::chrono::steady_clock::now();
-    {
-        TestJournalWorker worker("unused", server::journal::JournalSetup{});
-        for (int index = 0; index < 1000; ++index) REQUIRE(worker.append(Command{}));
-        REQUIRE(worker.flush());
-    }
+    worker.reset();
     const auto elapsed = std::chrono::steady_clock::now() - started;
-    CHECK_EQ(appended_commands.load(), 1000u);
-    CHECK_EQ(flush_requests.load(), 2u);  // the requested flush and the final one
-    CHECK(elapsed < std::chrono::milliseconds(100));
+    CHECK_EQ(probe->appended_commands.load(), 1000u);
+    CHECK_EQ(probe->flush_requests.load(), 2u);  // the requested flush and the final one
+    CHECK(elapsed < std::chrono::milliseconds(100));  // joined on the writer's signal, not the timeout
 }
 
 TEST_CASE(journal_worker, ring_holds_capacity_minus_one_entries_then_fails) {
-    flush_requests = 0;
-    writer_inside_flush = false;
-    stall_flush = true;
+    const auto probe = new_probe();
+    probe->stall_flush = true;
     {
         TestJournalWorker worker("unused", server::journal::JournalSetup{});
         REQUIRE(worker.flush());
-        while (!writer_inside_flush.load(std::memory_order_acquire)) std::this_thread::yield();
+        while (!probe->writer_inside_flush.load(std::memory_order_acquire)) std::this_thread::yield();
         std::size_t accepted = 0;
         while (worker.append(Command{})) ++accepted;
         CHECK_EQ(accepted, 1023u);
         CHECK(!worker.healthy());
-        stall_flush = false;
+        probe->stall_flush = false;
     }
 }
 
 TEST_CASE(journal_worker, stalled_writer_is_abandoned_after_the_shutdown_wait) {
-    flush_requests = 0;
-    writer_inside_flush = false;
-    stall_flush = true;
+    const auto probe = new_probe();
+    probe->stall_flush = true;
+    std::optional<TestJournalWorker> worker;
+    worker.emplace("unused", server::journal::JournalSetup{});
+    REQUIRE(worker->flush());
+    while (!probe->writer_inside_flush.load(std::memory_order_acquire)) std::this_thread::yield();
     const auto started = std::chrono::steady_clock::now();
-    {
-        TestJournalWorker worker("unused", server::journal::JournalSetup{});
-        REQUIRE(worker.flush());
-        while (!writer_inside_flush.load(std::memory_order_acquire)) std::this_thread::yield();
-    }
+    worker.reset();
     const auto elapsed = std::chrono::steady_clock::now() - started;
     CHECK(elapsed >= std::chrono::milliseconds(100));
     CHECK(elapsed < std::chrono::milliseconds(1000));
-    stall_flush = false;  // the detached writer finishes on the state it owns
-    while (flush_requests.load() < 2) std::this_thread::yield();
+    probe->stall_flush = false;  // the detached writer finishes on the state it owns
+    while (probe->flush_requests.load() < 2) std::this_thread::yield();
 }
 
 TEST_CASE(journal_worker, wakes_for_each_request_after_becoming_idle) {
-    appended_commands = 0;
-    flush_requests = 0;
-    stall_flush = false;
+    const auto probe = new_probe();
     TestJournalWorker worker("unused", server::journal::JournalSetup{});
     for (int index = 0; index < 20; ++index) {
         REQUIRE(worker.append(Command{}));
         REQUIRE(worker.flush());
-        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+        // Only a hang guard: a lost wakeup never drains, however long the wait.
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
         while (!worker.drained() && std::chrono::steady_clock::now() < deadline) std::this_thread::yield();
         REQUIRE(worker.drained());
-        CHECK_EQ(appended_commands.load(), static_cast<std::uint64_t>(index + 1));
+        CHECK_EQ(probe->appended_commands.load(), static_cast<std::uint64_t>(index + 1));
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
 }
