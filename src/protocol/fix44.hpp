@@ -240,6 +240,16 @@ public:
         format_timestamp(v, tmp, sizeof tmp);
         return field(tag, {tmp, 21});
     }
+    // Copies already formatted "tag=value<SOH>" fields verbatim (PossDup resends keep the original body).
+    bool raw_fields(std::string_view fields) noexcept {
+        if (!good_ || finished_ || fields.size() > buffer_.size() - used_) {
+            good_ = false;
+            return false;
+        }
+        if (!fields.empty()) std::memcpy(buffer_.data() + used_, fields.data(), fields.size());
+        used_ += fields.size();
+        return true;
+    }
     bool header(char type, const Header& h) noexcept {
         return field(35, type) && field(49, h.sender) && field(56, h.target) && uint_field(34, h.sequence) &&
                timestamp_field(52, h.sending_time);

@@ -7,8 +7,6 @@
 //   * FixSessionSettings: session bounds and timer policy
 //   * FixFieldReader: typed inbound field access that remembers the first
 //     problem as a session Reject(3) reason (373) and reference tag (371)
-//   * FixFrameWriter: an outbound frame writer that, unlike fix44::Builder,
-//     can splice already formatted fields (used for PossDup resends)
 //   * stream resynchronisation helpers for garbled input
 // Nothing in this header allocates.
 
@@ -216,98 +214,6 @@ private:
     bool has_problem_ = false;
 };
 
-// Writes "8=FIX.4.4|9=<n>|" + fields + "10=<sum>|" into a caller buffer.
-// Fields are appended in call order; raw_fields() copies preformatted
-// "tag=value<SOH>" bytes verbatim.
-class FixFrameWriter {
-public:
-    explicit FixFrameWriter(std::span<char> buffer) noexcept
-        : buffer_(buffer), used_(kBodyOffset), good_(buffer.size() > kBodyOffset + kTrailerBytes) {}
-
-    bool field(unsigned tag, std::string_view value) noexcept {
-        if (!good_ || value.find(fix44::soh) != std::string_view::npos) {
-            good_ = false;
-            return false;
-        }
-        char tag_digits[10];
-        const std::size_t tag_length = fix44::format_uint(tag, tag_digits, sizeof tag_digits);
-        if (tag_length + value.size() + 2 > buffer_.size() - used_) {
-            good_ = false;
-            return false;
-        }
-        std::memcpy(buffer_.data() + used_, tag_digits, tag_length);
-        used_ += tag_length;
-        buffer_[used_++] = '=';
-        if (!value.empty()) {
-            std::memcpy(buffer_.data() + used_, value.data(), value.size());
-        }
-        used_ += value.size();
-        buffer_[used_++] = fix44::soh;
-        return true;
-    }
-    bool field(unsigned tag, char value) noexcept { return field(tag, std::string_view(&value, 1)); }
-    bool uint_field(unsigned tag, std::uint64_t value) noexcept { return field(tag, DecimalText(value).view()); }
-    bool timestamp_field(unsigned tag, std::uint64_t realtime_ns) noexcept {
-        char text[21];
-        fix44::format_timestamp(realtime_ns, text, sizeof text);
-        return field(tag, std::string_view(text, sizeof text));
-    }
-    bool raw_fields(std::string_view preformatted) noexcept {
-        if (!good_ || preformatted.size() > buffer_.size() - used_) {
-            good_ = false;
-            return false;
-        }
-        if (!preformatted.empty()) {
-            std::memcpy(buffer_.data() + used_, preformatted.data(), preformatted.size());
-        }
-        used_ += preformatted.size();
-        return true;
-    }
-
-    // Returns the frame size (frame starts at buffer.data()), or 0 on overflow.
-    std::size_t finish() noexcept {
-        if (!good_) {
-            return 0;
-        }
-        const std::size_t body_length = used_ - kBodyOffset;
-        char head[40] =
-            "8=FIX.4.4\001"
-            "9=";
-        const std::size_t digits = fix44::format_uint(body_length, head + 12, 20);
-        const std::size_t head_length = 12 + digits + 1;
-        head[head_length - 1] = fix44::soh;
-        const std::size_t total = head_length + body_length + kTrailerBytes;
-        if (total > buffer_.size()) {
-            return 0;
-        }
-        std::memmove(buffer_.data() + head_length, buffer_.data() + kBodyOffset, body_length);
-        std::memcpy(buffer_.data(), head, head_length);
-        unsigned checksum = 0;
-        for (std::size_t index = 0; index < total - kTrailerBytes; ++index) {
-            checksum += static_cast<unsigned char>(buffer_[index]);
-        }
-        checksum %= 256;
-        char* trailer = buffer_.data() + total - kTrailerBytes;
-        trailer[0] = '1';
-        trailer[1] = '0';
-        trailer[2] = '=';
-        trailer[3] = static_cast<char>('0' + checksum / 100);
-        trailer[4] = static_cast<char>('0' + checksum / 10 % 10);
-        trailer[5] = static_cast<char>('0' + checksum % 10);
-        trailer[6] = fix44::soh;
-        good_ = false;
-        return total;
-    }
-
-private:
-    static constexpr std::size_t kBodyOffset = 33;  // room for "8=FIX.4.4|9=" + 20 digits + SOH
-    static constexpr std::size_t kTrailerBytes = 7;
-
-    std::span<char> buffer_;
-    std::size_t used_;
-    bool good_;
-};
-
 // "8=FIX.4.4<SOH>9=", the only valid start of a FIX 4.4 frame.
 inline constexpr std::string_view kFrameStartPattern{
     "8=FIX.4.4\001"
@@ -429,7 +335,7 @@ inline constexpr std::string_view kFrameStartPattern{
     if (body_begin == std::string_view::npos || body_begin + 1 > body_end) {
         return 0;
     }
-    FixFrameWriter writer(output);
+    fix44::Builder writer(output);
     writer.field(35, raw_field_value(original, 35));
     writer.field(49, raw_field_value(original, 49));
     writer.field(56, raw_field_value(original, 56));
