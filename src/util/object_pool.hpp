@@ -3,7 +3,6 @@
 
 #include <cstddef>
 #include <memory>
-#include <new>
 #include <type_traits>
 #include <utility>
 
@@ -30,20 +29,16 @@ public:
 
     // Returns nullptr when every node is in use.
     template <typename... Args>
-    T* create(Args&&... args) {
+    T* create(Args&&... args) noexcept {
+        static_assert(std::is_nothrow_constructible_v<T, Args...>, "a throwing constructor would lose its node");
         if (!free_list_) [[unlikely]] {
             return nullptr;
         }
 
         Node* node = free_list_;
         free_list_ = free_list_->next;
-        try {
-            return ::new (static_cast<void*>(node->storage)) T(std::forward<Args>(args)...);
-        } catch (...) {
-            node->next = free_list_;
-            free_list_ = node;
-            throw;
-        }
+        // Constructing the member makes it the union's active member.
+        return std::construct_at(std::addressof(node->value), std::forward<Args>(args)...);
     }
 
     void destroy(T* object) noexcept {
@@ -51,18 +46,21 @@ public:
             return;
         }
 
-        object->~T();
-        // The Node union whose storage holds `object` is still alive, so launder
-        // yields a usable pointer to it at the same address.
-        Node* node = std::launder(reinterpret_cast<Node*>(object));
+        // A union and its live member are pointer-interconvertible, so take the
+        // node before ending the object's lifetime. Assigning `next` then
+        // makes it the active member again.
+        Node* node = reinterpret_cast<Node*>(object);
+        std::destroy_at(object);
         node->next = free_list_;
         free_list_ = node;
     }
 
 private:
+    // A free node holds the free-list link; a used node holds the object.
     union Node {
-        alignas(T) unsigned char storage[sizeof(T)];
         Node* next;
+        T value;
+        Node() noexcept : next(nullptr) {}
     };
 
     std::unique_ptr<Node[]> nodes_;
