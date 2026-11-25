@@ -2,6 +2,7 @@
 #define TESTS_EXSIM_ENGINE_LIVE_ORDERS_HPP
 
 #include <engine/matching_engine.hpp>
+#include <test/framework/test.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -15,10 +16,14 @@ namespace exsim::testsupport {
 // Test workloads assign monotonically increasing IDs. A priority-losing
 // replace takes a new ID, so ascending IDs also describe expected FIFO order.
 // This intentionally slow scan keeps inspection out of the production API.
+// Readers use order_id, so a lookup must return the ID it asked for.
 inline std::vector<OrderInfo> live_orders(const MatchingEngine& engine) {
     std::vector<OrderInfo> orders;
     for (OrderId id = 1; orders.size() < engine.live_order_count(); ++id) {
-        if (auto order = engine.find_order(id)) orders.push_back(*order);
+        if (auto order = engine.find_order(id)) {
+            CHECK_EQ(order->order_id, id);
+            orders.push_back(*order);
+        }
     }
     return orders;
 }
