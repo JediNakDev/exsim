@@ -8,11 +8,12 @@ CXXFLAGS := -std=c++23 -Wall -Wextra -Wpedantic -Wshadow $(EXTRA_CXXFLAGS)
 # every object in one build shares the same flags, so the value is consistent.
 ifneq ($(findstring Free Software Foundation,$(shell $(CXX) --version 2>/dev/null)),)
 CXXFLAGS += -Wno-interference-size
-# On arm64, GCC 12, 13.1 to 13.3 and 14.1 to 14.2 can leave ASan fake stack frames marked in use after a return. Once a
-# thread has no free frame of one size, every call scans the full table (about 7 us) and stack use after return goes
-# undetected. Those releases turn the check off; x86-64 builds, as in CI, and fixed releases keep it.
+# On arm64, GCC 12, 13.1 to 13.3.0 and 14.1 to 14.2.0 can leave ASan fake stack frames marked in use after a return.
+# Once a thread has no free frame of one size, each call needing that size scans the full table (about 7 us) and stack
+# use after return in those frames goes undetected. Those releases turn the check off. x86-64 builds, as in CI, fixed
+# releases and 13.3.1 or 14.2.1 snapshots (which may hold the fix) keep it. The unit test fails on one without the fix.
 ifneq ($(filter aarch64-%,$(shell $(CXX) -dumpmachine)),)
-ifneq ($(filter 12.% 13.1.% 13.2.% 13.3.% 14.1.% 14.2.%,$(shell $(CXX) -dumpfullversion)),)
+ifneq ($(filter 12.% 13.1.% 13.2.% 13.3.0 14.1.% 14.2.0,$(shell $(CXX) -dumpfullversion)),)
 ASAN_USE_AFTER_RETURN := --param=asan-use-after-return=0
 endif
 endif

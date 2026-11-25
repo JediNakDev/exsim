@@ -1,6 +1,7 @@
-// On arm64, GCC 12, 13.1 to 13.3 and 14.1 to 14.2 can leave ASan fake stack frames marked in use after a return. Once a
-// thread has no free frame of one size, every call scans the full table (about 7 us) and stack use after return goes
-// undetected. The Makefile turns the check off there. This case fails if a build runs it on a fake stack that fills up.
+// On arm64, GCC 12, 13.1 to 13.3.0 and 14.1 to 14.2.0 can leave ASan fake stack frames marked in use after a return.
+// Once a thread has no free frame of one size, each call needing that size scans the full table (about 7 us) and stack
+// use after return in those frames goes undetected. The Makefile turns the check off there. This case fails if a build
+// runs it on a fake stack that fills up.
 #include "test.hpp"
 
 #ifndef __has_feature
