@@ -24,12 +24,16 @@ exsim::net::Socket connect_fix(Runtime& runtime) {
     return socket;
 }
 
+// Sends `frame` and polls until a whole FIX message arrives. The deadline is set
+// after the first pass (which may only accept the connection) and restarts
+// whenever bytes arrive. Only a pass that starts after it and receives nothing
+// ends the wait, so a descheduled thread does not fail.
 std::string exchange_frame(Runtime& runtime, int fd, std::string_view frame) {
     REQUIRE_EQ(exsim::net::send_some(fd, frame.data(), frame.size()), static_cast<ssize_t>(frame.size()));
     std::string output;
     std::array<char, 8192> buffer{};
-    const auto deadline = exsim::common::monotonic_ns() + 2'000'000'000;
-    do {
+    for (std::uint64_t deadline = 0;;) {
+        const auto pass_started = exsim::common::monotonic_ns();
         runtime.poll_once();
         const auto size = ::recv(fd, buffer.data(), buffer.size(), 0);
         if (size > 0)
@@ -37,7 +41,11 @@ std::string exchange_frame(Runtime& runtime, int fd, std::string_view frame) {
         else if (size < 0)
             REQUIRE(exsim::net::is_would_block(errno));
         if (output.find("\00110=") != std::string::npos && output.back() == '\001') return output;
-    } while (exsim::common::monotonic_ns() < deadline);
+        if (deadline == 0 || size > 0)
+            deadline = exsim::common::monotonic_ns() + 2'000'000'000;
+        else if (pass_started >= deadline)
+            break;
+    }
     REQUIRE(!output.empty());
     return output;
 }
