@@ -263,8 +263,12 @@ TEST_CASE(gateway_fix_sequence, early_resend_request_without_sending_time_is_rej
 }
 
 TEST_CASE(gateway_fix_sequence, early_heartbeat_with_bad_sending_time_keeps_the_probe) {
-    for (const auto header : {"", "52=bad|", "52=20261103-09:30:00.000|43=Y|",
-                              "52=20261103-09:30:00.000|43=Y|122=20261103-09:31:00.000|"}) {
+    struct Case {
+        const char* header;
+        const char* reject_reason;  // SessionRejectReason(373) when the gap fills
+    };
+    for (const Case& test : {Case{"", "1"}, Case{"52=bad|", "6"}, Case{"52=20261103-09:30:00.000|43=Y|", "1"},
+                             Case{"52=20261103-09:30:00.000|43=Y|122=20261103-09:31:00.000|", "10"}}) {
         FixTestExchange exchange;
         FixTestConnection client(exchange, "CLIENT2");
         client.logon(10, false, {});
@@ -273,8 +277,20 @@ TEST_CASE(gateway_fix_sequence, early_heartbeat_with_bad_sending_time_keeps_the_
         const auto probe = std::find_if(messages.begin(), messages.end(),
                                         [](const ParsedFixMessage& message) { return message.type() == "1"; });
         REQUIRE(probe != messages.end());
-        client.feed(fix_frame("35=0|49=CLIENT2|56=EXSIM|34=" + std::to_string(client.next_sequence + 3) + "|" + header +
+        const std::uint64_t held = client.next_sequence + 3;
+        client.feed(fix_frame("35=0|49=CLIENT2|56=EXSIM|34=" + std::to_string(held) + "|" + test.header +
                               "112=" + probe->get(112) + "|"));
+        CHECK(client.connection().test_request_outstanding());
+        client.drain();  // our ResendRequest for the gap
+        for (std::uint64_t sequence = client.next_sequence; sequence < held; ++sequence) {
+            client.send_at("0", sequence, "");
+        }
+        const auto replies = client.drain();
+        const bool logout = std::string_view(test.reject_reason) == "10";
+        REQUIRE_EQ(replies.size(), std::size_t{logout ? 2u : 1u});
+        CHECK_EQ(replies[0].type(), std::string("3"));
+        CHECK_EQ(replies[0].get(373), std::string(test.reject_reason));
+        if (logout) CHECK_EQ(replies[1].type(), std::string("5"));
         CHECK(client.connection().test_request_outstanding());
     }
 }
