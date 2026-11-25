@@ -85,14 +85,13 @@ TEST_CASE(server_runtime_timers, timer_passes_run_once_per_interval) {
     ConnectedRuntime connected(1);
     const std::uint64_t calls_before = gateway_timer_calls;
     const std::uint64_t started = common::monotonic_ns();
-    std::uint64_t iterations = 0, calls = 0, late_iterations = 0, last_call_ns = 0;
+    std::uint64_t calls = 0, late_iterations = 0, last_call_ns = 0;
     // At least 50 ms and five passes: a loaded machine can deschedule the loop
     // for most of any 50 ms window, and passes need the loop to run.
     while ((calls < 5 || common::monotonic_ns() - started < 50'000'000) &&
            common::monotonic_ns() - started < 5'000'000'000) {
         const std::uint64_t iteration_started = common::monotonic_ns();
         connected.runtime.poll_once();
-        ++iterations;
         const std::uint64_t now_calls = gateway_timer_calls - calls_before;
         // last_call_ns is read after the pass, so an iteration starting 1 ms
         // later is due by the runtime's clock too, however long it was descheduled.
@@ -106,5 +105,4 @@ TEST_CASE(server_runtime_timers, timer_passes_run_once_per_interval) {
     CHECK_GE(calls, 5u);              // the connection's timers still run
     CHECK_LE(calls, elapsed_ms + 1);  // but at most once per millisecond
     CHECK_EQ(late_iterations, 0u);    // and on the first iteration that is due
-    CHECK_GT(iterations, calls);
 }

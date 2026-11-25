@@ -70,26 +70,27 @@ void pump(Poller& poller, TcpServer& server, Handler& handler) {
     server.flush_pending(handler);
 }
 // Reads until the server's FIN, checking each byte against `expected`, and
-// returns the byte count. The deadline restarts whenever bytes arrive and is
-// checked only after a pass found none: on a loaded machine the thread can be
-// descheduled for seconds, so only a stalled transfer fails.
+// returns the byte count. The deadline restarts whenever bytes arrive. Only a
+// pass that starts after it and finds nothing fails: on a loaded machine the
+// thread can be descheduled for seconds, so only a stalled transfer fails.
 std::size_t receive_until_eof(Poller& poller, TcpServer& server, Handler& handler, TcpClient& client,
                               std::span<const char> expected) {
     std::size_t received = 0;
     for (auto deadline = monotonic_ns() + kTimeout;;) {
+        const auto pass_started = monotonic_ns();
         pump(poller, server, handler);
         const auto result = client.receive();
         auto data = client.receive_buffer().readable();
         REQUIRE(received + data.size() <= expected.size());
         if (!data.empty()) {
             REQUIRE_EQ(std::memcmp(data.data(), expected.data() + received, data.size()), 0);
-            deadline = monotonic_ns() + kTimeout;
+            deadline = pass_started + kTimeout;
         }
         received += data.size();
         client.receive_buffer().consume(data.size());
         if (result.status == ReceiveStatus::PeerClosed) return received;
         REQUIRE(result.status != ReceiveStatus::Error);
-        REQUIRE(monotonic_ns() < deadline);
+        REQUIRE(pass_started < deadline);
     }
 }
 void connect_client(TcpClient& client, Ipv4Endpoint remote) {
