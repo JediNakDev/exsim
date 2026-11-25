@@ -9,12 +9,12 @@
 //
 //   [exchange]                 name, bind_address, ouch_port, fix_port,
 //                              ilink_port, admin_socket, max_connections,
-//                              heartbeat_interval_ms, soup_session,
-//                              trading_day_start, trading_day_end
+//                              heartbeat_interval_ms, trading_day_start,
+//                              trading_day_end
 //   [market_data]              protocol (itch50 or mdp3), address, port,
 //                              interface, ttl, loopback, retransmit_port,
 //                              max_payload, market_segment_id
-//                              itch50 only: session, retransmit_buffer,
+//                              itch50 only: retransmit_buffer,
 //                              noii_interval_ms
 //                              mdp3 only: channel_id, book_depth,
 //                              snapshot_port, instrument_port, backup_port,
@@ -89,7 +89,7 @@ struct ExchangeSection {
     std::string admin_socket;  // Unix socket for runtime commands, relative to the config file; empty = none
     std::uint32_t max_connections = 64;
     std::uint32_t heartbeat_interval_ms = 1000;  // SoupBinTCP server heartbeat
-    std::string soup_session = "EXSIM";          // SoupBinTCP session (<= 10 chars)
+    std::string soup_session = "EXSIM";          // SoupBinTCP session (<= 10 chars), set per start by main.cpp
     // Commands are accepted only while their stamped timestamp (ns since
     // local midnight) is in [trading_day_start_ns, trading_day_end_ns).
     Timestamp trading_day_start_ns = 0;
@@ -107,7 +107,7 @@ struct MarketDataSection {
     bool loopback = true;
     std::uint16_t retransmit_port = 0;  // MoldUDP64 request server
     std::uint32_t max_payload = 1400;   // bytes per MoldUDP64 packet incl. header; 72..65507 (md::kMinimumMaxPayload)
-    std::string session = "EXSIM";      // MoldUDP64 session (<= 10 chars)
+    std::string session = "EXSIM";      // MoldUDP64 session (<= 10 chars), set per start by main.cpp
     std::uint32_t retransmit_buffer = 1u << 16;  // messages kept for retransmission (64 B each)
     std::uint32_t noii_interval_ms = 1000;
     std::uint16_t channel_id = 1;

@@ -87,6 +87,17 @@ TEST_CASE(server_config_mdp, ouch_user_limits_max_price_to_the_ouch_price_field)
     CHECK(error.find("OUCH") != std::string::npos);
 }
 
+// Every start takes a fresh session name (src/main.cpp), so a configured name
+// would be replaced; the keys are refused instead of silently ignored.
+TEST_CASE(server_config, session_names_are_not_config_keys) {
+    for (const auto extra : {"[exchange]\nsoup_session = X\n", "[market_data]\nsession = X\n"}) {
+        ServerConfig config;
+        std::string error;
+        CHECK(!parse_config(std::string(kMinimal) + extra, config, error));
+        CHECK(error.find("unknown key") != std::string::npos);
+    }
+}
+
 TEST_CASE(server_config_mdp, rejects_keys_of_the_other_market_data_protocol) {
     const std::string mdp =
         "[market_data]\nprotocol = mdp3\nport = 19001\nsnapshot_port = 19002\ninstrument_port = 19003\n"
@@ -97,7 +108,7 @@ TEST_CASE(server_config_mdp, rejects_keys_of_the_other_market_data_protocol) {
     ServerConfig config;
     std::string error;
     REQUIRE(parse_config(mdp + instrument_and_user, config, error));
-    for (const auto itch_key : {"session = EXSIM\n", "retransmit_buffer = 16\n", "noii_interval_ms = 5\n"}) {
+    for (const auto itch_key : {"retransmit_buffer = 16\n", "noii_interval_ms = 5\n"}) {
         CHECK(!parse_config(mdp + itch_key + instrument_and_user, config, error));
         CHECK(error.find("ignored by the selected protocol") != std::string::npos);
     }
@@ -106,8 +117,9 @@ TEST_CASE(server_config_mdp, rejects_keys_of_the_other_market_data_protocol) {
         CHECK(!parse_config(std::string(kMinimal) + "[market_data]\nport = 19001\n" + mdp_key, config, error));
         CHECK(error.find("ignored by the selected protocol") != std::string::npos);
     }
-    CHECK(parse_config(std::string(kMinimal) + "[market_data]\nport = 19001\nsession = ABC\nmarket_segment_id = 2\n",
-                       config, error));
+    CHECK(parse_config(
+        std::string(kMinimal) + "[market_data]\nport = 19001\nretransmit_buffer = 16\nmarket_segment_id = 2\n", config,
+        error));
 }
 
 TEST_CASE(server_config_ilink, current_schema_fixture_and_missing_credentials) {
@@ -268,7 +280,6 @@ TEST_CASE(server_config, semantic_validation) {
     CHECK(fails("[instrument AAPL]\n"));                       // duplicate instrument
     CHECK(fails("[instrument B]\nmin_price = 0.015\n"));       // off-tick band
     CHECK(fails("[instrument B]\nreference_price = 2000\n"));  // outside default band
-    CHECK(fails("[exchange]\nsoup_session = ELEVENCHARS\n"));
     {
         ServerConfig cfg;
         std::string err;

@@ -25,7 +25,6 @@ constexpr Price kHundredFiftyDollars = 1'500'000;
 // user and MM1 is not configured.
 const char* const kCoreConfig = R"(
 [exchange]
-soup_session = EXSIM
 heartbeat_interval_ms = 1000
 trading_day_start = 09:30
 trading_day_end = 16:00
