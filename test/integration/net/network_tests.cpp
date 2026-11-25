@@ -204,7 +204,7 @@ TEST_CASE(net_buffers, compaction_overflow_and_single_byte_capacity) {
     REQUIRE_EQ(send.reserve(4).size(), 4U);
     send.commit(4);
     CHECK(send.reserve(1).empty());
-    CHECK_EQ(send.pending_bytes(), 4U);
+    CHECK_EQ(send.pending().size(), 4U);
     send.clear();
     CHECK_EQ(send.reserve(2).size(), 2U);
 }
@@ -356,7 +356,7 @@ TEST_CASE(net_server, reserve_if_room_refuses_without_overflowing) {
     // Four more bytes do not fit: refused, but nothing queued is lost and the
     // connection stays open.
     CHECK(server.reserve_send_if_room(id, 4).empty());
-    CHECK_EQ(server.connection(id)->send_buffer().pending_bytes(), 6U);
+    CHECK_EQ(server.connection(id)->send_buffer().pending().size(), 6U);
     std::size_t received = 0;
     until([&] { return received == 6; },
           [&] {
@@ -395,8 +395,13 @@ TEST_CASE(net_server, backpressure_order_and_graceful_close) {
     server.flush_pending(handler);
     REQUIRE(server.connection(id) != nullptr);
     CHECK(server.connection(id)->send_buffer().has_pending());
-    const auto sent = expected.size() - server.connection(id)->send_buffer().pending_bytes();
+    const auto sent = expected.size() - server.connection(id)->send_buffer().pending().size();
     REQUIRE(sent > 0);
+    // One byte more than the freed prefix does not fit: refused without moving
+    // the queued bytes.
+    const char* queued = server.connection(id)->send_buffer().pending().data();
+    CHECK(server.reserve_send_if_room(id, sent + 1).empty());
+    CHECK(server.connection(id)->send_buffer().pending().data() == queued);
     const auto original_size = expected.size();
     expected.resize(original_size + sent);
     for (std::size_t index = original_size; index < expected.size(); ++index)

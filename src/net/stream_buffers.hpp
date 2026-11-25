@@ -117,11 +117,12 @@ public:
 
     // Zero-copy append: returns exactly `max_bytes` of contiguous space at the
     // end of the queue; encode into it, then commit() the bytes actually used.
-    // Returns an empty span when the bytes do not fit; nothing queued is lost.
+    // Returns an empty span when the bytes do not fit, without moving the
+    // queued bytes: a paused replay retries until enough is sent.
     std::span<char> reserve(std::size_t max_bytes) noexcept {
         if (capacity_ - write_offset_ < max_bytes) {
+            if (capacity_ - (write_offset_ - read_offset_) < max_bytes) return {};
             compact();
-            if (capacity_ - write_offset_ < max_bytes) return {};
         }
         return {storage_.get() + write_offset_, max_bytes};
     }
@@ -134,9 +135,7 @@ public:
     std::span<const char> pending() const noexcept {
         return {storage_.get() + read_offset_, write_offset_ - read_offset_};
     }
-    std::size_t pending_bytes() const noexcept { return write_offset_ - read_offset_; }
     bool has_pending() const noexcept { return write_offset_ != read_offset_; }
-    std::size_t capacity() const noexcept { return capacity_; }
 
     // One send() of the pending bytes. A short send means the socket buffer
     // is full, so the rest waits for write readiness (status Blocked).
