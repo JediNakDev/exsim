@@ -176,7 +176,7 @@ TEST_CASE(md_publisher, out_of_day_batch_stops_session_without_output) {
     CHECK(fixture.publisher.end_session(30) == md::PublishStatus::Ok);
     REQUIRE_EQ(fixture.packets.size(), 1u);
     const DecodedPacket end = decode_packet(fixture.packets[0]);
-    CHECK_EQ(end.count, md::kMoldEndOfSessionCount);
+    CHECK_EQ(end.count, protocol::moldudp64::kEndOfSessionCount);
     CHECK_EQ(end.sequence, next_before);
     CHECK(fixture.publisher.state() == md::PublisherState::Ended);
 }
@@ -398,7 +398,7 @@ TEST_CASE(md_publisher, end_of_day_ends_session_and_repeats_end_of_session) {
     REQUIRE_EQ(fixture.packets.size(), 2u);
     CHECK_EQ(message_types(messages_of({fixture.packets[0]})), std::string("SS"));
     const DecodedPacket end = decode_packet(fixture.packets[1]);
-    CHECK_EQ(end.count, md::kMoldEndOfSessionCount);
+    CHECK_EQ(end.count, protocol::moldudp64::kEndOfSessionCount);
     CHECK_EQ(end.sequence, 7u);
     CHECK(fixture.publisher.state() == md::PublisherState::Ended);
     CHECK(fixture.publisher.end_of_day(60) == md::PublishStatus::NotAllowedInState);
