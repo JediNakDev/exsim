@@ -5,6 +5,9 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <map>
+#include <span>
+#include <tuple>
 #include <vector>
 
 namespace exsim::testsupport {
@@ -33,12 +36,28 @@ inline std::size_t level_orders(const MatchingEngine& engine, InstrumentId instr
     return written;
 }
 
-// The feed builder retains its own FIFO inspection for packet assertions.
-template <typename Book>
-std::size_t level_orders(const Book& book, InstrumentId instrument, Side side, Price price, OrderId* out,
-                         std::size_t capacity) {
-    return book.level_orders(instrument, side, price, out, capacity);
-}
+// A reader that visits every level groups one live_orders() result here
+// instead of calling level_orders() per level, which rescans every ID each
+// time. IDs within a level stay ascending.
+class LevelOrders {
+public:
+    explicit LevelOrders(std::span<const OrderInfo> orders) {
+        for (const OrderInfo& order : orders)
+            levels_[{order.instrument, order.side, order.price}].push_back(order.order_id);
+    }
+
+    std::size_t level_orders(InstrumentId instrument, Side side, Price price, OrderId* out,
+                             std::size_t capacity) const {
+        const auto level = levels_.find({instrument, side, price});
+        if (level == levels_.end()) return 0;
+        const std::size_t written = std::min(capacity, level->second.size());
+        std::copy_n(level->second.begin(), written, out);
+        return written;
+    }
+
+private:
+    std::map<std::tuple<InstrumentId, Side, Price>, std::vector<OrderId>> levels_;
+};
 
 }  // namespace exsim::testsupport
 

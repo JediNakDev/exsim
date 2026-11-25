@@ -62,7 +62,7 @@ struct BoundaryCheckingHandler {
     std::string first_failure{};
 
     std::uint64_t builder_digest() {
-        return book_digest(*builder, instrument_count, level_buffer, id_buffer,
+        return book_digest(*builder, *builder, instrument_count, level_buffer, id_buffer,
                            [this](InstrumentId id) { return builder->trading_state(id); });
     }
 
@@ -197,7 +197,8 @@ public:
     }
 
     std::uint64_t engine_digest() {
-        return book_digest(engine, engine.instrument_count(), engine_level_buffer_, engine_id_buffer_,
+        return book_digest(engine, testsupport::LevelOrders(testsupport::live_orders(engine)),
+                           engine.instrument_count(), engine_level_buffer_, engine_id_buffer_,
                            [this](InstrumentId id) { return md::itch_trading_state(engine.phase(id)); });
     }
 

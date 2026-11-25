@@ -136,11 +136,11 @@ inline NewOrder limit_order(Timestamp ts, InstrumentId instrument, SessionId ses
 
 inline void set_command_time(Command& command, Timestamp ts) { command.timestamp = ts; }
 
-// First difference between two books exposing depth()/level_orders(), or
-// an empty string. Also compares the ITCH trading state of each instrument.
-template <class EngineBook>
-std::string book_difference(const EngineBook& engine, const md::ItchBookBuilder& builder, std::size_t instrument_count,
-                            std::size_t max_orders) {
+// First difference between the engine and the builder, or an empty string.
+// Also compares the ITCH trading state of each instrument.
+inline std::string book_difference(const MatchingEngine& engine, const md::ItchBookBuilder& builder,
+                                   std::size_t instrument_count, std::size_t max_orders) {
+    const testsupport::LevelOrders engine_fifos(testsupport::live_orders(engine));
     std::vector<LevelInfo> engine_levels(max_orders + 1), builder_levels(max_orders + 1);
     std::vector<OrderId> engine_ids(max_orders + 1), builder_ids(max_orders + 1);
     for (std::size_t index = 1; index <= instrument_count; ++index) {
@@ -164,9 +164,9 @@ std::string book_difference(const EngineBook& engine, const md::ItchBookBuilder&
                            std::to_string(b.qty) + "/" + std::to_string(b.order_count) + " engine " +
                            std::to_string(e.price) + "x" + std::to_string(e.qty) + "/" + std::to_string(e.order_count);
                 const std::size_t engine_fifo =
-                    exsim::testsupport::level_orders(engine, id, side, e.price, engine_ids.data(), engine_ids.size());
-                const std::size_t builder_fifo = exsim::testsupport::level_orders(
-                    builder, id, side, e.price, builder_ids.data(), builder_ids.size());
+                    engine_fifos.level_orders(id, side, e.price, engine_ids.data(), engine_ids.size());
+                const std::size_t builder_fifo =
+                    builder.level_orders(id, side, e.price, builder_ids.data(), builder_ids.size());
                 if (engine_fifo != builder_fifo ||
                     !std::equal(engine_ids.begin(), engine_ids.begin() + static_cast<std::ptrdiff_t>(engine_fifo),
                                 builder_ids.begin()))
@@ -178,10 +178,12 @@ std::string book_difference(const EngineBook& engine, const md::ItchBookBuilder&
 }
 
 // Order-sensitive 64-bit digest of every level (price, qty, count, FIFO ids)
-// and trading state. `trading_state_of(id)` gives the ITCH state character.
-template <class Book, class TradingState>
-std::uint64_t book_digest(const Book& book, std::size_t instrument_count, std::vector<LevelInfo>& levels,
-                          std::vector<OrderId>& ids, TradingState trading_state_of) {
+// and trading state. `fifos.level_orders()` lists a level's IDs: the builder
+// itself, or a testsupport::LevelOrders of the engine. `trading_state_of(id)`
+// gives the ITCH state character.
+template <class Book, class Fifos, class TradingState>
+std::uint64_t book_digest(const Book& book, const Fifos& fifos, std::size_t instrument_count,
+                          std::vector<LevelInfo>& levels, std::vector<OrderId>& ids, TradingState trading_state_of) {
     std::uint64_t hash = 1469598103934665603ULL;
     auto mix = [&](std::uint64_t value) {
         for (int shift = 0; shift < 64; shift += 8) {
@@ -199,8 +201,7 @@ std::uint64_t book_digest(const Book& book, std::size_t instrument_count, std::v
                 mix(static_cast<std::uint64_t>(levels[level].price));
                 mix(levels[level].qty);
                 mix(levels[level].order_count);
-                const std::size_t fifo =
-                    exsim::testsupport::level_orders(book, id, side, levels[level].price, ids.data(), ids.size());
+                const std::size_t fifo = fifos.level_orders(id, side, levels[level].price, ids.data(), ids.size());
                 for (std::size_t order = 0; order < fifo; ++order) mix(ids[order]);
             }
         }
