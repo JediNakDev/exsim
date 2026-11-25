@@ -57,6 +57,9 @@ int main(int argc, char** argv) {
     sigemptyset(&signals);
     sigaddset(&signals, SIGINT);
     sigaddset(&signals, SIGTERM);
+    // A SIGHUP ignored on entry (nohup) stays ignored: Linux queues a blocked signal even when it is ignored.
+    struct sigaction hangup {};
+    if (sigaction(SIGHUP, nullptr, &hangup) == 0 && hangup.sa_handler != SIG_IGN) sigaddset(&signals, SIGHUP);
     pthread_sigmask(SIG_BLOCK, &signals, nullptr);
     try {
         exsim::server::ServerConfig config;
@@ -83,7 +86,8 @@ int main(int argc, char** argv) {
             // macOS has no sigtimedwait; consume blocked signals between polls.
             sigset_t pending;
             sigpending(&pending);
-            if (sigismember(&pending, SIGINT) || sigismember(&pending, SIGTERM)) {
+            if (sigismember(&pending, SIGINT) || sigismember(&pending, SIGTERM) ||
+                (sigismember(&signals, SIGHUP) && sigismember(&pending, SIGHUP))) {
                 int signal = 0;
                 sigwait(&signals, &signal);
                 runtime.request_shutdown();

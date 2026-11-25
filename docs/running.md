@@ -32,9 +32,9 @@ exchange.wait()
 
 ## Stopping
 
-Ctrl+C (SIGINT) or `kill <pid>` (SIGTERM) shuts down cleanly: instruments close, end-of-day messages go out, sessions drain, the journal flushes, the admin socket file is removed, and the process exits with 0. `kill -9` skips all of that and leaves the socket file behind; remove it before reusing the path.
+Ctrl+C (SIGINT), `kill <pid>` (SIGTERM), or SIGHUP shuts down cleanly: instruments close, end-of-day messages go out, sessions drain, the journal flushes, the admin socket file is removed, and the process exits with 0. `kill -9` skips all of that and leaves the socket file behind; remove it before reusing the path.
 
-The process belongs to the shell that started it, so it ends with your SSH session. Use tmux, `nohup`, or a systemd unit to keep it running after you log out.
+Closing the terminal or SSH session that started the exchange can send it SIGHUP, which stops it as above. Use tmux, `nohup`, or a systemd unit to keep it running after you log out; under `nohup` it ignores SIGHUP.
 
 ## Runtime commands
 
