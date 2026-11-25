@@ -41,17 +41,34 @@ struct CountingJournalWriter {
     }
     bool flush() noexcept {
         probe->writer_inside_flush = true;
-        probe->writer_inside_flush.notify_one();
-        probe->stall_flush.wait(true);  // sleeps until release_flush
+        probe->stall_flush.wait(true);  // sleeps while a FlushGate holds it
         probe->flush_requests.fetch_add(1, std::memory_order_relaxed);
         return true;
     }
     std::shared_ptr<Probe> probe;
 };
 
-void release_flush(Probe& probe) {
-    probe.stall_flush = false;
-    probe.stall_flush.notify_one();
+// Holds the writer inside flush() until open() or the end of the test, so a
+// failed REQUIRE never leaves it blocked. Declare it after the worker.
+struct FlushGate {
+    explicit FlushGate(Probe& held) : probe(held) { probe.stall_flush = true; }
+    ~FlushGate() { open(); }
+    void open() {
+        probe.stall_flush = false;
+        probe.stall_flush.notify_one();
+    }
+    Probe& probe;
+};
+
+// Long enough for a writer starved of CPU on a loaded machine; only a regression waits it out.
+constexpr std::chrono::seconds patience{10};
+
+// A lost wakeup never finishes, so this bound fails the test instead of hanging the suite.
+template <class Done>
+bool eventually(Done done) {
+    const auto deadline = std::chrono::steady_clock::now() + patience;
+    while (!done() && std::chrono::steady_clock::now() < deadline) std::this_thread::yield();
+    return done();
 }
 
 using TestJournalWorker = server::runtime::JournalWorker<CountingJournalWriter, 1024>;
@@ -60,54 +77,50 @@ using TestJournalWorker = server::runtime::JournalWorker<CountingJournalWriter, 
 
 TEST_CASE(journal_worker, destructor_drains_accepted_entries_and_joins) {
     const auto probe = new_probe();
-    probe->stall_flush = true;
-    // A loaded machine can keep the writer off the CPU for longer than the default 100 ms.
-    constexpr std::chrono::seconds shutdown_wait{10};
     std::optional<TestJournalWorker> worker;
-    worker.emplace("unused", server::journal::JournalSetup{}, shutdown_wait);
-    // Hold the writer inside a flush while the entries queue, so shutdown has them all to drain.
-    REQUIRE(worker->flush());
-    probe->writer_inside_flush.wait(false);
+    worker.emplace("unused", server::journal::JournalSetup{}, patience);
     for (int index = 0; index < 1000; ++index) REQUIRE(worker->append(Command{}));
     REQUIRE(worker->flush());
-    release_flush(*probe);
     const auto started = std::chrono::steady_clock::now();
     worker.reset();
     const auto elapsed = std::chrono::steady_clock::now() - started;
     CHECK_EQ(probe->appended_commands.load(), 1000u);
-    CHECK_EQ(probe->flush_requests.load(), 3u);  // the held flush, the requested one and the final one
-    CHECK(elapsed < shutdown_wait / 2);          // joined on the writer's signal, well before the wait runs out
+    CHECK_EQ(probe->flush_requests.load(), 2u);  // the requested flush and the final one
+    CHECK(elapsed < patience / 2);               // joined on the writer's signal, well before the wait runs out
 }
 
 TEST_CASE(journal_worker, ring_holds_capacity_minus_one_entries_then_fails) {
     const auto probe = new_probe();
-    probe->stall_flush = true;
     {
-        TestJournalWorker worker("unused", server::journal::JournalSetup{});
+        TestJournalWorker worker("unused", server::journal::JournalSetup{}, patience);
+        FlushGate gate(*probe);
         REQUIRE(worker.flush());
-        probe->writer_inside_flush.wait(false);
+        REQUIRE(eventually([&] { return probe->writer_inside_flush.load(); }));
         std::size_t accepted = 0;
         while (worker.append(Command{})) ++accepted;
         CHECK_EQ(accepted, 1023u);
         CHECK(!worker.healthy());
-        release_flush(*probe);
     }
+    // The overflow stopped the worker while its writer was held, so the writer
+    // drained every accepted entry after the stop.
+    CHECK_EQ(probe->appended_commands.load(), 1023u);
+    CHECK_EQ(probe->flush_requests.load(), 2u);  // the held flush and the final one
 }
 
 TEST_CASE(journal_worker, stalled_writer_is_abandoned_after_the_shutdown_wait) {
     const auto probe = new_probe();
-    probe->stall_flush = true;
     std::optional<TestJournalWorker> worker;
     worker.emplace("unused", server::journal::JournalSetup{});
+    FlushGate gate(*probe);
     REQUIRE(worker->flush());
-    probe->writer_inside_flush.wait(false);
+    REQUIRE(eventually([&] { return probe->writer_inside_flush.load(); }));
     const auto started = std::chrono::steady_clock::now();
     worker.reset();
     const auto elapsed = std::chrono::steady_clock::now() - started;
     CHECK(elapsed >= std::chrono::milliseconds(100));
     CHECK(elapsed < std::chrono::milliseconds(1000));
-    release_flush(*probe);  // the detached writer finishes on the state it owns
-    while (probe->flush_requests.load() < 2) std::this_thread::yield();
+    gate.open();  // the detached writer finishes on the state it owns
+    CHECK(eventually([&] { return probe->flush_requests.load() == 2; }));
 }
 
 TEST_CASE(journal_worker, wakes_for_each_request_after_becoming_idle) {
@@ -116,10 +129,7 @@ TEST_CASE(journal_worker, wakes_for_each_request_after_becoming_idle) {
     for (int index = 0; index < 20; ++index) {
         REQUIRE(worker.append(Command{}));
         REQUIRE(worker.flush());
-        // Only a hang guard: a lost wakeup never drains, however long the wait.
-        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
-        while (!worker.drained() && std::chrono::steady_clock::now() < deadline) std::this_thread::yield();
-        REQUIRE(worker.drained());
+        REQUIRE(eventually([&] { return worker.drained(); }));
         CHECK_EQ(probe->appended_commands.load(), static_cast<std::uint64_t>(index + 1));
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
