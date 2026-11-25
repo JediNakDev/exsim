@@ -29,7 +29,7 @@ std::string exchange_frame(Runtime& runtime, int fd, std::string_view frame) {
     std::string output;
     std::array<char, 8192> buffer{};
     const auto deadline = exsim::common::monotonic_ns() + 2'000'000'000;
-    while (exsim::common::monotonic_ns() < deadline) {
+    do {
         runtime.poll_once();
         const auto size = ::recv(fd, buffer.data(), buffer.size(), 0);
         if (size > 0)
@@ -37,7 +37,7 @@ std::string exchange_frame(Runtime& runtime, int fd, std::string_view frame) {
         else if (size < 0)
             REQUIRE(exsim::net::is_would_block(errno));
         if (output.find("\00110=") != std::string::npos && output.back() == '\001') return output;
-    }
+    } while (exsim::common::monotonic_ns() < deadline);
     REQUIRE(!output.empty());
     return output;
 }

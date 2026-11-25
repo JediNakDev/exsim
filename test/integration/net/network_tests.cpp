@@ -84,7 +84,7 @@ std::size_t receive_until_eof(Poller& poller, TcpServer& server, Handler& handle
         REQUIRE(received + data.size() <= expected.size());
         if (!data.empty()) {
             REQUIRE_EQ(std::memcmp(data.data(), expected.data() + received, data.size()), 0);
-            deadline = pass_started + kTimeout;
+            deadline = monotonic_ns() + kTimeout;
         }
         received += data.size();
         client.receive_buffer().consume(data.size());
