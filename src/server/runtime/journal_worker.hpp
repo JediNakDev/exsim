@@ -22,17 +22,20 @@ namespace exsim::server::runtime {
 template <class Writer = journal::JournalWriter, std::size_t Capacity = 32768>
 class JournalWorker {
 public:
-    JournalWorker(const std::string& path, const journal::JournalSetup& setup)
-        : state_(std::make_shared<State>(path, setup)), worker_([state = state_] { persist(*state); }) {}
+    // Tests pass a long shutdown_wait so a writer starved of CPU is not abandoned.
+    JournalWorker(const std::string& path, const journal::JournalSetup& setup,
+                  std::chrono::milliseconds shutdown_wait = std::chrono::milliseconds(100))
+        : state_(std::make_shared<State>(path, setup)),
+          shutdown_wait_(shutdown_wait),
+          worker_([state = state_] { persist(*state); }) {}
 
     ~JournalWorker() {
         state_->stopping.store(true, std::memory_order_release);
         state_->wake.fetch_add(1, std::memory_order_release);
         state_->wake.notify_one();
-        // The writer drains, closes and signals completion; wait up to 100 ms.
+        // The writer drains, closes and signals completion; wait up to shutdown_wait_.
         std::unique_lock lock(state_->completion_mutex);
-        const bool writer_done =
-            state_->completion.wait_for(lock, std::chrono::milliseconds(100), [&] { return state_->done; });
+        const bool writer_done = state_->completion.wait_for(lock, shutdown_wait_, [&] { return state_->done; });
         lock.unlock();
         if (writer_done)
             worker_.join();
@@ -134,6 +137,7 @@ private:
     }
 
     std::shared_ptr<State> state_;
+    std::chrono::milliseconds shutdown_wait_;
     std::uint64_t submitted_operations_ = 0;  // reactor-owned
     bool last_operation_flush_ = false;
     // jthread cannot interrupt file I/O; retain bounded shutdown and detach.
