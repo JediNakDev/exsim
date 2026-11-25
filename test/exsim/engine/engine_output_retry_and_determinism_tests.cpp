@@ -66,7 +66,8 @@ static std::vector<std::uint64_t> fields(const EventBuffer& out) {
 static void invariants(const MatchingEngine& e) {
     std::size_t count = 0;
     OrderId previous = 0;
-    for (const OrderInfo& o : testsupport::live_orders(e)) {
+    const std::vector<OrderInfo> orders = testsupport::live_orders(e);
+    for (const OrderInfo& o : orders) {
         CHECK(o.order_id > previous);
         previous = o.order_id;
         ++count;
@@ -75,6 +76,7 @@ static void invariants(const MatchingEngine& e) {
         CHECK_EQ(e.find_order(o.session, o.cl_ord_id)->order_id, o.order_id);
     }
     CHECK_EQ(count, e.live_order_count());
+    const testsupport::LevelOrders fifos(orders);
     std::size_t depth_count = 0;
     for (InstrumentId id = 1; id <= e.instrument_count(); ++id) {
         auto bid = e.best_bid(id), ask = e.best_ask(id);
@@ -84,7 +86,7 @@ static void invariants(const MatchingEngine& e) {
             auto n = e.depth(id, side, levels, 64);
             for (std::size_t i = 0; i < n; ++i) {
                 OrderId ids[64];
-                auto m = exsim::testsupport::level_orders(e, id, side, levels[i].price, ids, 64);
+                auto m = fifos.level_orders(id, side, levels[i].price, ids, 64);
                 CHECK(m > 0);
                 CHECK_EQ(m, levels[i].order_count);
                 depth_count += m;

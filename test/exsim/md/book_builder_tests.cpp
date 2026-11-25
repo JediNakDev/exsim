@@ -98,8 +98,10 @@ bool same_level(const LevelInfo& level, Price price, Quantity qty, std::uint32_t
 std::uint64_t digest(const md::ItchBookBuilder& builder) {
     std::vector<LevelInfo> level_buffer(64);
     std::vector<OrderId> id_buffer(64);
-    return book_digest(builder, builder.max_instruments(), level_buffer, id_buffer,
-                       [&](InstrumentId id) { return builder.trading_state(id); });
+    return book_digest(
+        builder, builder.max_instruments(), level_buffer, id_buffer,
+        [&](InstrumentId id) { return builder.trading_state(id); },
+        [&](auto... args) { return builder.level_orders(args...); });
 }
 
 md::BookUpdateStatus apply_message(md::ItchBookBuilder& builder, const Bytes& message) {
