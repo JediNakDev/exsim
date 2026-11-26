@@ -339,7 +339,8 @@ TEST_CASE(mdp_publisher, skipping_deep_changes_sends_the_same_bytes_as_recomputi
         Timestamp now = 1'000'000;
         REQUIRE_EQ(publisher.start(now, 1700000000000000000ull + now, engine), md::PublishStatus::Ok);
         REQUIRE_EQ(reference.start(now, 1700000000000000000ull + now, engine), md::PublishStatus::Ok);
-        Consumer consumer{.depth = depth};
+        Consumer consumer;
+        consumer.depth = depth;
         for (const auto& packet : reference_packets) consumer.packet(packet);
         testsupport::CommandGenerator generator(seed, weights, 40);
         for (int step = 0; step < 4000; ++step) {
