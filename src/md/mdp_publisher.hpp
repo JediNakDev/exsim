@@ -133,9 +133,8 @@ public:
                 case EventType::Canceled:
                     if (event.canceled.was_resting) note_change(state, event.canceled.side, event.canceled.price);
                     break;
-                case EventType::Replaced:
+                case EventType::Replaced:  // a re-entry at a new price comes as its own Rested or Fill
                     note_change(state, event.replaced.side, event.replaced.old_price);
-                    note_change(state, event.replaced.side, event.replaced.price);
                     break;
                 case EventType::Fill:
                     // An auction fill removes orders at prices other than the fill price.

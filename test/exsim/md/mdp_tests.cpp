@@ -312,9 +312,10 @@ TEST_CASE(mdp_publisher, changes_behind_the_tenth_level_publish_nothing) {
 
 // The reference publisher also gets an AuctionSummary for every instrument in every batch, which makes it
 // recompute both sides of every instrument, as the publisher did before it skipped changes behind its levels.
-// A consumer checks the reference against the engine, so a rule that also kept the reference from
-// recomputing still fails. Both must send the same bytes, snapshots included, while the books run deeper
-// than the published levels: ten for odd seeds, three for even ones.
+// A consumer applies only the reference's incremental packets, never a snapshot that would hide a missed
+// update, and checks them against the engine, so a rule that also kept the reference from recomputing still
+// fails. Both must send the same bytes, snapshots included, while the books run deeper than the published
+// levels: ten for odd seeds, three for even ones.
 TEST_CASE(mdp_publisher, skipping_deep_changes_sends_the_same_bytes_as_recomputing_every_batch) {
     const server::journal::JournalSetup setup = testsupport::fuzz_setup(false, 2);
     server::ServerConfig config = mdp_config();
@@ -366,11 +367,11 @@ TEST_CASE(mdp_publisher, skipping_deep_changes_sends_the_same_bytes_as_recomputi
             reference_packets.clear();
             REQUIRE_EQ(publisher.on_events({events.begin(), events.size()}), md::PublishStatus::Ok);
             REQUIRE_EQ(reference.on_events(forced), md::PublishStatus::Ok);
-            publisher.poll(now, UINT64_MAX);
-            reference.poll(now, UINT64_MAX);
             consumer.batch_ended = false;
             for (const auto& packet : reference_packets) consumer.packet(packet);
             consumer.compare(engine, config.instruments);
+            publisher.poll(now, UINT64_MAX);
+            reference.poll(now, UINT64_MAX);
             if (packets != reference_packets)
                 FAIL("seed " + std::to_string(seed) + " step " + std::to_string(step) + " " +
                      testsupport::format_command(command));
