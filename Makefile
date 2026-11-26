@@ -93,4 +93,4 @@ endif
 bench-build:
 	$(MAKE) MODE=bench BUILD=$(BENCH_BUILD) $(BENCH_BIN)
 bench: bench-build
-	./$(BENCH_BIN) $(if $(FILTER),--benchmark_filter='$(FILTER)') $(ARGS)
+	$(BENCH_BIN) $(if $(FILTER),--benchmark_filter='$(FILTER)') $(ARGS)
