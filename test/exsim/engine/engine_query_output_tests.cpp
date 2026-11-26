@@ -175,7 +175,9 @@ TEST_CASE(engine_buffer, insufficient_output_changes_neither_engine_nor_output) 
     // After the refused attempts no id was consumed: the next order gets id 3
     // and the first fill is match id 1. Events are appended after a marker.
     EventBuffer roomy(required_event_capacity(fixture.engine_config));
-    REQUIRE(roomy.push(EventType::PhaseChanged, 0, 31337) != nullptr);
+    Event* const roomy_marker = roomy.push(EventType::PhaseChanged, 0, 31337);
+    REQUIRE(roomy_marker != nullptr);
+    roomy_marker->phase_changed = {Phase::Closed, Phase::Halted};
     REQUIRE_EQ(fixture.engine.handle(commands[0], roomy), HandleResult::Applied);
     REQUIRE_EQ(roomy.size(), std::size_t{3});  // marker, Accepted, Fill (3 of the resting 5)
     CHECK_EQ(roomy[0].ts, Timestamp{31337});

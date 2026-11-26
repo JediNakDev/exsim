@@ -32,7 +32,7 @@ TEST_CASE(foundation, capacity_overflow_and_constness) {
 TEST_CASE(foundation, bounded_events) {
     exsim::EventBuffer out(2);
     exsim::Event* const first = out.push(exsim::EventType::Fill, 3, 7);
-    CHECK(first != nullptr);
+    REQUIRE(first != nullptr);
     CHECK(first->type == exsim::EventType::Fill);
     CHECK_EQ(first->instrument, 3u);
     CHECK_EQ(first->ts, 7u);
