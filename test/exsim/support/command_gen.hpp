@@ -22,7 +22,9 @@ inline server::journal::JournalSetup fuzz_setup(bool tiny = false, std::size_t i
 }
 class CommandGenerator {
 public:
-    explicit CommandGenerator(std::uint64_t seed, CommandWeights weights = {}) : rng_(seed), weights_(weights) {}
+    // Prices are drawn from `price_levels` ticks starting at 990000.
+    explicit CommandGenerator(std::uint64_t seed, CommandWeights weights = {}, std::uint64_t price_levels = 5)
+        : rng_(seed), weights_(weights), price_levels_(price_levels) {}
     template <class Engine>
     Command next(const Engine& engine) {
         ++step_;
@@ -54,7 +56,7 @@ public:
             n.tif = static_cast<TimeInForce>(pick(4));
             n.stp = static_cast<StpMode>(pick(4));
             n.post_only = pick(12) == 0;
-            n.price = 990000 + static_cast<Price>(pick(5)) * 100;
+            n.price = 990000 + static_cast<Price>(pick(price_levels_)) * 100;
             n.qty = static_cast<Quantity>(1 + pick(100));
             if (pick(20) == 0) switch (pick(8)) {
                     case 0: n.instrument = 4; break;
@@ -82,7 +84,7 @@ public:
                            live.price ? live.price : 1000000,
                            static_cast<Quantity>(pick(110)),
                            pick(4) == 0};
-            if (pick(3) == 0) r.price = 990000 + static_cast<Price>(pick(5)) * 100;
+            if (pick(3) == 0) r.price = 990000 + static_cast<Price>(pick(price_levels_)) * 100;
             if (pick(15) == 0) r.cl_ord_id = kMaxClOrdId + 1;
             if (pick(10) == 0) r.cl_ord_id = 1 + pick(80);
             return r;
@@ -97,6 +99,7 @@ private:
     std::uint64_t pick(std::uint64_t n) { return rng_() % n; }
     std::mt19937_64 rng_;
     CommandWeights weights_;
+    std::uint64_t price_levels_;
     Timestamp step_ = 0;
     ClOrdId token_ = 100;
 };

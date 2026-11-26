@@ -102,6 +102,7 @@ public:
         for (const auto id : touched_) {
             auto& state = states_[id];
             state.touched = false;
+            state.recompute_bids = state.recompute_asks = false;
             state.trade_count = 0;
             state.update_count = 0;
         }
@@ -124,6 +125,28 @@ public:
                 state.touched = true;
                 touched_.push_back(event.instrument);
             }
+            switch (event.type) {
+                case EventType::Accepted:
+                case EventType::Rejected:
+                case EventType::MassCancelDone: break;  // the book did not change
+                case EventType::Rested: note_change(state, event.rested.side, event.rested.price); break;
+                case EventType::Canceled:
+                    if (event.canceled.was_resting) note_change(state, event.canceled.side, event.canceled.price);
+                    break;
+                case EventType::Replaced:
+                    note_change(state, event.replaced.side, event.replaced.old_price);
+                    note_change(state, event.replaced.side, event.replaced.price);
+                    break;
+                case EventType::Fill:
+                    // An auction fill removes orders at prices other than the fill price.
+                    if (event.fill.aggressor == Aggressor::None)
+                        state.recompute_bids = state.recompute_asks = true;
+                    else
+                        note_change(state, event.fill.aggressor == Aggressor::Buy ? Side::SELL : Side::BUY,
+                                    event.fill.price);
+                    break;
+                default: state.recompute_bids = state.recompute_asks = true;
+            }
             if (event.type == EventType::Fill) {
                 std::int64_t price = 0;
                 if (!protocol::cme::price_to_price9(event.fill.price, price) || event.fill.qty >= INT32_MAX)
@@ -137,12 +160,14 @@ public:
         for (const auto i : touched_) {
             auto& state = states_[i];
             const auto id = static_cast<InstrumentId>(i);
-            state.next_bid_count = engine_->depth(id, Side::BUY, state.next_bids.data(), config_.book_depth);
-            state.next_ask_count = engine_->depth(id, Side::SELL, state.next_asks.data(), config_.book_depth);
-            if (!derive_updates(state, state.bids, state.bid_count, state.next_bids, state.next_bid_count,
-                                protocol::mdp3::BookSide::Bid) ||
-                !derive_updates(state, state.asks, state.ask_count, state.next_asks, state.next_ask_count,
-                                protocol::mdp3::BookSide::Ask) ||
+            if (state.recompute_bids)
+                state.next_bid_count = engine_->depth(id, Side::BUY, state.next_bids.data(), config_.book_depth);
+            if (state.recompute_asks)
+                state.next_ask_count = engine_->depth(id, Side::SELL, state.next_asks.data(), config_.book_depth);
+            if ((state.recompute_bids && !derive_updates(state, state.bids, state.bid_count, state.next_bids,
+                                                         state.next_bid_count, protocol::mdp3::BookSide::Bid)) ||
+                (state.recompute_asks && !derive_updates(state, state.asks, state.ask_count, state.next_asks,
+                                                         state.next_ask_count, protocol::mdp3::BookSide::Ask)) ||
                 state.report_sequence + std::uint64_t{state.trade_count} + state.update_count >= UINT32_MAX)
                 return fail(PublishStatus::UnrepresentableField);
             if (state.update_count) {
@@ -196,10 +221,14 @@ public:
                                                             message_),
                      now, MdpStream::Incremental);
             }
-            state.bids = state.next_bids;
-            state.bid_count = state.next_bid_count;
-            state.asks = state.next_asks;
-            state.ask_count = state.next_ask_count;
+            if (state.recompute_bids) {
+                state.bids = state.next_bids;
+                state.bid_count = state.next_bid_count;
+            }
+            if (state.recompute_asks) {
+                state.asks = state.next_asks;
+                state.ask_count = state.next_ask_count;
+            }
             state.phase = phase;
             if (published_event) state.last_event = epoch_origin_ + now;
         }
@@ -236,7 +265,19 @@ private:
         std::uint64_t last_event = 0;
         Phase phase = Phase::Continuous;
         bool touched = false;
+        bool recompute_bids = false, recompute_asks = false;  // this batch may change the published levels
     };
+
+    // A side is recomputed unless it shows book_depth levels and the change is strictly
+    // behind the last of them: then the published levels keep their prices and sizes.
+    void note_change(State& state, Side side, Price price) const noexcept {
+        const bool bid = side == Side::BUY;
+        const std::size_t count = bid ? state.bid_count : state.ask_count;
+        const auto& levels = bid ? state.bids : state.asks;
+        if (count == config_.book_depth && (bid ? price < levels[count - 1].price : price > levels[count - 1].price))
+            return;
+        (bid ? state.recompute_bids : state.recompute_asks) = true;
+    }
 
     bool derive_updates(State& state, std::array<LevelInfo, 10> current, std::size_t count,
                         const std::array<LevelInfo, 10>& desired, std::size_t desired_count,
