@@ -2,7 +2,8 @@
 #define EXSIM_PROTOCOL_SOUPBINTCP_HPP
 // Length includes the type byte, excludes the two-byte length itself. Data
 // payload views borrow the input; the session layer supplies sequence state.
-// Login reply decoders live in test/exsim/protocol/soupbintcp_client_codec.hpp.
+// Client-side aliases and decoders with no caller outside the tests live in
+// test/exsim/protocol/soupbintcp_client_codec.hpp.
 #include "wire.hpp"
 #include <algorithm>
 namespace exsim::protocol::soupbintcp {
@@ -31,7 +32,6 @@ inline Status decode(const char* p, std::size_t n, Packet& out) noexcept {
     out = {p[2], {p + 3, std::size_t(len) - 1}};
     return Status::ok;
 }
-inline Status decode(std::span<const char> s, Packet& out) noexcept { return decode(s.data(), s.size(), out); }
 inline std::size_t encode(Packet m, char* p, std::size_t n) noexcept {
     if (m.payload.size() > 65534 || n < m.payload.size() + 3 || !known(m.type)) return 0;
     wire::store16(p, static_cast<std::uint16_t>(m.payload.size() + 1));
@@ -125,12 +125,9 @@ struct DataPacket {
 };
 using UnsequencedData = DataPacket<'U'>;
 using SequencedData = DataPacket<'S'>;
-using Debug = DataPacket<'+'>;
 template <char Type>
 struct ControlPacket {};
-using ClientHeartbeat = ControlPacket<'R'>;
 using ServerHeartbeat = ControlPacket<'H'>;
-using LogoutRequest = ControlPacket<'O'>;
 using EndOfSession = ControlPacket<'Z'>;
 struct LoginRejected {
     char reason = 'A';
@@ -145,21 +142,6 @@ std::size_t encode(ControlPacket<T>, char* p, std::size_t n) noexcept {
 }
 inline std::size_t encode(LoginRejected m, char* p, std::size_t n) noexcept {
     return encode(Packet{'J', {&m.reason, 1}}, p, n);
-}
-template <char T>
-Status decode(const char* p, std::size_t n, DataPacket<T>& m) noexcept {
-    Packet packet;
-    auto status = decode(p, n, packet);
-    if (status != Status::ok) return status;
-    if (packet.type != T) return Status::invalid_type;
-    m.payload = packet.payload;
-    return Status::ok;
-}
-template <char T>
-Status decode(const char* p, std::size_t n, ControlPacket<T>&) noexcept {
-    Packet packet;
-    auto status = decode(p, n, packet);
-    return status != Status::ok ? status : packet.type == T ? Status::ok : Status::invalid_type;
 }
 }  // namespace exsim::protocol::soupbintcp
 #endif
