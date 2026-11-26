@@ -149,10 +149,7 @@ TEST_CASE(engine_output, nonempty_insufficient_output_retry_all_commands) {
             default: c = NewOrder{}; break;
         }
         EventBuffer small(1);
-        Event sentinel{};
-        sentinel.type = EventType::PhaseChanged;
-        sentinel.ts = 777;
-        REQUIRE(small.push(sentinel));
+        REQUIRE(small.push(EventType::PhaseChanged, 0, 777) != nullptr);
         const auto before = fields(small);
         REQUIRE(a.handle(c, small) == HandleResult::InsufficientOutput);
         CHECK_EQ(fields(small), before);

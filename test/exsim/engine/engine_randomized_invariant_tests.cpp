@@ -210,7 +210,6 @@ void run_randomized_invariant_sweep(std::uint64_t seed, int step_count) {
     EngineFixture twin(Phase::Continuous, kInstrumentCount, config);
     RandomCommandSource source(seed);
     ConservationLedger ledger;
-    const Event marker{EventType::PhaseChanged, 0, 777, {.phase_changed = {Phase::Closed, Phase::Closed}}};
     std::size_t refused_attempts = 0;
     std::size_t deepest_live_order_count = 0;
 
@@ -221,7 +220,9 @@ void run_randomized_invariant_sweep(std::uint64_t seed, int step_count) {
         // fits the whole command or refuses it without touching anything.
         const std::size_t tight_capacity = 1 + source.below(5);
         EventBuffer tight_output(tight_capacity);
-        REQUIRE(tight_output.push(marker));
+        Event* const marker = tight_output.push(EventType::PhaseChanged, 0, 777);
+        REQUIRE(marker != nullptr);
+        marker->phase_changed = {Phase::Closed, Phase::Closed};
         const std::uint64_t state_before = book_state_digest(fixture.engine);
         const HandleResult tight_result = fixture.engine.handle(command, tight_output);
 
@@ -242,7 +243,12 @@ void run_randomized_invariant_sweep(std::uint64_t seed, int step_count) {
             REQUIRE_EQ(tight_result, HandleResult::Applied);
             // Compare the appended events (after the marker) with the twin.
             EventBuffer appended(tight_output.size());
-            for (std::size_t i = 1; i < tight_output.size(); ++i) REQUIRE(appended.push(tight_output[i]));
+            for (std::size_t i = 1; i < tight_output.size(); ++i) {
+                const Event& event = tight_output[i];
+                Event* const copy = appended.push(event.type, event.instrument, event.ts);
+                REQUIRE(copy != nullptr);
+                *copy = event;
+            }
             CHECK_EQ(event_stream_digest(appended), event_stream_digest(twin_events));
             ledger.record(tight_output, 1, command.ts());
         }
