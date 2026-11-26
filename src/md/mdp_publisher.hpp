@@ -133,7 +133,7 @@ public:
                 case EventType::Canceled:
                     if (event.canceled.was_resting) note_change(state, event.canceled.side, event.canceled.price);
                     break;
-                case EventType::Replaced:  // a re-entry at a new price comes as its own Rested or Fill
+                case EventType::Replaced:  // whatever rests at the new price comes as its own Rested
                     note_change(state, event.replaced.side, event.replaced.old_price);
                     break;
                 case EventType::Fill:
