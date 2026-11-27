@@ -10,13 +10,13 @@
 //
 // This is the harness that backs the "book reconstruction validated
 // against a reference oracle" claim. A NASDAQ file goes through the same
-// frame walker and dispatch in tools/itch_replay, one stock at a time.
+// frame walker and dispatch in benchmark/itch_replay, one stock at a time.
 
 #include "test/framework/test.hpp"
-#include "tools/itch_replay/diff.hpp"
-#include "tools/itch_replay/itch_replayer.hpp"
-#include "tools/itch_replay/reference_book.hpp"
-#include "tools/itch_replay/synthetic.hpp"
+#include "benchmark/itch_replay/diff.hpp"
+#include "benchmark/itch_replay/itch_replayer.hpp"
+#include "benchmark/itch_replay/reference_book.hpp"
+#include "benchmark/itch_replay/synthetic.hpp"
 
 #include <protocol/itch50.hpp>
 

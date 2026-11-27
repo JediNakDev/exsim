@@ -96,7 +96,7 @@ endif
 $(BUILD)/journal_replay: $(call obj,tools/journal_replay/main.cpp src/server/journal/journal.cpp) $(ENGINE_OBJS)
 	$(CXX) $(LDFLAGS) $^ -o $@ $(LDLIBS)
 journal-replay: $(BUILD)/journal_replay
-$(BUILD)/itch_replay: $(call obj,tools/itch_replay/main.cpp) $(ENGINE_OBJS)
+$(BUILD)/itch_replay: $(call obj,benchmark/itch_replay/main.cpp) $(ENGINE_OBJS)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $^ -o $@ $(LDLIBS)
 itch-replay:
 	$(MAKE) MODE=perf build/perf/itch_replay

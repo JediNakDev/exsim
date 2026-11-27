@@ -141,5 +141,5 @@ make -j4 itch-replay
 ./build/perf/itch_replay --synth 100000 --validate
 ```
 
-Replay is a separate tool that drives the same engine. It is not part of this suite.
+ITCH replay (`itch_replay/`) drives the same engine with one stock of a NASDAQ ITCH 5.0 file, or with synthetic messages, and reports throughput. `--validate` also checks the book against a reference book after every message. It is not part of the Google Benchmark suite.
 See [profiling](profiling/README.md) and [current results](results/README.md).
