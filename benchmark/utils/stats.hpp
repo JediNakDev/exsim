@@ -2,7 +2,6 @@
 #define EXSIM_BENCH_STATS_HPP
 
 #include "utils/histogram.hpp"
-#include <benchmark/benchmark.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -12,7 +11,8 @@ namespace bench {
 // Per-operation summary of a run that timed batches of `batch_size` commands.
 // Every sample in the histogram is one batch, so each percentile is a
 // percentile of batch means: single-operation outliers are averaged with the
-// rest of their batch.
+// rest of their batch. With batch_size 1 (the wire benchmark) every sample is
+// one operation.
 struct Stats {
     std::uint64_t operations = 0;
     double mean_ns = 0;
@@ -45,18 +45,6 @@ struct Stats {
                 static_cast<double>(stats.operations) * 1e9 / static_cast<double>(batches.sum());
         }
         return stats;
-    }
-
-    void report(benchmark::State& state) const {
-        state.counters["Mean_ns"] = mean_ns;
-        state.counters["P50_ns"] = p50_ns;
-        state.counters["P95_ns"] = p95_ns;
-        state.counters["P99_ns"] = p99_ns;
-        state.counters["P99.9_ns"] = p999_ns;
-        state.counters["P99.99_ns"] = p9999_ns;
-        state.counters["Min_ns"] = min_ns;
-        state.counters["Max_ns"] = max_ns;
-        state.counters["Mops_per_s"] = throughput_per_second / 1e6;
     }
 };
 

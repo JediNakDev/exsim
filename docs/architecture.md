@@ -89,7 +89,7 @@ The admin socket has no authentication beyond its owner-only file mode. Remote t
 
 Protocol support is a subset of each specification. iLink uses the pinned version 9 schema with configured party records. MDP supports MBP snapshots and bounded TCP recovery. Exchange state is not restored after a process restart.
 
-Run native processes on macOS or Linux. Active checks cover unit and integration tests. The benchmark suite measures the matching engine, not the complete exchange service.
+Run native processes on macOS or Linux. Active checks cover unit and integration tests. `make bench` measures the matching engine alone; `make bench-wire` measures a running exchange over loopback TCP and UDP only, with no network cards, switches or multicast.
 
 See [running an exchange](running.md), [tests](../test/README.md), and [benchmarks](../benchmark/README.md).
 

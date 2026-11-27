@@ -15,13 +15,15 @@ public:
     explicit CSVWriter(const std::string& filename) : file_(filename) {
         file_.exceptions(std::ios::failbit | std::ios::badbit);
         file_ << "Benchmark,Operations,Mean_ns,P50_ns,P95_ns,P99_ns,P99.9_ns,P99.99_ns,"
-                 "Min_ns,Max_ns,Throughput_ops_per_sec\n";
+                 "Min_ns,Max_ns,Throughput_ops_per_sec"
+              << std::endl;  // flushed, so a file that cannot take it fails here
     }
 
     void write(const std::string& name, const Stats& s) {
         file_ << name << "," << s.operations << "," << std::fixed << std::setprecision(2) << s.mean_ns << ","
               << s.p50_ns << "," << s.p95_ns << "," << s.p99_ns << "," << s.p999_ns << "," << s.p9999_ns << ","
-              << s.min_ns << "," << s.max_ns << "," << std::setprecision(0) << s.throughput_per_second << "\n";
+              << s.min_ns << "," << s.max_ns << "," << std::setprecision(0) << s.throughput_per_second
+              << std::endl;  // flushed, so a failed write throws here and fails the run
     }
 
 private:

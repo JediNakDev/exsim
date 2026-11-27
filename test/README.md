@@ -11,7 +11,7 @@ This runs two suites. Each is a folder, and every test file is named `*_tests.cp
 | Command | Folder | Coverage |
 | --- | --- | --- |
 | `make -j4 unit` | `exsim/` (mirrors `src/`) | Matching, books, containers, codecs, gateways, config, core policies, publishers, and ITCH replay |
-| `make -j4 integration` | `integration/` | Sockets, feeds, the admin socket, and the exchange runtime, plus `integration/exsim_exchanged_test.py`, which runs the binary as a trading engine's harness would |
+| `make -j4 integration` | `integration/` | Sockets, feeds, the admin socket, and the exchange runtime, plus `integration/exsim_exchanged_test.py`, which runs the binary as a trading engine's harness would, and `integration/wire_bench_test.py`, which checks that the wire benchmark fails on a wrong reply and stops its exchange on a signal |
 
 Shared code is not a suite: `framework/` is the test framework, `exsim/support/` holds protocol clients, the ITCH book builder, the MoldUDP64 receiver and the journal reader, and `fixtures/` holds config files. Support code links only into test binaries.
 
@@ -31,7 +31,7 @@ Debug builds use AddressSanitizer and UBSan. `FILTER` selects native cases by su
 
 On arm64, GCC 12, 13.1 to 13.3.0 and 14.1 to 14.2.0 can leave ASan fake stack frames marked in use after a function returns ([fixed upstream](https://github.com/gcc-mirror/gcc/commit/13d971601175541146fda54682cde4d3f9cd2759) in 13.4, 14.3 and 15). Once a thread has no free frame of one size, after thousands of calls, each call needing that size scans the full table (about 7 us) and the stack-use-after-return check misses bugs in those frames. That stretched the arm64 Linux debug unit suite from about 3 minutes to over 9 hours, so the Makefile turns the check off for those releases on arm64. Short runs, such as the integration tests' child processes, lose the check while it would still work. x86-64 builds, as in CI, fixed releases, and 13.3.1 or 14.2.1 snapshots (which may hold the fix) keep it. With ASan's default fake stack size, `test_framework.asan_fake_stack_does_not_fill_up` fails if a build runs the broken check.
 
-Builds go to `build/<mode>/`. CI runs both suites on macOS and Ubuntu in release and debug modes, a ThreadSanitizer run on Ubuntu, a benchmark build, a fuzz run (45 seconds per harness), and a format check (`make format-check`, clang-format 18).
+Builds go to `build/<mode>/`. CI runs both suites on macOS and Ubuntu in release and debug modes, a ThreadSanitizer run on Ubuntu, a benchmark build with a short wire benchmark run, a fuzz run (45 seconds per harness), and a format check (`make format-check`, clang-format 18).
 
 ## Fuzzing
 

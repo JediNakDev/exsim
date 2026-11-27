@@ -42,6 +42,10 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libbenchmark-dev
       - name: build benchmarks
         run: make -j4 MODE=bench bench-build
+      # A few hundred orders through a real exchange process; it fails on a wrong or missing reply, never on timing.
+      # The absolute BENCH_BUILD checks that make runs the client it just built.
+      - name: wire benchmark smoke run
+        run: make -j4 bench-wire BENCH_BUILD="$PWD/build/bench" EXTRA_CXXFLAGS=-Werror ARGS=--orders=300
   fuzz:
     name: fuzz harnesses (ubuntu-24.04, clang 19)
     runs-on: ubuntu-24.04

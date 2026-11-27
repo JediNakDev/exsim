@@ -56,7 +56,7 @@ $(BUILD)/obj/%.o: %.cpp Makefile
 	@mkdir -p $(dir $@)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 $(BUILD)/exsim_exchanged: $(call obj,src/main.cpp) $(LIB_OBJS)
-	$(CXX) $(LDFLAGS) $^ -o $@ $(LDLIBS)
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) $^ -o $@ $(LDLIBS)
 $(BUILD)/unit_tests: $(call obj,test/main.cpp $(UNIT_SRCS)) $(LIB_OBJS) $(TEST_LIB_OBJS)
 	$(CXX) $(LDFLAGS) $^ -o $@ $(LDLIBS)
 unit: $(BUILD)/unit_tests
@@ -65,9 +65,9 @@ $(BUILD)/integration_tests: $(call obj,test/main.cpp $(INTEGRATION_SRCS)) $(LIB_
 	$(CXX) $(LDFLAGS) $^ -o $@ $(LDLIBS)
 # FILTER goes to both runners (substring for native cases, -k for Python). A runner that matches
 # nothing exits 2 (native) or 5 (Python 3.12+); that is not a failure.
-integration: apps $(BUILD)/integration_tests
+integration: apps $(BUILD)/integration_tests $(BUILD)/exsim_wire_bench
 	EXSIM_BUILD=$(BUILD) ./$(BUILD)/integration_tests $(FILTER); [ $$? -eq 0 -o $$? -eq 2 ]
-	EXSIM_BUILD=$(BUILD) python3 -B test/integration/exsim_exchanged_test.py $(if $(FILTER),-k '$(FILTER)'); [ $$? -eq 0 -o $$? -eq 5 ]
+	EXSIM_BUILD=$(BUILD) python3 -B -m unittest discover -v -s test/integration -p '*_test.py' $(if $(FILTER),-k '$(FILTER)'); [ $$? -eq 0 -o $$? -eq 5 ]
 test: unit integration
 clean:
 	rm -rf $(BUILD)
@@ -92,14 +92,14 @@ BENCH_CPPFLAGS := -I$(BENCHMARK_PREFIX)/include
 BENCH_LDFLAGS := -L$(BENCHMARK_PREFIX)/lib
 endif
 
-.PHONY: bench bench-build itch-replay
+.PHONY: bench bench-build bench-wire itch-replay
 $(BUILD)/itch_replay: $(call obj,tools/itch_replay/main.cpp) $(ENGINE_OBJS)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $^ -o $@ $(LDLIBS)
 itch-replay:
 	$(MAKE) MODE=perf build/perf/itch_replay
 
-ifeq ($(MODE),bench)
 $(BUILD)/obj/benchmark/%.o: CPPFLAGS += -I benchmark $(BENCH_CPPFLAGS)
+ifeq ($(MODE),bench)
 $(BENCH_BIN): $(call obj,$(BENCH_SRCS)) $(ENGINE_OBJS)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $^ -o $@ $(BENCH_LDFLAGS) -lbenchmark $(LDLIBS)
 endif
@@ -107,6 +107,14 @@ bench-build:
 	$(MAKE) MODE=bench BUILD=$(BENCH_BUILD) $(BENCH_BIN)
 bench: bench-build
 	$(BENCH_BIN) $(if $(FILTER),--benchmark_filter='$(FILTER)') $(ARGS)
+
+# The wire benchmark is a client of the exsim_exchanged built next to it. It
+# needs no Google Benchmark, so any MODE can build it (debug runs it under ASan).
+$(BUILD)/exsim_wire_bench: $(call obj,benchmark/wire/main.cpp src/net/socket.cpp src/net/udp.cpp)
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) $^ -o $@ $(LDLIBS)
+bench-wire:
+	$(MAKE) MODE=bench BUILD=$(BENCH_BUILD) $(BENCH_BUILD)/exsim_exchanged $(BENCH_BUILD)/exsim_wire_bench
+	$(BENCH_BUILD)/exsim_wire_bench $(ARGS)
 
 # One libFuzzer harness per parser of untrusted input (fuzz/*.cpp). libFuzzer ships with LLVM clang,
 # not Apple clang; clang 19 is the first with std::hardware_destructive_interference_size on libstdc++.
