@@ -51,7 +51,7 @@ Measured cost of `MatchingEngine::handle` per command on an Apple M6 (macOS 27.0
 | SweepWithFills | 35.35 |
 | ReplaceOrder | 47.68 |
 
-The CSV percentiles are percentiles of 32-command batch means, not single-command tail latency. The table was measured on 2026-11-17, before #49 gave `EventBuffer` fixed storage. See [results](../results/README.md) for the machine, Linux profile and the exact rows.
+The CSV percentiles are percentiles of 32-command batch means, not single-command tail latency. The table was measured on 2026-11-17, before #49 gave `EventBuffer` fixed storage. See [results](../benchmark/results/README.md) for the machine, Linux profile and the exact rows.
 
 ## Exchange metadata
 

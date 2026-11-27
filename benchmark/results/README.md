@@ -4,7 +4,7 @@ One result set, measured on the code in this branch. Rerun after any engine chan
 
 | File | What | How |
 | --- | --- | --- |
-| `macos_arm64.csv` | Latency and throughput of the six benchmark cases | `make bench ARGS=--csv=results/macos_arm64.csv` |
+| `macos_arm64.csv` | Latency and throughput of the six benchmark cases | `make bench ARGS=--csv=benchmark/results/macos_arm64.csv` |
 | `linux_arm64_flame.svg` | Flame graph of `MixedWorkload` | `benchmark/profiling/run_perf.sh` |
 | `linux_arm64_flame_engine.svg` | The same samples, only the stacks under `MatchingEngine::handle` | same run |
 | `linux_arm64_perf_report.txt` | Functions above 1% of samples in the same profile | same run |
@@ -16,6 +16,6 @@ The macOS CSV was measured 2026-11-17, before #49. The host was too busy on 2026
 - macOS: Apple M6, macOS 27.0.1, Apple clang 21. The thread could not be pinned; macOS only takes an affinity hint.
 - Linux: Ubuntu 24.04 in an OrbStack virtual machine on the same host, g++ 13.3, perf 6.8. The machine has no PMU, so the profile samples `cpu-clock` and there are no cycle or cache-miss counters.
 
-CSV percentiles are percentiles of 32-command batch means, not single-command tail latency. See [the benchmark suite](../benchmark/README.md) for what is and is not measured.
+CSV percentiles are percentiles of 32-command batch means, not single-command tail latency. See [the benchmark suite](../README.md) for what is and is not measured.
 
 `linux_arm64_flame.svg` includes the untimed setup between iterations; `linux_arm64_flame_engine.svg` does not.

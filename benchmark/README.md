@@ -142,4 +142,4 @@ make -j4 itch-replay
 ```
 
 Replay is a separate tool that drives the same engine. It is not part of this suite.
-See [profiling](profiling/README.md) and [current results](../results/README.md).
+See [profiling](profiling/README.md) and [current results](results/README.md).

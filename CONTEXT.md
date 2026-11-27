@@ -28,7 +28,7 @@ A small exchange simulator. Each exchange is one process started from a config f
 | `spec/` | Pinned CME XML schemas |
 | `tools/` | ITCH replay, journal replay and the CME schema generator |
 | `test/` | Unit and integration tests |
-| `benchmark/` | Benchmark harness and profiling scripts |
+| `benchmark/` | Benchmarks, ITCH replay, profiling scripts and the latest results |
 
 ## Design goal
 
