@@ -41,9 +41,11 @@ ifeq ($(shell uname -s),Linux)
 LDLIBS += -lcrypto
 endif
 TEST_LIB_SRCS := test/exsim/support/clients/itch_book_builder.cpp test/exsim/support/clients/tcp_client.cpp
-LIB_SRCS := $(filter-out src/main.cpp,$(shell find src -name '*.cpp' | sort))
+LIB_SRCS := $(filter-out src/main.cpp src/journal_replay.cpp,$(shell find src -name '*.cpp' | sort))
 obj = $(patsubst %.cpp,$(BUILD)/obj/%.o,$(1))
 LIB_OBJS := $(call obj,$(LIB_SRCS))
+# The replay tools and the benchmarks link only the matching engine and its order book.
+ENGINE_OBJS := $(call obj,src/book/order_book.cpp src/engine/matching_engine.cpp)
 TEST_LIB_OBJS := $(call obj,$(TEST_LIB_SRCS))
 # A suite is a folder: test/exsim holds unit tests (mirrors src/), test/integration holds sockets and processes.
 # Both hold *_tests.cpp only; shared helpers under test/exsim/support are not picked up here.
@@ -51,12 +53,14 @@ UNIT_SRCS := $(shell find test/exsim test/framework -name '*_tests.cpp' | sort) 
 INTEGRATION_SRCS := $(shell find test/integration -name '*_tests.cpp' | sort) test/framework/alloc_counter.cpp
 .PHONY: all apps test unit integration clean format format-check
 all: apps
-apps: $(BUILD)/exsim_exchanged
+apps: $(BUILD)/exsim_exchanged $(BUILD)/journal_replay
 $(BUILD)/obj/%.o: %.cpp Makefile
 	@mkdir -p $(dir $@)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 $(BUILD)/exsim_exchanged: $(call obj,src/main.cpp) $(LIB_OBJS)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $^ -o $@ $(LDLIBS)
+$(BUILD)/journal_replay: $(call obj,src/journal_replay.cpp src/server/journal/journal.cpp) $(ENGINE_OBJS)
+	$(CXX) $(LDFLAGS) $^ -o $@ $(LDLIBS)
 $(BUILD)/unit_tests: $(call obj,test/main.cpp $(UNIT_SRCS)) $(LIB_OBJS) $(TEST_LIB_OBJS)
 	$(CXX) $(LDFLAGS) $^ -o $@ $(LDLIBS)
 unit: $(BUILD)/unit_tests
@@ -65,7 +69,7 @@ $(BUILD)/integration_tests: $(call obj,test/main.cpp $(INTEGRATION_SRCS)) $(LIB_
 	$(CXX) $(LDFLAGS) $^ -o $@ $(LDLIBS)
 # FILTER goes to both runners (substring for native cases, -k for Python). A runner that matches
 # nothing exits 2 (native) or 5 (Python 3.12+); that is not a failure.
-integration: apps $(BUILD)/integration_tests $(BUILD)/exsim_wire_bench $(BUILD)/journal_replay
+integration: apps $(BUILD)/integration_tests $(BUILD)/exsim_wire_bench
 	EXSIM_BUILD=$(BUILD) ./$(BUILD)/integration_tests $(FILTER); [ $$? -eq 0 -o $$? -eq 2 ]
 	EXSIM_BUILD=$(BUILD) python3 -B -m unittest discover -v -s test/integration -p '*_test.py' $(if $(FILTER),-k '$(FILTER)'); [ $$? -eq 0 -o $$? -eq 5 ]
 test: unit integration
@@ -80,8 +84,6 @@ format-check:
 	$(CLANG_FORMAT) --dry-run --Werror $(FORMAT_SRCS)
 -include $(shell find $(BUILD)/obj -name '*.d' 2>/dev/null)
 
-# The replay tools and the benchmarks link only the matching engine and its order book.
-ENGINE_OBJS := $(call obj,src/book/order_book.cpp src/engine/matching_engine.cpp)
 BENCH_SRCS := $(sort $(wildcard benchmark/*.cpp benchmark/cases/*.cpp benchmark/utils/*.cpp))
 BENCH_BUILD ?= build/bench
 BENCH_BIN := $(BENCH_BUILD)/exsim_benchmark
@@ -92,10 +94,7 @@ BENCH_CPPFLAGS := -I$(BENCHMARK_PREFIX)/include
 BENCH_LDFLAGS := -L$(BENCHMARK_PREFIX)/lib
 endif
 
-.PHONY: bench bench-build bench-wire itch-replay journal-replay
-$(BUILD)/journal_replay: $(call obj,tools/journal_replay/main.cpp src/server/journal/journal.cpp) $(ENGINE_OBJS)
-	$(CXX) $(LDFLAGS) $^ -o $@ $(LDLIBS)
-journal-replay: $(BUILD)/journal_replay
+.PHONY: bench bench-build bench-wire itch-replay
 $(BUILD)/itch_replay: $(call obj,benchmark/itch_replay/main.cpp) $(ENGINE_OBJS)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $^ -o $@ $(LDLIBS)
 itch-replay:

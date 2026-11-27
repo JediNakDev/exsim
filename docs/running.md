@@ -86,8 +86,9 @@ Exchanges can use optional `[journal]` settings: `path`, `on_failure`, and `flus
 
 A journal holds the commands the exchange applied, each with the timestamp the exchange gave it and a digest of the events it produced. `journal_replay` feeds the commands to a fresh matching engine and checks each one's events against that digest. With the `[journal]` section of `config/examples/exchange.conf` uncommented, the example exchange writes `config/examples/exchange.journal`; after it stops:
 
+`make` builds it next to the exchange:
+
 ```sh
-make -j4 journal-replay
 ./build/release/journal_replay config/examples/exchange.journal
 ```
 

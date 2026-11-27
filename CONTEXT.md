@@ -24,9 +24,10 @@ A small exchange simulator. Each exchange is one process started from a config f
 | `src/server` | Exchange core, runtime loop, config, journal, admin commands and socket |
 | `src/util` | Hash map, object pool, SPSC queue |
 | `src/main.cpp` | The exchange binary |
+| `src/journal_replay.cpp` | The journal replay binary |
 | `config/` | Your exchange configs, ignored by git; `config/examples/` holds the tracked examples |
 | `spec/` | Pinned CME XML schemas |
-| `tools/` | Journal replay and the CME schema generator |
+| `tools/` | The CME schema generator |
 | `test/` | Unit and integration tests, fuzz harnesses |
 | `benchmark/` | Benchmarks, ITCH replay, profiling scripts and the latest results |
 
