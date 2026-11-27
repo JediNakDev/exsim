@@ -53,25 +53,6 @@ template <typename Enum>
     return side == Side::BUY ? Aggressor::Buy : Aggressor::Sell;
 }
 
-// Initialize mandatory active fields; padding is never compared or serialized.
-[[nodiscard]] inline Event blank_event(EventType type, InstrumentId instrument, Timestamp ts) noexcept {
-    switch (type) {
-#define ACTIVE(tag, member) \
-    case EventType::tag: return Event{type, instrument, ts, {.member = {}}};
-        ACTIVE(Accepted, accepted)
-        ACTIVE(Rejected, rejected)
-        ACTIVE(Rested, rested)
-        ACTIVE(Fill, fill)
-        ACTIVE(Canceled, canceled)
-        ACTIVE(Replaced, replaced)
-        ACTIVE(MassCancelDone, mass_cancel_done)
-        ACTIVE(PhaseChanged, phase_changed)
-        ACTIVE(AuctionSummary, auction_summary)
-#undef ACTIVE
-    }
-    std::abort();
-}
-
 // The 8 symbol bytes as one integer, the key of the symbol -> instrument map.
 // Eight NUL bytes give 0, the map's empty-slot key: that symbol is never listed.
 [[nodiscard]] std::uint64_t symbol_key(const Symbol& symbol) noexcept {
@@ -81,8 +62,13 @@ template <typename Enum>
     return key;
 }
 
-inline void append_event(EventBuffer& out, const Event& event) noexcept {
-    if (!out.push(event)) std::abort();  // preflight failure is an implementation defect
+// The caller fills the event in the buffer: building it on the stack and copying
+// it in cost a 104-byte copy that waited on the stores it read.
+[[nodiscard]] inline Event& append_event(EventBuffer& out, EventType type, InstrumentId instrument,
+                                         Timestamp ts) noexcept {
+    Event* const event = out.push(type, instrument, ts);
+    if (event == nullptr) std::abort();  // preflight failure is an implementation defect
+    return *event;
 }
 
 inline void set_fill_leg(FillLeg& leg, OrderId order_id, ClOrdId cl_ord_id, SessionId session, OwnerId owner,
@@ -222,28 +208,26 @@ MatchingEngine::Impl::Impl(const EngineConfig& config)
 // ===========================================================================
 
 void MatchingEngine::Impl::reject_new_order(const NewOrder& cmd, RejectReason reason, EventBuffer& out) {
-    Event event = blank_event(EventType::Rejected, cmd.instrument, cmd.ts);
+    Event& event = append_event(out, EventType::Rejected, cmd.instrument, cmd.ts);
     event.rejected.cmd = CommandType::NewOrder;
     event.rejected.reason = reason;
     event.rejected.session = cmd.session;
     event.rejected.cl_ord_id = cmd.cl_ord_id;
-    append_event(out, event);
 }
 
 void MatchingEngine::Impl::reject_replace(const ReplaceOrder& cmd, RejectReason reason, OrderId order_id,
                                           InstrumentId instrument, EventBuffer& out) {
-    Event event = blank_event(EventType::Rejected, instrument, cmd.ts);
+    Event& event = append_event(out, EventType::Rejected, instrument, cmd.ts);
     event.rejected.cmd = CommandType::Replace;
     event.rejected.reason = reason;
     event.rejected.session = cmd.session;
     event.rejected.cl_ord_id = cmd.cl_ord_id;
     event.rejected.orig_cl_ord_id = cmd.orig_cl_ord_id;
     event.rejected.order_id = order_id;
-    append_event(out, event);
 }
 
 void MatchingEngine::Impl::emit_accepted(const IncomingOrder& order, Timestamp ts, EventBuffer& out) {
-    Event event = blank_event(EventType::Accepted, order.instrument, ts);
+    Event& event = append_event(out, EventType::Accepted, order.instrument, ts);
     AcceptedEvent& accepted = event.accepted;
     accepted.order_id = order.order_id;
     accepted.cl_ord_id = order.cl_ord_id;
@@ -256,12 +240,11 @@ void MatchingEngine::Impl::emit_accepted(const IncomingOrder& order, Timestamp t
     accepted.post_only = order.post_only;
     accepted.price = order.price;
     accepted.qty = order.qty;
-    append_event(out, event);
 }
 
 void MatchingEngine::Impl::emit_incoming_canceled(const IncomingOrder& order, CancelReason reason, Timestamp ts,
                                                   EventBuffer& out) {
-    Event event = blank_event(EventType::Canceled, order.instrument, ts);
+    Event& event = append_event(out, EventType::Canceled, order.instrument, ts);
     CanceledEvent& canceled = event.canceled;
     canceled.order_id = order.order_id;
     canceled.cl_ord_id = order.cl_ord_id;
@@ -272,14 +255,13 @@ void MatchingEngine::Impl::emit_incoming_canceled(const IncomingOrder& order, Ca
     canceled.cum_qty = order.cum_qty;
     canceled.reason = reason;
     canceled.was_resting = false;
-    append_event(out, event);
 }
 
 void MatchingEngine::Impl::emit_resting_canceled(const InstrumentBook& book, OrderIndex index, CancelReason reason,
                                                  ClOrdId request_cl_ord_id, Timestamp ts, EventBuffer& out) {
     const OrderMetadata& order_metadata = metadata[index];
     const Order& resting = *order_metadata.order;
-    Event event = blank_event(EventType::Canceled, book.id, ts);
+    Event& event = append_event(out, EventType::Canceled, book.id, ts);
     CanceledEvent& canceled = event.canceled;
     canceled.order_id = resting.id;
     canceled.cl_ord_id = cl_ord_id_of(order_metadata.session_token);
@@ -291,7 +273,6 @@ void MatchingEngine::Impl::emit_resting_canceled(const InstrumentBook& book, Ord
     canceled.cum_qty = order_metadata.cum_qty;
     canceled.reason = reason;
     canceled.was_resting = true;
-    append_event(out, event);
 }
 
 // ===========================================================================
@@ -407,7 +388,7 @@ void MatchingEngine::Impl::rest(InstrumentBook& book, const IncomingOrder& order
     (void)inserted;
     ++live_count;
 
-    Event event = blank_event(EventType::Rested, order.instrument, ts);
+    Event& event = append_event(out, EventType::Rested, order.instrument, ts);
     RestedEvent& rested = event.rested;
     rested.order_id = order.order_id;
     rested.cl_ord_id = order.cl_ord_id;
@@ -415,7 +396,6 @@ void MatchingEngine::Impl::rest(InstrumentBook& book, const IncomingOrder& order
     rested.side = order.side;
     rested.price = order.price;
     rested.leaves_qty = order.leaves_qty;
-    append_event(out, event);
 }
 
 // ===========================================================================
@@ -505,7 +485,7 @@ bool MatchingEngine::Impl::match(InstrumentBook& book, IncomingOrder& order, Tim
             order.cum_qty += fill_qty;
             const Quantity resting_leaves = resting->remaining_quantity;
 
-            Event event = blank_event(EventType::Fill, order.instrument, ts);
+            Event& event = append_event(out, EventType::Fill, order.instrument, ts);
             FillEvent& fill = event.fill;
             fill.match_id = next_match_id++;
             fill.price = level_price;
@@ -518,7 +498,6 @@ bool MatchingEngine::Impl::match(InstrumentBook& book, IncomingOrder& order, Tim
             set_fill_leg(resting_leg, resting->id, cl_ord_id_of(resting_metadata.session_token),
                          session_of(resting_metadata.session_token), resting_metadata.owner, resting_leaves,
                          resting_metadata.cum_qty);
-            append_event(out, event);
 
             book.last_trade_price = level_price;
             book.has_last_trade_price = true;
@@ -625,13 +604,12 @@ void MatchingEngine::Impl::on_new_order(const NewOrder& cmd, EventBuffer& out) {
 void MatchingEngine::Impl::on_cancel(const CancelOrder& cmd, EventBuffer& out) {
     const OrderIndex index = find_live_order(cmd.session, cmd.orig_cl_ord_id);
     if (index == kNilOrder) [[unlikely]] {
-        Event event = blank_event(EventType::Rejected, 0, cmd.ts);
+        Event& event = append_event(out, EventType::Rejected, 0, cmd.ts);
         event.rejected.cmd = CommandType::Cancel;
         event.rejected.reason = RejectReason::UnknownOrder;
         event.rejected.session = cmd.session;
         event.rejected.cl_ord_id = cmd.cl_ord_id;
         event.rejected.orig_cl_ord_id = cmd.orig_cl_ord_id;
-        append_event(out, event);
         return;
     }
     InstrumentBook& book = books[metadata[index].instrument - 1];
@@ -643,7 +621,7 @@ void MatchingEngine::Impl::on_cancel(const CancelOrder& cmd, EventBuffer& out) {
             cmd.reduce_to_total_qty > order_metadata.cum_qty ? cmd.reduce_to_total_qty - order_metadata.cum_qty : 0;
         if (target >= leaves_qty) return;
         if (target != 0) {
-            Event event = blank_event(EventType::Canceled, book.id, cmd.ts);
+            Event& event = append_event(out, EventType::Canceled, book.id, cmd.ts);
             auto& c = event.canceled;
             c.order_id = resting.id;
             c.cl_ord_id = cl_ord_id_of(order_metadata.session_token);
@@ -657,7 +635,6 @@ void MatchingEngine::Impl::on_cancel(const CancelOrder& cmd, EventBuffer& out) {
             c.was_resting = true;
             c.leaves_qty = target;
             book.order_book.reduce_order(resting, leaves_qty - target);
-            append_event(out, event);
             return;
         }
     }
@@ -721,8 +698,18 @@ void MatchingEngine::Impl::on_replace(const ReplaceOrder& cmd, EventBuffer& out)
     const Quantity cum_qty = order_metadata.cum_qty;
     const Quantity new_leaves_qty = cmd.qty - cum_qty;
     const SessionId session = cmd.session;
+    const bool priority_kept = !cmd.force_priority_loss && new_tick == old_tick && new_leaves_qty <= old_leaves_qty;
+    if (!priority_kept) {
+        // The order re-enters, so the new leaves must fit the target level, which no
+        // longer counts the old leaves.
+        const std::uint64_t level_qty =
+            book.order_book.level_volume(side, new_tick) - (new_tick == old_tick ? old_leaves_qty : 0);
+        if (new_leaves_qty > max_level_qty - level_qty) [[unlikely]] {
+            return reject_replace(cmd, RejectReason::CapacityExceeded, old_order_id, instrument, out);
+        }
+    }
 
-    Event event = blank_event(EventType::Replaced, instrument, cmd.ts);
+    Event& event = append_event(out, EventType::Replaced, instrument, cmd.ts);
     ReplacedEvent& replaced = event.replaced;
     replaced.old_order_id = old_order_id;
     replaced.orig_cl_ord_id = cmd.orig_cl_ord_id;
@@ -735,9 +722,10 @@ void MatchingEngine::Impl::on_replace(const ReplaceOrder& cmd, EventBuffer& out)
     replaced.qty = cmd.qty;
     replaced.leaves_qty = new_leaves_qty;
     replaced.cum_qty = cum_qty;
+    replaced.priority_kept = priority_kept;
 
-    if (!cmd.force_priority_loss && new_tick == old_tick && new_leaves_qty <= old_leaves_qty) {
-        // Priority kept: update in place, FIFO position unchanged.
+    if (priority_kept) {
+        // Update in place, FIFO position unchanged.
         book.order_book.reduce_order(resting, old_leaves_qty - new_leaves_qty);
         if (token_changes) {
             order_by_session_token.erase(order_metadata.session_token);
@@ -747,18 +735,10 @@ void MatchingEngine::Impl::on_replace(const ReplaceOrder& cmd, EventBuffer& out)
             (void)inserted;
         }
         replaced.new_order_id = old_order_id;
-        replaced.priority_kept = true;
-        append_event(out, event);
         return;
     }
 
     // Priority lost: leave the book, take a new OrderId, re-enter as an aggressor.
-    // The new leaves must fit the target level, which no longer counts the old leaves.
-    const std::uint64_t level_qty =
-        book.order_book.level_volume(side, new_tick) - (new_tick == old_tick ? old_leaves_qty : 0);
-    if (new_leaves_qty > max_level_qty - level_qty) [[unlikely]] {
-        return reject_replace(cmd, RejectReason::CapacityExceeded, old_order_id, instrument, out);
-    }
     const NewOrderData data{
         .instrument = instrument,
         .session = session,
@@ -776,8 +756,6 @@ void MatchingEngine::Impl::on_replace(const ReplaceOrder& cmd, EventBuffer& out)
     remove_resting(book, index);
 
     replaced.new_order_id = order.order_id;
-    replaced.priority_kept = false;
-    append_event(out, event);
 
     if (book.phase == Phase::Continuous) {
         match_and_dispose(book, order, cmd.ts, out);
@@ -805,12 +783,11 @@ void MatchingEngine::Impl::on_mass_cancel(const MassCancel& cmd, EventBuffer& ou
         }
         index = next;
     }
-    Event event = blank_event(EventType::MassCancelDone, cmd.instrument, cmd.ts);
+    Event& event = append_event(out, EventType::MassCancelDone, cmd.instrument, cmd.ts);
     event.mass_cancel_done.session = cmd.session;
     event.mass_cancel_done.request_cl_ord_id = cmd.cl_ord_id;
     event.mass_cancel_done.canceled_count = canceled_count;
     event.mass_cancel_done.reason = reason;
-    append_event(out, event);
 }
 
 // ===========================================================================
@@ -898,7 +875,7 @@ void MatchingEngine::Impl::uncross(InstrumentBook& book, Timestamp ts, EventBuff
         const Quantity buy_leaves = buy.remaining_quantity;
         const Quantity sell_leaves = sell.remaining_quantity;
 
-        Event event = blank_event(EventType::Fill, book.id, ts);
+        Event& event = append_event(out, EventType::Fill, book.id, ts);
         FillEvent& fill = event.fill;
         fill.match_id = next_match_id++;
         fill.price = uncross_price;
@@ -908,7 +885,6 @@ void MatchingEngine::Impl::uncross(InstrumentBook& book, Timestamp ts, EventBuff
                      buy_metadata.owner, buy_leaves, buy_metadata.cum_qty);
         set_fill_leg(fill.sell, sell.id, cl_ord_id_of(sell_metadata.session_token),
                      session_of(sell_metadata.session_token), sell_metadata.owner, sell_leaves, sell_metadata.cum_qty);
-        append_event(out, event);
 
         if (buy_leaves == 0) {
             remove_resting(book, buy_index);
@@ -917,11 +893,10 @@ void MatchingEngine::Impl::uncross(InstrumentBook& book, Timestamp ts, EventBuff
             remove_resting(book, sell_index);
         }
     }
-    Event event = blank_event(EventType::AuctionSummary, book.id, ts);
+    Event& event = append_event(out, EventType::AuctionSummary, book.id, ts);
     event.auction_summary.price = uncross_price;
     event.auction_summary.matched_qty = plan.matched_qty;
     event.auction_summary.match_id = next_match_id++;
-    append_event(out, event);
     book.last_trade_price = uncross_price;
     book.has_last_trade_price = true;
 }
@@ -950,10 +925,9 @@ void MatchingEngine::Impl::apply_phase(InstrumentBook& book, Phase new_phase, Ti
         expire_day_orders(book, ts, out);
     }
     book.phase = new_phase;
-    Event event = blank_event(EventType::PhaseChanged, book.id, ts);
+    Event& event = append_event(out, EventType::PhaseChanged, book.id, ts);
     event.phase_changed.old_phase = old_phase;
     event.phase_changed.new_phase = new_phase;
-    append_event(out, event);
 }
 
 void MatchingEngine::Impl::on_set_phase(const SetPhase& cmd, EventBuffer& out) {
@@ -965,10 +939,9 @@ void MatchingEngine::Impl::on_set_phase(const SetPhase& cmd, EventBuffer& out) {
         reason = RejectReason::InvalidField;
     }
     if (reason != RejectReason::None) [[unlikely]] {
-        Event event = blank_event(EventType::Rejected, cmd.instrument, cmd.ts);
+        Event& event = append_event(out, EventType::Rejected, cmd.instrument, cmd.ts);
         event.rejected.cmd = CommandType::SetPhase;
         event.rejected.reason = reason;
-        append_event(out, event);
         return;
     }
     if (book != nullptr) {

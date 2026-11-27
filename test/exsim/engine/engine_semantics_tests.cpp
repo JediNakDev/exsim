@@ -204,7 +204,6 @@ void invariants(const MatchingEngine& e) {
 TEST_CASE(engine_contract, retry_randomized_all_commands) {
     Fixture a(Phase::PreOpen), b(Phase::PreOpen);
     EventBuffer short_out(1);
-    const Event marker{EventType::PhaseChanged, 0, 999, {.phase_changed = {Phase::Closed, Phase::Halted}}};
     std::mt19937 rng(9304);
     for (unsigned i = 0; i < 12000; ++i) {
         Command cmd;
@@ -240,7 +239,9 @@ TEST_CASE(engine_contract, retry_randomized_all_commands) {
             }
         }
         short_out.clear();
-        REQUIRE(short_out.push(marker));
+        Event* const marker = short_out.push(EventType::PhaseChanged, 0, 999);
+        REQUIRE(marker != nullptr);
+        marker->phase_changed = {Phase::Closed, Phase::Halted};
         const auto before = digest(short_out);
         REQUIRE(a.e.handle(cmd, short_out) == HandleResult::InsufficientOutput);
         CHECK_EQ(digest(short_out), before);

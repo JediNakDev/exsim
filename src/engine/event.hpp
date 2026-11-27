@@ -8,6 +8,8 @@
 
 #include "common/types.hpp"
 #include <cstddef>
+#include <cstdlib>
+#include <new>
 #include <type_traits>
 #include <memory>
 
@@ -159,10 +161,24 @@ public:
     EventBuffer& operator=(const EventBuffer&) = delete;
 
     void clear() noexcept { size_ = 0; }
-    [[nodiscard]] bool push(const Event& e) noexcept {
-        if (size_ == capacity_) return false;
-        std::construct_at(events_ + size_++, e);
-        return true;
+    // Appends an event of `type` with its active member zeroed and returns it for the
+    // caller to fill in place, or nullptr when the buffer is full. Padding is never
+    // compared or serialized.
+    [[nodiscard]] Event* push(EventType type, InstrumentId instrument, Timestamp ts) noexcept {
+        if (size_ == capacity_) return nullptr;
+        void* const slot = events_ + size_++;
+        switch (type) {
+            case EventType::Accepted: return ::new (slot) Event{type, instrument, ts, {.accepted = {}}};
+            case EventType::Rejected: return ::new (slot) Event{type, instrument, ts, {.rejected = {}}};
+            case EventType::Rested: return ::new (slot) Event{type, instrument, ts, {.rested = {}}};
+            case EventType::Fill: return ::new (slot) Event{type, instrument, ts, {.fill = {}}};
+            case EventType::Canceled: return ::new (slot) Event{type, instrument, ts, {.canceled = {}}};
+            case EventType::Replaced: return ::new (slot) Event{type, instrument, ts, {.replaced = {}}};
+            case EventType::MassCancelDone: return ::new (slot) Event{type, instrument, ts, {.mass_cancel_done = {}}};
+            case EventType::PhaseChanged: return ::new (slot) Event{type, instrument, ts, {.phase_changed = {}}};
+            case EventType::AuctionSummary: return ::new (slot) Event{type, instrument, ts, {.auction_summary = {}}};
+        }
+        std::abort();  // not an EventType
     }
     [[nodiscard]] std::size_t remaining() const noexcept { return capacity_ - size_; }
     [[nodiscard]] bool can_append(std::size_t n) const noexcept { return n <= remaining(); }
