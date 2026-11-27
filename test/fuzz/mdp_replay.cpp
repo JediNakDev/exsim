@@ -1,6 +1,6 @@
 // One MDP TCP replay connection's input (login, then one recovery request),
 // answered from a ring that holds packets 5 to 12 (1 to 4 have been evicted).
-#include "fuzz/exchange.hpp"
+#include "test/fuzz/exchange.hpp"
 #include "md/mdp_replay_session.hpp"
 
 extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size) {

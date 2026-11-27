@@ -40,9 +40,9 @@ make fuzz
 make fuzz FILTER=gateway FUZZ_SECONDS=600
 ```
 
-`fuzz/` holds one libFuzzer harness per parser of untrusted input: the FIX 4.4, SoupBinTCP/OUCH 4.2 and iLink 3 order-entry connections, the MoldUDP64 retransmission request, the MDP TCP replay request, the config file and the admin command line. Each passes its bytes to the production code, built with ASan and UBSan. The gateway and admin harnesses build a full exchange core per input (`fuzz/exchange.hpp`).
+`test/fuzz/` holds one libFuzzer harness per parser of untrusted input: the FIX 4.4, SoupBinTCP/OUCH 4.2 and iLink 3 order-entry connections, the MoldUDP64 retransmission request, the MDP TCP replay request, the config file and the admin command line. Each passes its bytes to the production code, built with ASan and UBSan. The gateway and admin harnesses build a full exchange core per input (`test/fuzz/exchange.hpp`).
 
-Each harness runs for `FUZZ_SECONDS` (default 60) and stops at the first crash or sanitizer report, leaving the input in `build/fuzz/`. Replay it with `./build/fuzz/fuzz_<name> <file>`, and give the fix a unit test that replays the same input. Seeds come from `fuzz/seeds/<name>` and, for the config harness, `config/examples/*.conf`. New inputs collect in `build/fuzz/corpus/<name>`.
+Each harness runs for `FUZZ_SECONDS` (default 60) and stops at the first crash or sanitizer report, leaving the input in `build/fuzz/`. Replay it with `./build/fuzz/fuzz_<name> <file>`, and give the fix a unit test that replays the same input. Seeds come from `test/fuzz/seeds/<name>` and, for the config harness, `config/examples/*.conf`. New inputs collect in `build/fuzz/corpus/<name>`.
 
 libFuzzer ships with LLVM clang, not Apple clang, so run it on Linux. On Ubuntu 24.04, install `clang-19 libclang-rt-19-dev`. Set `FUZZ_CXX` to use another clang, version 19 or later.
 

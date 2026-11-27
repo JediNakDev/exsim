@@ -6,7 +6,7 @@
 // input replays exactly: parse_config reads kConfig, the clock is fixed, and
 // replies go to a 64 KiB buffer that is never drained. A full one refuses
 // writes as a full TCP send buffer does: live output drops the connection and
-// an OUCH replay pauses, here for good. The gateway seeds in fuzz/seeds log in
+// an OUCH replay pauses, here for good. The gateway seeds in test/fuzz/seeds log in
 // as these users at this clock; change either and they stop at login.
 
 #include "server/admin/core_admin.hpp"

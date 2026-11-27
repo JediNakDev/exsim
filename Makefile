@@ -119,7 +119,7 @@ bench-wire:
 	$(MAKE) MODE=bench BUILD=$(BENCH_BUILD) $(BENCH_BUILD)/exsim_exchanged $(BENCH_BUILD)/exsim_wire_bench
 	$(BENCH_BUILD)/exsim_wire_bench $(ARGS)
 
-# One libFuzzer harness per parser of untrusted input (fuzz/*.cpp). libFuzzer ships with LLVM clang,
+# One libFuzzer harness per parser of untrusted input (test/fuzz/*.cpp). libFuzzer ships with LLVM clang,
 # not Apple clang; clang 19 is the first with std::hardware_destructive_interference_size on libstdc++.
 # Each runs FUZZ_SECONDS from its seeds, keeps new inputs in build/fuzz/corpus/<name>, and stops at
 # the first crash, leaving the input in build/fuzz/. FILTER picks harnesses by substring. An input runs
@@ -127,18 +127,18 @@ bench-wire:
 # ASan's munmap and madvise on a loaded VM.
 FUZZ_CXX ?= clang++-19
 FUZZ_SECONDS ?= 60
-FUZZ_NAMES := $(basename $(notdir $(wildcard fuzz/*.cpp)))
+FUZZ_NAMES := $(basename $(notdir $(wildcard test/fuzz/*.cpp)))
 FUZZ_RUN := $(if $(FILTER),$(foreach name,$(FUZZ_NAMES),$(if $(findstring $(FILTER),$(name)),$(name))),$(FUZZ_NAMES))
 .PHONY: fuzz fuzz-run
-$(FUZZ_NAMES:%=$(BUILD)/fuzz_%): $(BUILD)/fuzz_%: $(BUILD)/obj/fuzz/%.o $(LIB_OBJS)
+$(FUZZ_NAMES:%=$(BUILD)/fuzz_%): $(BUILD)/fuzz_%: $(BUILD)/obj/test/fuzz/%.o $(LIB_OBJS)
 	$(CXX) $(LDFLAGS) $^ -o $@ $(LDLIBS)
 # build/fuzz always, so a BUILD= given here cannot link objects built without coverage or sanitizers.
 fuzz:
 	$(MAKE) MODE=fuzz CXX=$(FUZZ_CXX) BUILD=build/fuzz fuzz-run
-# The config harness starts from the example configs; the others from fuzz/seeds/<name>.
+# The config harness starts from the example configs; the others from test/fuzz/seeds/<name>.
 fuzz-run: $(FUZZ_RUN:%=$(BUILD)/fuzz_%)
 	for name in $(FUZZ_RUN); do \
-		seeds=fuzz/seeds/$$name; [ $$name != config ] || seeds=config/examples; \
+		seeds=test/fuzz/seeds/$$name; [ $$name != config ] || seeds=config/examples; \
 		mkdir -p $(BUILD)/corpus/$$name && \
 		$(BUILD)/fuzz_$$name -max_total_time=$(FUZZ_SECONDS) -timeout=60 -print_final_stats=1 \
 			-artifact_prefix=$(BUILD)/$$name- $(BUILD)/corpus/$$name $$seeds || exit 1; \
