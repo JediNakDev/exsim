@@ -68,4 +68,4 @@ Each test case builds its own state and shares nothing with other cases, so the 
 
 End-to-end suites are deferred.
 
-The active benchmark suite lives in [benchmark/](../benchmark/README.md). ITCH replay lives in `benchmark/itch_replay/`. CME schema sources, regeneration, and supported scope are documented in the [CME profile](../docs/ilink-and-mdp.md).
+The active benchmark suite lives in [benchmark/](../benchmark/README.md). ITCH replay lives in `benchmark/itch_replay/`. CME schema sources, code generation, and supported scope are documented in the [CME profile](../docs/ilink-and-mdp.md).

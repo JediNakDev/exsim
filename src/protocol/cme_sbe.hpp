@@ -6,9 +6,11 @@
 #include "common/types.hpp"
 #include "protocol/wire.hpp"
 
+#include <algorithm>
 #include <bit>
 #include <cstring>
 #include <limits>
+#include <string_view>
 #include <type_traits>
 
 namespace exsim::protocol::cme {
@@ -53,6 +55,34 @@ inline void encode_header(char* bytes, Header header) noexcept {
     store_le(bytes + 2, header.template_id);
     store_le(bytes + 4, header.schema_id);
     store_le(bytes + 6, header.version);
+}
+
+// Field descriptors in the headers tools/cme_codegen generates from spec/: a field's offset in its block, typed by
+// its wire encoding. A BytesField is a composite of several parts.
+template <class T>
+struct Field {
+    std::size_t offset;
+};
+template <std::size_t N>
+struct TextField {
+    std::size_t offset;
+};
+template <std::size_t N>
+struct BytesField {
+    std::size_t offset;
+};
+
+template <class T>
+void put(char* block, Field<T> field, std::type_identity_t<T> value) noexcept {
+    store_le(block + field.offset, value);
+}
+// Shorter text is padded with NULs. Longer text is not written.
+template <std::size_t N>
+bool put(char* block, TextField<N> field, std::string_view text) noexcept {
+    if (text.size() > N) return false;
+    std::fill_n(block + field.offset, N, char{0});
+    if (!text.empty()) std::memcpy(block + field.offset, text.data(), text.size());
+    return true;
 }
 
 struct MessageView {

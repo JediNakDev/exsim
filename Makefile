@@ -2,7 +2,7 @@
 MODE ?= release
 CXX ?= c++
 BUILD := build/$(MODE)
-CPPFLAGS := -I src -I . -MMD -MP
+CPPFLAGS := -I src -I . -I $(BUILD)/gen -MMD -MP
 CXXFLAGS := -std=c++23 -Wall -Wextra -Wpedantic -Wshadow $(EXTRA_CXXFLAGS)
 # GCC warns that std::hardware_destructive_interference_size depends on -mtune;
 # every object in one build shares the same flags, so the value is consistent.
@@ -54,7 +54,20 @@ INTEGRATION_SRCS := $(shell find test/integration -name '*_tests.cpp' | sort) te
 .PHONY: all apps test unit integration clean format format-check
 all: apps
 apps: $(BUILD)/exsim_exchanged $(BUILD)/journal_replay
-$(BUILD)/obj/%.o: %.cpp Makefile
+# CME SBE layouts are generated from the pinned XML in spec/ (docs/ilink-and-mdp.md), never committed. The
+# generator is built without MODE flags: it only writes headers, so it needs no sanitizer or fuzzer runtime.
+GEN_HEADERS := $(addprefix $(BUILD)/gen/protocol/,ilink3_schema.hpp mdp3_schema.hpp tcprecovery_schema.hpp)
+$(BUILD)/cme_codegen: tools/cme_codegen/main.cpp Makefile
+	@mkdir -p $(dir $@)
+	$(CXX) -std=c++23 -O1 -Wall -Wextra $< -o $@
+$(BUILD)/gen/protocol/ilink3_schema.hpp: spec/ilinkbinary.xml
+$(BUILD)/gen/protocol/mdp3_schema.hpp: spec/templates_FixBinary.xml
+$(BUILD)/gen/protocol/tcprecovery_schema.hpp: spec/tcprecovery.xml
+$(GEN_HEADERS): $(BUILD)/gen/protocol/%_schema.hpp: $(BUILD)/cme_codegen
+	@mkdir -p $(dir $@)
+	$(BUILD)/cme_codegen $(filter %.xml,$^) $* > $@.tmp && mv $@.tmp $@
+# Order-only: the first build generates the headers before any compile; after that the .d files track them.
+$(BUILD)/obj/%.o: %.cpp Makefile | $(GEN_HEADERS)
 	@mkdir -p $(dir $@)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 $(BUILD)/exsim_exchanged: $(call obj,src/main.cpp) $(LIB_OBJS)
@@ -75,7 +88,7 @@ integration: apps $(BUILD)/integration_tests $(BUILD)/exsim_wire_bench
 test: unit integration
 clean:
 	rm -rf $(BUILD)
-# One pinned clang-format for local runs and CI. Generated files are skipped through .clang-format-ignore.
+# One pinned clang-format for local runs and CI.
 CLANG_FORMAT ?= clang-format-18
 FORMAT_SRCS = $(shell git ls-files '*.cpp' '*.hpp')
 format:

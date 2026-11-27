@@ -27,7 +27,7 @@ A small exchange simulator. Each exchange is one process started from a config f
 | `src/journal_replay.cpp` | The journal replay binary |
 | `config/` | Your exchange configs, ignored by git; `config/examples/` holds the tracked examples |
 | `spec/` | Pinned CME XML schemas |
-| `tools/` | The CME schema generator |
+| `tools/` | The CME schema generator, which the build runs |
 | `test/` | Unit and integration tests, fuzz harnesses |
 | `benchmark/` | Benchmarks, ITCH replay, profiling scripts and the latest results |
 

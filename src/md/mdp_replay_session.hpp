@@ -3,6 +3,7 @@
 
 #include "md/mdp_publisher.hpp"
 #include "protocol/fix44.hpp"
+#include "protocol/tcprecovery_schema.hpp"
 
 namespace exsim::md {
 
@@ -87,8 +88,10 @@ public:
                     parser.get(554) != config_.replay_password)
                     logout("authentication failed", now, epoch);
                 else {
-                    const std::array<char, 1> body{30};
-                    send_admin(408, body, epoch);
+                    using M = protocol::tcprecovery::schema::AdminLogin408;
+                    std::array<char, M::block_length> body = M::defaults;
+                    protocol::cme::put(body.data(), M::HeartBtInt, 30);
+                    send_admin<M>(body, epoch);
                     phase_ = Phase::Request;
                     deadline_ = now + kTimeout;
                 }
@@ -129,27 +132,29 @@ public:
 private:
     enum class Phase { Login, Request, Logout };
     static constexpr std::uint64_t kTimeout = 5000000000;
-    void send_admin(std::uint16_t id, std::span<const char> body, std::uint64_t epoch) noexcept {
-        std::array<char, 190> message{};
-        std::array<char, 202> packet{};
-        const auto size =
-            protocol::cme::encode_mdp_message({static_cast<std::uint16_t>(body.size()), id, 9, 0}, body, message);
-        const auto length =
-            protocol::cme::encode_mdp_packet(admin_sequence_++, epoch, std::span(message).first(size), packet);
+    template <class M>
+    void send_admin(const std::array<char, M::block_length>& body, std::uint64_t epoch) noexcept {
+        namespace cme = protocol::cme;
+        namespace schema = protocol::tcprecovery::schema;
+        std::array<char, cme::kMdpMessageHeaderSize + M::block_length> message{};
+        std::array<char, cme::kMdpPacketHeaderSize + cme::kMdpMessageHeaderSize + M::block_length> packet{};
+        const auto size = cme::encode_mdp_message({M::block_length, M::id, schema::id, schema::version}, body, message);
+        const auto length = cme::encode_mdp_packet(admin_sequence_++, epoch, std::span(message).first(size), packet);
         char* out = sink_.prepare(length + 2);
         if (!out || !length) {
             overflow_ = close_ = true;
             return;
         }
-        protocol::cme::store_le(out, static_cast<std::uint16_t>(length));
+        cme::store_le(out, static_cast<std::uint16_t>(length));
         std::memcpy(out + 2, packet.data(), length);
         sink_.commit(length + 2);
     }
     void logout(std::string_view reason, std::uint64_t now, std::uint64_t epoch) noexcept {
         if (phase_ == Phase::Logout || close_) return;
-        std::array<char, 180> body{};
-        std::memcpy(body.data(), reason.data(), std::min(reason.size(), body.size()));
-        send_admin(409, body, epoch);
+        using M = protocol::tcprecovery::schema::AdminLogout409;
+        std::array<char, M::block_length> body = M::defaults;
+        protocol::cme::put(body.data(), M::Text, reason.substr(0, body.size()));
+        send_admin<M>(body, epoch);
         phase_ = Phase::Logout;
         deadline_ = now + kTimeout;
     }

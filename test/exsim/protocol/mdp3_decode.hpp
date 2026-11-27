@@ -15,7 +15,7 @@ struct IncrementalView {
 // Applies only to schema-13 MBP book (46) and trade summary (48).
 [[nodiscard]] inline Status decode_incremental(const cme::MessageView& message, IncrementalView& out) noexcept {
     const auto& header = message.header;
-    if (header.schema_id != kSchemaId || header.version != kVersion ||
+    if (header.schema_id != schema::id || header.version != schema::version ||
         (header.template_id != 46 && header.template_id != 48))
         return Status::invalid_type;
     if (header.block_length < 11 || message.body.size() < header.block_length) return Status::invalid_length;
@@ -38,7 +38,7 @@ struct IncrementalView {
 [[nodiscard]] inline Status decode_snapshot(const cme::MessageView& message, Snapshot& out,
                                             cme::GroupView& entries) noexcept {
     const auto& header = message.header;
-    if (header.schema_id != kSchemaId || header.version != kVersion || header.template_id != 52)
+    if (header.schema_id != schema::id || header.version != schema::version || header.template_id != 52)
         return Status::invalid_type;
     if (header.block_length < 59 || message.body.size() < header.block_length) return Status::invalid_length;
     cme::GroupView group;

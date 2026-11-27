@@ -7,19 +7,21 @@
 #include <type_traits>
 
 namespace exsim::protocol::ilink3 {
+static_assert(schema::id == 8 && schema::version == 9, "the iLink gateway follows schema 8 version 9");
+
 template <class T>
-[[nodiscard]] T get(const cme::MessageView& message, Field<T> field) noexcept {
+[[nodiscard]] T get(const cme::MessageView& message, cme::Field<T> field) noexcept {
     return cme::load_le<T>(message.body.data() + field.offset);
 }
 template <std::size_t N>
-[[nodiscard]] std::string_view get(const cme::MessageView& message, TextField<N> field) noexcept {
+[[nodiscard]] std::string_view get(const cme::MessageView& message, cme::TextField<N> field) noexcept {
     const char* begin = message.body.data() + field.offset;
     std::size_t size = 0;
     while (size < N && begin[size]) ++size;
     return {begin, size};
 }
 template <std::size_t N>
-[[nodiscard]] bool valid_text(const cme::MessageView& message, TextField<N> field, bool required = true) noexcept {
+[[nodiscard]] bool valid_text(const cme::MessageView& message, cme::TextField<N> field, bool required = true) noexcept {
     const auto text = get(message, field);
     if (required && text.empty()) return false;
     for (char ch : text)
@@ -38,15 +40,12 @@ template <class Message>
 struct Root {
     std::array<char, Message::block_length> bytes = Message::defaults;
     template <class T>
-    void set(Field<T> field, std::type_identity_t<T> value) noexcept {
-        cme::store_le(bytes.data() + field.offset, value);
+    void set(cme::Field<T> field, std::type_identity_t<T> value) noexcept {
+        cme::put(bytes.data(), field, value);
     }
     template <std::size_t N>
-    bool set(TextField<N> field, std::string_view text) noexcept {
-        if (text.size() > N) return false;
-        std::fill_n(bytes.data() + field.offset, N, char{0});
-        if (!text.empty()) std::memcpy(bytes.data() + field.offset, text.data(), text.size());
-        return true;
+    bool set(cme::TextField<N> field, std::string_view text) noexcept {
+        return cme::put(bytes.data(), field, text);
     }
     // Writes root and tail at their final offsets after the framing header.
     [[nodiscard]] std::size_t encode(std::span<char> output,

@@ -1,16 +1,16 @@
 #ifndef EXSIM_PROTOCOL_MDP3_HPP
 #define EXSIM_PROTOCOL_MDP3_HPP
 
-// CME MDP 3.0, schema 1 version 13. Offsets and acting block sizes come
-// from templates_FixBinary.xml, SHA256 recorded in docs/ilink-and-mdp.md.
+// CME MDP 3.0 encoders. Block lengths, offsets and null defaults come from the header
+// the build generates from spec/templates_FixBinary.xml (docs/ilink-and-mdp.md).
 #include "protocol/cme_sbe.hpp"
+#include "protocol/mdp3_schema.hpp"
 
 #include <algorithm>
 #include <array>
 
 namespace exsim::protocol::mdp3 {
-inline constexpr std::uint16_t kSchemaId = 1;
-inline constexpr std::uint16_t kVersion = 13;
+static_assert(schema::id == 1 && schema::version == 13, "the encoders below follow schema 1 version 13");
 inline constexpr std::uint8_t kEndOfEvent = 0x80;
 inline constexpr std::uint8_t kLastTrade = 0x01;
 inline constexpr std::int32_t kNullInt32 = INT32_MAX;
@@ -71,114 +71,132 @@ struct Snapshot {
     std::int64_t max_variation = cme::kNullPrice9;
 };
 
+// Writes the message size, the SBE header and M's root block with its null defaults, and returns the root.
+// The caller has checked that size bytes fit.
+template <class M>
+[[nodiscard]] char* start_message(std::span<char> output, std::size_t size) noexcept {
+    cme::store_le(output.data(), static_cast<std::uint16_t>(size));
+    cme::encode_header(output.data() + 2, {M::block_length, M::id, schema::id, schema::version});
+    char* root = output.data() + cme::kMdpMessageHeaderSize;
+    std::copy(M::defaults.begin(), M::defaults.end(), root);
+    return root;
+}
+
+// Writes Group's dimension header and count entries holding the null defaults, and returns the first entry.
+template <class Group>
+char* start_group(char* cursor, std::uint8_t count) noexcept {
+    std::copy(Group::dimension.begin(), Group::dimension.end(), cursor);
+    cme::put(cursor, Group::num_in_group, count);
+    cursor += Group::dimension.size();
+    for (std::size_t i = 0; i < count; ++i)
+        std::copy(Group::defaults.begin(), Group::defaults.end(), cursor + i * Group::block_length);
+    return cursor;
+}
+
 // One message is bounded by the wire's uint8 group counts. The caller
 // supplies all storage and decides packet boundaries and channel sequences.
 [[nodiscard]] inline std::size_t encode_book(std::uint64_t transact_time, std::uint8_t event_indicator,
                                              std::span<const BookEntry> entries, std::span<char> output) noexcept {
-    constexpr std::size_t fixed = 10 + 11 + 3 + 8;
-    if (entries.size() > 255 || output.size() < fixed + 32 * entries.size()) return 0;
-    const std::size_t size = fixed + 32 * entries.size();
-    std::fill_n(output.data(), size, char{0});
-    cme::store_le(output.data(), static_cast<std::uint16_t>(size));
-    cme::encode_header(output.data() + 2, {11, 46, kSchemaId, kVersion});
-    cme::store_le(output.data() + 10, transact_time);
-    output[18] = static_cast<char>(event_indicator);
-    cme::store_le(output.data() + 21, std::uint16_t{32});
-    output[23] = static_cast<char>(entries.size());
-    char* cursor = output.data() + 24;
+    using M = schema::MDIncrementalRefreshBook46;
+    using Entry = M::NoMDEntries;
+    constexpr std::size_t fixed = cme::kMdpMessageHeaderSize + M::block_length + M::empty_tail.size();
+    if (entries.size() > 255 || output.size() < fixed + Entry::block_length * entries.size()) return 0;
+    const std::size_t size = fixed + Entry::block_length * entries.size();
+    char* root = start_message<M>(output, size);
+    cme::put(root, M::TransactTime, transact_time);
+    cme::put(root, M::MatchEventIndicator, event_indicator);
+    char* cursor = start_group<Entry>(root + M::block_length, static_cast<std::uint8_t>(entries.size()));
     for (const BookEntry& entry : entries) {
-        cme::store_le(cursor, entry.price);
-        cme::store_le(cursor + 8, entry.quantity);
-        cme::store_le(cursor + 12, entry.security_id);
-        cme::store_le(cursor + 16, entry.report_sequence);
-        cme::store_le(cursor + 20, entry.order_count);
-        cursor[24] = static_cast<char>(entry.level);
-        cursor[25] = static_cast<char>(entry.action);
-        cursor[26] = static_cast<char>(entry.side);
-        cme::store_le(cursor + 27, entry.tradeable_size);
-        cursor += 32;
+        cme::put(cursor, Entry::MDEntryPx, entry.price);
+        cme::put(cursor, Entry::MDEntrySize, entry.quantity);
+        cme::put(cursor, Entry::SecurityID, entry.security_id);
+        cme::put(cursor, Entry::RptSeq, entry.report_sequence);
+        cme::put(cursor, Entry::NumberOfOrders, entry.order_count);
+        cme::put(cursor, Entry::MDPriceLevel, entry.level);
+        cme::put(cursor, Entry::MDUpdateAction, static_cast<std::uint8_t>(entry.action));
+        cme::put(cursor, Entry::MDEntryType, static_cast<char>(entry.side));
+        cme::put(cursor, Entry::TradeableSize, entry.tradeable_size);
+        cursor += Entry::block_length;
     }
-    // NoOrderIDEntries uses an eight-byte dimension header, even when empty.
-    cme::store_le(cursor, std::uint16_t{24});
+    start_group<M::NoOrderIDEntries>(cursor, 0);
     return size;
 }
 
 [[nodiscard]] inline std::size_t encode_trades(std::uint64_t transact_time, std::uint8_t event_indicator,
                                                std::span<const TradeEntry> entries, std::span<const TradeOrder> orders,
                                                std::span<char> output) noexcept {
-    constexpr std::size_t fixed = 10 + 11 + 3 + 8;
-    if (entries.size() > 255 || orders.size() > 255 || output.size() < fixed + 32 * entries.size() + 16 * orders.size())
+    using M = schema::MDIncrementalRefreshTradeSummary48;
+    using Entry = M::NoMDEntries;
+    using Order = M::NoOrderIDEntries;
+    constexpr std::size_t fixed = cme::kMdpMessageHeaderSize + M::block_length + M::empty_tail.size();
+    if (entries.size() > 255 || orders.size() > 255 ||
+        output.size() < fixed + Entry::block_length * entries.size() + Order::block_length * orders.size())
         return 0;
-    const std::size_t size = fixed + 32 * entries.size() + 16 * orders.size();
-    std::fill_n(output.data(), size, char{0});
-    cme::store_le(output.data(), static_cast<std::uint16_t>(size));
-    cme::encode_header(output.data() + 2, {11, 48, kSchemaId, kVersion});
-    cme::store_le(output.data() + 10, transact_time);
-    output[18] = static_cast<char>(event_indicator);
-    cme::store_le(output.data() + 21, std::uint16_t{32});
-    output[23] = static_cast<char>(entries.size());
-    char* cursor = output.data() + 24;
+    const std::size_t size = fixed + Entry::block_length * entries.size() + Order::block_length * orders.size();
+    char* root = start_message<M>(output, size);
+    cme::put(root, M::TransactTime, transact_time);
+    cme::put(root, M::MatchEventIndicator, event_indicator);
+    char* cursor = start_group<Entry>(root + M::block_length, static_cast<std::uint8_t>(entries.size()));
     for (const TradeEntry& entry : entries) {
-        cme::store_le(cursor, entry.price);
-        cme::store_le(cursor + 8, entry.quantity);
-        cme::store_le(cursor + 12, entry.security_id);
-        cme::store_le(cursor + 16, entry.report_sequence);
-        cme::store_le(cursor + 20, entry.order_count);
-        cursor[24] = static_cast<char>(entry.aggressor_side);
-        cursor[25] = static_cast<char>(entry.action);
-        cme::store_le(cursor + 26, entry.trade_entry_id);
-        cursor += 32;
+        cme::put(cursor, Entry::MDEntryPx, entry.price);
+        cme::put(cursor, Entry::MDEntrySize, entry.quantity);
+        cme::put(cursor, Entry::SecurityID, entry.security_id);
+        cme::put(cursor, Entry::RptSeq, entry.report_sequence);
+        cme::put(cursor, Entry::NumberOfOrders, entry.order_count);
+        cme::put(cursor, Entry::AggressorSide, entry.aggressor_side);
+        cme::put(cursor, Entry::MDUpdateAction, static_cast<std::uint8_t>(entry.action));
+        cme::put(cursor, Entry::MDTradeEntryID, entry.trade_entry_id);
+        cursor += Entry::block_length;
     }
-    cme::store_le(cursor, std::uint16_t{16});
-    cursor[7] = static_cast<char>(orders.size());
-    cursor += 8;
+    cursor = start_group<Order>(cursor, static_cast<std::uint8_t>(orders.size()));
     for (const TradeOrder& order : orders) {
-        cme::store_le(cursor, order.order_id);
-        cme::store_le(cursor + 8, order.quantity);
-        cursor += 16;
+        cme::put(cursor, Order::OrderID, order.order_id);
+        cme::put(cursor, Order::LastQty, order.quantity);
+        cursor += Order::block_length;
     }
     return size;
 }
 
 [[nodiscard]] inline std::size_t encode_snapshot(const Snapshot& snapshot, std::span<const SnapshotEntry> entries,
                                                  std::span<char> output) noexcept {
-    constexpr std::size_t fixed = 10 + 59 + 3;
-    if (entries.size() > 255 || output.size() < fixed + 22 * entries.size()) return 0;
-    const std::size_t size = fixed + 22 * entries.size();
-    std::fill_n(output.data(), size, char{0});
-    cme::store_le(output.data(), static_cast<std::uint16_t>(size));
-    cme::encode_header(output.data() + 2, {59, 52, kSchemaId, kVersion});
-    char* root = output.data() + 10;
-    cme::store_le(root, snapshot.last_packet_sequence);
-    cme::store_le(root + 4, snapshot.total_reports);
-    cme::store_le(root + 8, snapshot.security_id);
-    cme::store_le(root + 12, snapshot.report_sequence);
-    cme::store_le(root + 16, snapshot.transact_time);
-    cme::store_le(root + 24, snapshot.last_update_time);
-    cme::store_le(root + 32, snapshot.trade_date);
-    root[34] = static_cast<char>(snapshot.trading_status);
-    cme::store_le(root + 35, snapshot.high_limit);
-    cme::store_le(root + 43, snapshot.low_limit);
-    cme::store_le(root + 51, snapshot.max_variation);
-    cme::store_le(root + 59, std::uint16_t{22});
-    root[61] = static_cast<char>(entries.size());
-    char* cursor = root + 62;
+    using M = schema::SnapshotFullRefresh52;
+    using Entry = M::NoMDEntries;
+    constexpr std::size_t fixed = cme::kMdpMessageHeaderSize + M::block_length + M::empty_tail.size();
+    if (entries.size() > 255 || output.size() < fixed + Entry::block_length * entries.size()) return 0;
+    const std::size_t size = fixed + Entry::block_length * entries.size();
+    char* root = start_message<M>(output, size);
+    cme::put(root, M::LastMsgSeqNumProcessed, snapshot.last_packet_sequence);
+    cme::put(root, M::TotNumReports, snapshot.total_reports);
+    cme::put(root, M::SecurityID, snapshot.security_id);
+    cme::put(root, M::RptSeq, snapshot.report_sequence);
+    cme::put(root, M::TransactTime, snapshot.transact_time);
+    cme::put(root, M::LastUpdateTime, snapshot.last_update_time);
+    cme::put(root, M::TradeDate, snapshot.trade_date);
+    cme::put(root, M::MDSecurityTradingStatus, snapshot.trading_status);
+    cme::put(root, M::HighLimitPrice, snapshot.high_limit);
+    cme::put(root, M::LowLimitPrice, snapshot.low_limit);
+    cme::put(root, M::MaxPriceVariation, snapshot.max_variation);
+    char* cursor = start_group<Entry>(root + M::block_length, static_cast<std::uint8_t>(entries.size()));
     for (const SnapshotEntry& entry : entries) {
-        cme::store_le(cursor, entry.price);
-        cme::store_le(cursor + 8, entry.quantity);
-        cme::store_le(cursor + 12, entry.order_count);
-        cursor[16] = static_cast<char>(entry.level);
-        cme::store_le(cursor + 17, entry.reference_date);
-        cursor[19] = static_cast<char>(entry.open_close_settle);
-        cursor[20] = static_cast<char>(entry.settlement_price_type);
-        cursor[21] = entry.entry_type;
-        cursor += 22;
+        cme::put(cursor, Entry::MDEntryPx, entry.price);
+        cme::put(cursor, Entry::MDEntrySize, entry.quantity);
+        cme::put(cursor, Entry::NumberOfOrders, entry.order_count);
+        cme::put(cursor, Entry::MDPriceLevel, entry.level);
+        cme::put(cursor, Entry::TradingReferenceDate, entry.reference_date);
+        cme::put(cursor, Entry::OpenCloseSettlFlag, entry.open_close_settle);
+        cme::put(cursor, Entry::SettlPriceType, entry.settlement_price_type);
+        cme::put(cursor, Entry::MDEntryType, entry.entry_type);
+        cursor += Entry::block_length;
     }
     return size;
 }
 
 [[nodiscard]] inline std::size_t encode_heartbeat(std::span<char> output) noexcept {
-    return cme::encode_mdp_message({0, 12, kSchemaId, kVersion}, {}, output);
+    using M = schema::AdminHeartbeat12;
+    constexpr std::size_t size = cme::kMdpMessageHeaderSize + M::block_length;
+    if (output.size() < size) return 0;
+    (void)start_message<M>(output, size);
+    return size;
 }
 
 [[nodiscard]] inline std::uint8_t trading_status(Phase phase) noexcept {
@@ -195,26 +213,32 @@ struct Snapshot {
 [[nodiscard]] inline std::size_t encode_security_status(std::uint64_t timestamp, std::int32_t security_id,
                                                         std::uint16_t trade_date, Phase phase, std::uint8_t indicator,
                                                         std::span<char> output) noexcept {
-    std::array<char, 30> root{};
-    cme::store_le(root.data(), timestamp);
-    std::memcpy(root.data() + 8, "EXSIM", 5);
-    std::memcpy(root.data() + 14, "EXSIM", 5);
-    cme::store_le(root.data() + 20, security_id);
-    cme::store_le(root.data() + 24, trade_date);
-    root[26] = static_cast<char>(indicator);
-    root[27] = static_cast<char>(trading_status(phase));
-    return cme::encode_mdp_message({30, 30, kSchemaId, kVersion}, root, output);
+    using M = schema::SecurityStatus30;
+    constexpr std::size_t size = cme::kMdpMessageHeaderSize + M::block_length;
+    if (output.size() < size) return 0;
+    char* root = start_message<M>(output, size);
+    cme::put(root, M::TransactTime, timestamp);
+    cme::put(root, M::SecurityGroup, "EXSIM");
+    cme::put(root, M::Asset, "EXSIM");
+    cme::put(root, M::SecurityID, security_id);
+    cme::put(root, M::TradeDate, trade_date);
+    cme::put(root, M::MatchEventIndicator, indicator);
+    cme::put(root, M::SecurityTradingStatus, trading_status(phase));
+    return size;
 }
 
 [[nodiscard]] inline std::size_t encode_channel_reset(std::uint64_t timestamp, std::int16_t channel,
                                                       std::span<char> output) noexcept {
-    std::array<char, 14> body{};
-    cme::store_le(body.data(), timestamp);
-    body[8] = static_cast<char>(kEndOfEvent);
-    cme::store_le(body.data() + 9, std::uint16_t{2});
-    body[11] = 1;
-    cme::store_le(body.data() + 12, channel);
-    return cme::encode_mdp_message({9, 4, kSchemaId, kVersion}, body, output);
+    using M = schema::ChannelReset4;
+    using Entry = M::NoMDEntries;
+    constexpr std::size_t size =
+        cme::kMdpMessageHeaderSize + M::block_length + M::empty_tail.size() + Entry::block_length;
+    if (output.size() < size) return 0;
+    char* root = start_message<M>(output, size);
+    cme::put(root, M::TransactTime, timestamp);
+    cme::put(root, M::MatchEventIndicator, kEndOfEvent);
+    cme::put(start_group<Entry>(root + M::block_length, 1), Entry::ApplID, channel);
+    return size;
 }
 
 struct FutureDefinition {
@@ -239,69 +263,58 @@ struct FutureDefinition {
 
 [[nodiscard]] inline std::size_t encode_future_definition(const FutureDefinition& definition,
                                                           std::span<char> output) noexcept {
-    if (definition.symbol.empty() || definition.symbol.size() > 20 || definition.lot_size > INT32_MAX / 10000u)
-        return 0;
-    // Root plus NoEvents, NoMDFeedTypes, NoInstAttrib, NoLotTypeRules.
-    std::array<char, 249> body{};
-    char* root = body.data();
-    root[0] = static_cast<char>(kEndOfEvent);
-    cme::store_le(root + 1, definition.total_reports);
-    root[5] = 'A';
-    cme::store_le(root + 6, definition.timestamp);
-    root[14] = static_cast<char>(trading_status(definition.phase));
-    cme::store_le(root + 15, definition.channel_id);
-    root[17] = static_cast<char>(definition.market_segment);
-    root[18] = 7;  // index futures
-    std::memcpy(root + 19, "XCME", 4);
-    std::memcpy(root + 23, "EXSIM", 5);
-    std::memcpy(root + 29, "EXSIM", 5);
-    std::memcpy(root + 35, definition.symbol.data(), definition.symbol.size());
-    cme::store_le(root + 55, definition.security_id);
-    std::memcpy(root + 59, "FUT", 3);
-    std::memcpy(root + 65, "FFICXX", 6);
-    cme::store_le(root + 71, static_cast<std::uint16_t>(definition.maturity_date / 10000));
-    root[73] = static_cast<char>(definition.maturity_date / 100 % 100);
-    root[74] = static_cast<char>(definition.maturity_date % 100);
-    root[75] = char(0xff);
-    std::memcpy(root + 76, "USD", 3);
-    std::memcpy(root + 79, "USD", 3);
-    root[82] = 'F';  // simulator price-time matching
-    cme::store_le(root + 83, definition.lot_size);
-    cme::store_le(root + 87, definition.max_quantity);
-    cme::store_le(root + 91, definition.tick_price9);
-    cme::store_le(root + 99, std::int64_t{1000000000});
-    std::fill_n(root + 107, 3, char(0xff));
-    std::memcpy(root + 110, "IPNT", 4);
-    cme::store_le(root + 140, std::int64_t{definition.contract_size} * 1000000000);
-    cme::store_le(root + 148, definition.reference_price9);
-    cme::store_le(root + 157, kNullInt32);
-    cme::store_le(root + 161, kNullInt32);
-    cme::store_le(root + 165, definition.high_price9);
-    cme::store_le(root + 173, definition.low_price9);
-    cme::store_le(root + 181, cme::kNullPrice9);
-    cme::store_le(root + 189, kNullInt32);
-    cme::store_le(root + 193, std::uint16_t{UINT16_MAX});
-    cme::store_le(root + 195, kNullInt32);
-    cme::store_le(root + 199, kNullInt32);
-    root[203] = char(0x7f);
-    root[204] = char(0x7f);
-    cme::store_le(root + 205, cme::kNullPrice9);
-    root[213] = 'N';
-    cme::store_le(root + 214, definition.trade_date);
-    cme::store_le(root + 216, std::uint64_t{UINT64_MAX});
-    cme::store_le(root + 224, std::uint16_t{9});  // no event dates
-    cme::store_le(root + 227, std::uint16_t{4});
-    root[229] = 1;
-    std::memcpy(root + 230, "GBX", 3);
-    root[233] = static_cast<char>(definition.depth);
-    cme::store_le(root + 234, std::uint16_t{4});
-    root[236] = 1;
-    cme::store_le(root + 237, std::uint32_t{1});
-    cme::store_le(root + 241, std::uint16_t{5});
-    root[243] = 1;
-    root[244] = 4;
-    cme::store_le(root + 245, static_cast<std::int32_t>(definition.lot_size * 10000));
-    return cme::encode_mdp_message({224, 54, kSchemaId, kVersion}, body, output);
+    using M = schema::MDInstrumentDefinitionFuture54;
+    using Feed = M::NoMDFeedTypes;
+    using Attribute = M::NoInstAttrib;
+    using LotRule = M::NoLotTypeRules;
+    // NoEvents is empty; the other three groups hold one entry each.
+    constexpr std::size_t size = cme::kMdpMessageHeaderSize + M::block_length + M::empty_tail.size() +
+                                 Feed::block_length + Attribute::block_length + LotRule::block_length;
+    if (definition.symbol.empty() || definition.lot_size > INT32_MAX / 10000u || output.size() < size) return 0;
+    char* root = start_message<M>(output, size);
+    if (!cme::put(root, M::Symbol, definition.symbol)) return 0;
+    cme::put(root, M::MatchEventIndicator, kEndOfEvent);
+    cme::put(root, M::TotNumReports, definition.total_reports);
+    cme::put(root, M::SecurityUpdateAction, 'A');
+    cme::put(root, M::LastUpdateTime, definition.timestamp);
+    cme::put(root, M::MDSecurityTradingStatus, trading_status(definition.phase));
+    cme::put(root, M::ApplID, definition.channel_id);
+    cme::put(root, M::MarketSegmentID, definition.market_segment);
+    cme::put(root, M::UnderlyingProduct, 7);  // index futures
+    cme::put(root, M::SecurityExchange, "XCME");
+    cme::put(root, M::SecurityGroup, "EXSIM");
+    cme::put(root, M::Asset, "EXSIM");
+    cme::put(root, M::SecurityID, definition.security_id);
+    cme::put(root, M::SecurityType, "FUT");
+    cme::put(root, M::CFICode, "FFICXX");
+    // MaturityMonthYear is a uint16 year and uint8 month, day and week; the week stays null.
+    char* maturity = root + M::MaturityMonthYear.offset;
+    cme::store_le(maturity, static_cast<std::uint16_t>(definition.maturity_date / 10000));
+    maturity[2] = static_cast<char>(definition.maturity_date / 100 % 100);
+    maturity[3] = static_cast<char>(definition.maturity_date % 100);
+    cme::put(root, M::Currency, "USD");
+    cme::put(root, M::SettlCurrency, "USD");
+    cme::put(root, M::MatchAlgorithm, 'F');  // simulator price-time matching
+    cme::put(root, M::MinTradeVol, definition.lot_size);
+    cme::put(root, M::MaxTradeVol, definition.max_quantity);
+    cme::put(root, M::MinPriceIncrement, definition.tick_price9);
+    cme::put(root, M::DisplayFactor, 1'000'000'000);
+    cme::put(root, M::UnitOfMeasure, "IPNT");
+    cme::put(root, M::UnitOfMeasureQty, std::int64_t{definition.contract_size} * 1'000'000'000);
+    cme::put(root, M::TradingReferencePrice, definition.reference_price9);
+    cme::put(root, M::HighLimitPrice, definition.high_price9);
+    cme::put(root, M::LowLimitPrice, definition.low_price9);
+    cme::put(root, M::UserDefinedInstrument, 'N');
+    cme::put(root, M::TradingReferenceDate, definition.trade_date);
+    char* feed = start_group<Feed>(start_group<M::NoEvents>(root + M::block_length, 0), 1);
+    cme::put(feed, Feed::MDFeedType, "GBX");
+    cme::put(feed, Feed::MarketDepth, static_cast<std::int8_t>(definition.depth));
+    char* attribute = start_group<Attribute>(feed + Feed::block_length, 1);
+    cme::put(attribute, Attribute::InstAttribValue, 1);
+    char* lot_rule = start_group<LotRule>(attribute + Attribute::block_length, 1);
+    cme::put(lot_rule, LotRule::LotType, 4);
+    cme::put(lot_rule, LotRule::MinLotSize, static_cast<std::int32_t>(definition.lot_size * 10000));
+    return size;
 }
 }  // namespace exsim::protocol::mdp3
 #endif
