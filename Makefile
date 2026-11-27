@@ -65,7 +65,7 @@ $(BUILD)/integration_tests: $(call obj,test/main.cpp $(INTEGRATION_SRCS)) $(LIB_
 	$(CXX) $(LDFLAGS) $^ -o $@ $(LDLIBS)
 # FILTER goes to both runners (substring for native cases, -k for Python). A runner that matches
 # nothing exits 2 (native) or 5 (Python 3.12+); that is not a failure.
-integration: apps $(BUILD)/integration_tests $(BUILD)/exsim_wire_bench
+integration: apps $(BUILD)/integration_tests $(BUILD)/exsim_wire_bench $(BUILD)/journal_replay
 	EXSIM_BUILD=$(BUILD) ./$(BUILD)/integration_tests $(FILTER); [ $$? -eq 0 -o $$? -eq 2 ]
 	EXSIM_BUILD=$(BUILD) python3 -B -m unittest discover -v -s test/integration -p '*_test.py' $(if $(FILTER),-k '$(FILTER)'); [ $$? -eq 0 -o $$? -eq 5 ]
 test: unit integration
@@ -80,7 +80,7 @@ format-check:
 	$(CLANG_FORMAT) --dry-run --Werror $(FORMAT_SRCS)
 -include $(shell find $(BUILD)/obj -name '*.d' 2>/dev/null)
 
-# The ITCH replay tool and the benchmarks link only the matching engine and its order book.
+# The replay tools and the benchmarks link only the matching engine and its order book.
 ENGINE_OBJS := $(call obj,src/book/order_book.cpp src/engine/matching_engine.cpp)
 BENCH_SRCS := $(sort $(wildcard benchmark/*.cpp benchmark/cases/*.cpp benchmark/utils/*.cpp))
 BENCH_BUILD ?= build/bench
@@ -92,7 +92,10 @@ BENCH_CPPFLAGS := -I$(BENCHMARK_PREFIX)/include
 BENCH_LDFLAGS := -L$(BENCHMARK_PREFIX)/lib
 endif
 
-.PHONY: bench bench-build bench-wire itch-replay
+.PHONY: bench bench-build bench-wire itch-replay journal-replay
+$(BUILD)/journal_replay: $(call obj,tools/journal_replay/main.cpp src/server/journal/journal.cpp) $(ENGINE_OBJS)
+	$(CXX) $(LDFLAGS) $^ -o $@ $(LDLIBS)
+journal-replay: $(BUILD)/journal_replay
 $(BUILD)/itch_replay: $(call obj,tools/itch_replay/main.cpp) $(ENGINE_OBJS)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $^ -o $@ $(LDLIBS)
 itch-replay:

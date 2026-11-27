@@ -1,7 +1,7 @@
 #include "md/mdp_publisher.hpp"
 #include "md/mdp_replay_session.hpp"
 #include "test/exsim/support/command_gen.hpp"
-#include "test/exsim/support/format.hpp"
+#include "server/journal/format.hpp"
 #include "test/framework/test.hpp"
 #include "test/framework/alloc_counter.hpp"
 
@@ -374,7 +374,7 @@ TEST_CASE(mdp_publisher, skipping_deep_changes_sends_the_same_bytes_as_recomputi
             reference.poll(now, UINT64_MAX);
             if (packets != reference_packets)
                 FAIL("seed " + std::to_string(seed) + " step " + std::to_string(step) + " " +
-                     testsupport::format_command(command));
+                     server::journal::format_command(command));
             for (const auto& event : events) {
                 const bool rested = event.type == EventType::Rested;
                 if (!rested && !(event.type == EventType::Canceled && event.canceled.was_resting)) continue;

@@ -20,6 +20,7 @@ namespace {
 // abandoned by one test's shutdown wait cannot change what a later test reads.
 struct Probe {
     std::atomic<std::uint64_t> appended_commands{0};
+    std::atomic<std::uint64_t> last_output{0};
     std::atomic<std::uint64_t> flush_requests{0};
     std::atomic<bool> stall_flush{false};
     std::atomic<bool> writer_inside_flush{false};
@@ -35,8 +36,9 @@ std::shared_ptr<Probe> new_probe() {
 
 struct CountingJournalWriter {
     CountingJournalWriter(const std::string&, const server::journal::JournalSetup&) : probe(next_probe) {}
-    bool append(const Command&) noexcept {
+    bool append(const Command&, std::uint64_t output) noexcept {
         probe->appended_commands.fetch_add(1, std::memory_order_relaxed);
+        probe->last_output.store(output, std::memory_order_relaxed);
         return true;
     }
     bool flush() noexcept {
@@ -79,12 +81,13 @@ TEST_CASE(journal_worker, destructor_drains_accepted_entries_and_joins) {
     const auto probe = new_probe();
     std::optional<TestJournalWorker> worker;
     worker.emplace("unused", server::journal::JournalSetup{}, patience);
-    for (int index = 0; index < 1000; ++index) REQUIRE(worker->append(Command{}));
+    for (std::uint64_t index = 0; index < 1000; ++index) REQUIRE(worker->append(Command{}, index));
     REQUIRE(worker->flush());
     const auto started = std::chrono::steady_clock::now();
     worker.reset();
     const auto elapsed = std::chrono::steady_clock::now() - started;
     CHECK_EQ(probe->appended_commands.load(), 1000u);
+    CHECK_EQ(probe->last_output.load(), 999u);   // each entry carries its command's output digest
     CHECK_EQ(probe->flush_requests.load(), 2u);  // the requested flush and the final one
     CHECK(elapsed < patience / 2);               // joined on the writer's signal, well before the wait runs out
 }
@@ -97,7 +100,7 @@ TEST_CASE(journal_worker, ring_holds_capacity_minus_one_entries_then_fails) {
         REQUIRE(worker.flush());
         REQUIRE(eventually([&] { return probe->writer_inside_flush.load(); }));
         std::size_t accepted = 0;
-        while (worker.append(Command{})) ++accepted;
+        while (worker.append(Command{}, 0)) ++accepted;
         CHECK_EQ(accepted, 1023u);
         CHECK(!worker.healthy());
     }
@@ -127,7 +130,7 @@ TEST_CASE(journal_worker, wakes_for_each_request_after_becoming_idle) {
     const auto probe = new_probe();
     TestJournalWorker worker("unused", server::journal::JournalSetup{});
     for (int index = 0; index < 20; ++index) {
-        REQUIRE(worker.append(Command{}));
+        REQUIRE(worker.append(Command{}, 0));
         REQUIRE(worker.flush());
         REQUIRE(eventually([&] { return worker.drained(); }));
         CHECK_EQ(probe->appended_commands.load(), static_cast<std::uint64_t>(index + 1));

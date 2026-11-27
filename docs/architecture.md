@@ -60,7 +60,7 @@ See [data structures and algorithms](dsa.md) for storage and matching costs.
 
 Config files belong to the user and are only read at startup. They hold credentials, so keep them owner-only.
 
-Exchanges can write optional journals. Journals do not provide automatic crash recovery, and abrupt termination can lose buffered records.
+Exchanges can write optional journals: the applied commands in sequence, each with its timestamp and a digest of the events it produced. Matching reads nothing else, so replaying the commands into a fresh engine must reproduce every digest; `journal_replay` checks that and names the first command that differs. Journals do not provide crash recovery: the exchange never reads one, and abrupt termination can lose buffered records.
 
 Books, session state, and feed history disappear when an exchange exits. Recovery covers retained in-memory history. MDP subscribers can join using periodic snapshots and instrument definitions; ITCH subscribers still need earlier feed history.
 

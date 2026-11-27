@@ -113,8 +113,8 @@ FOK checks, self-trade prevention, auction execution, expiry, and bulk commands 
 
 Market-data recovery uses a bounded retransmission ring. Old messages are overwritten, so recovery only covers retained history. It cannot supply a full book snapshot to a late subscriber.
 
-Optional journaling passes commands to a writer through a bounded single-producer, single-consumer queue. It keeps disk writes outside matching.
+Optional journaling passes commands and their output digests to a writer through a bounded single-producer, single-consumer queue. It keeps disk writes outside matching.
 
 See [retransmission ring](../src/md/retransmission_ring.hpp) and [journal worker](../src/server/runtime/journal_worker.hpp).
 
-The journal worker uses atomic wait/notify when idle. It retains `std::thread` because blocked file I/O cannot be interrupted and shutdown bounds its wait before detaching. Schema 3 stores the full instrument identity and active command fields in 56 to 128 byte records with sequence, payload length and checksum. Flush writes a 24-byte checkpoint footer, overwritten by the next append.
+The journal worker uses atomic wait/notify when idle. It retains `std::thread` because blocked file I/O cannot be interrupted and shutdown bounds its wait before detaching. Schema 3 stores the full instrument identity, then 64 to 136 byte records: sequence, payload length, active command fields, output digest and checksum. Flush writes a 24-byte checkpoint footer, overwritten by the next append. The reactor computes the output digest for every journaled command, so it mixes the event count, then whole 64-bit fields, with the xxHash64 round (two multiplies each) instead of bytes like the file checksum (eight per field). Word-wise FNV-1a would be one multiply cheaper, but a top-bit change in two fields cancels out in it.

@@ -82,6 +82,17 @@ Config files are yours to keep next to your trading engine and in version contro
 
 Exchanges can use optional `[journal]` settings: `path`, `on_failure`, and `flush_interval_ms`. A relative `path` is relative to the config file. An exchange refuses a journal path whose last component is a symlink, and takes an exclusive lock on the file before truncating it, so a second running exchange that names the same journal fails to start and leaves the first one's history intact. The journal is opened last, after every listener, so a start refused for a busy port or a taken admin socket leaves the last run's journal alone.
 
+## Replaying a journal
+
+A journal holds the commands the exchange applied, each with the timestamp the exchange gave it and a digest of the events it produced. `journal_replay` feeds the commands to a fresh matching engine and checks each one's events against that digest. With the `[journal]` section of `config/exchange.conf` uncommented, the example exchange writes `config/exchange.journal`; after it stops:
+
+```sh
+make -j4 journal-replay
+./build/release/journal_replay config/exchange.journal
+```
+
+A clean run prints `replayed N commands and M events: every output matches the journal` and exits 0. That covers the records before the checkpoint at the end of the file, which every successful flush writes, including the one at shutdown. A write failure stops journaling, so later commands are not in the file, and it can leave the file without a valid checkpoint, which replay reports as truncated. Replay a journal its exchange is no longer writing: a flush during the read can be reported as damage, or leave the records after the checkpoint replay saw unchecked. Replay checks the header and the checkpoint first, then each record as it is read, so memory does not grow with the journal and the first record that diverges is reported before any later damage. Checksums catch damage, not tampering: replay trusts the header as the exchange trusts its config, and builds the same engine, so it needs the memory that exchange had. Otherwise it prints the first command whose output differs, with its sequence number and the replayed events, and exits 1; replaying an old journal with a new build shows where matching changed, as long as the build reads that journal's schema. A build reads only its own schema; schema 2 journals, written before output digests, cannot be replayed. A damaged or truncated journal is reported, with the record and byte offset when the problem is in a record, also with exit 1. The exchange itself never reads a journal: every start is empty.
+
 The legacy Exsim `fixp_sbe` protocol and `admin_port` are rejected; CME iLink 3 has its own FIXP/SBE gateway, and runtime commands use `admin_socket`.
 
 `ilink_account` is no longer a `[user <name>]` key and nothing replaces it; the simulator never used the value. A config that still has it fails to load with `<line>: unknown key 'ilink_account'`. Remove the line.

@@ -1,11 +1,12 @@
 // The canonical journal written by ExchangeCore: replaying it into a fresh
-// engine reproduces every dispatched event, and write failures follow
-// `[journal] on_failure`.
+// engine reproduces every dispatched event and every recorded output digest,
+// damage is reported, and write failures follow `[journal] on_failure`.
 
 #include "test/exsim/server/core/core_test_support.hpp"
 #include "server/journal/journal.hpp"
-#include "test/exsim/support/journal_reader.hpp"
 
+#include <array>
+#include <cerrno>
 #include <csignal>
 #include <cstdio>
 #include <iostream>
@@ -73,24 +74,37 @@ private:
     bool installed_ = false;
 };
 
+struct JournalContents {
+    journal::JournalSetup setup;
+    std::vector<journal::JournalRecord> records;  // records[i] has sequence number i
+};
+
+JournalContents read_journal(const std::string& path) {
+    journal::JournalReader reader(path);
+    JournalContents journal{reader.setup(), {}};
+    while (const auto record = reader.next()) journal.records.push_back(*record);
+    return journal;
+}
+
 struct Replay {
     std::vector<Command> commands;
     std::vector<Event> events;
+    std::size_t output_mismatches = 0;  // records whose output digest the replay does not reproduce
 };
 
 Replay replay_journal(const std::string& path) {
-    testsupport::JournalReader reader(path);
-    MatchingEngine engine(reader.setup().engine);
-    for (const InstrumentConfig& instrument : reader.setup().instruments) {
+    const JournalContents journal = read_journal(path);
+    MatchingEngine engine(journal.setup.engine);
+    for (const InstrumentConfig& instrument : journal.setup.instruments) {
         REQUIRE(engine.add_instrument(instrument) != 0);
     }
-    EventBuffer output(required_event_capacity(reader.setup().engine));
+    EventBuffer output(required_event_capacity(journal.setup.engine));
     Replay replay;
-    Command command;
-    while (reader.next(command)) {
-        replay.commands.push_back(command);
+    for (const journal::JournalRecord& record : journal.records) {
+        replay.commands.push_back(record.command);
         output.clear();
-        REQUIRE(engine.handle(command, output) == HandleResult::Applied);
+        REQUIRE(engine.handle(record.command, output) == HandleResult::Applied);
+        if (journal::output_digest({output.begin(), output.size()}) != record.output) ++replay.output_mismatches;
         replay.events.insert(replay.events.end(), output.begin(), output.end());
     }
     return replay;
@@ -106,10 +120,22 @@ bool same_canonical_events(const std::vector<Event>& left, const std::vector<Eve
 
 bool journal_is_readable(const std::string& path) {
     try {
-        testsupport::JournalReader reader(path);
+        (void)read_journal(path);
         return true;
     } catch (const std::exception&) {
         return false;
+    }
+}
+
+// The error read_journal reports for `bytes`, or "" when it reads them.
+std::string read_error(const std::string& path, const std::vector<char>& bytes) {
+    std::ofstream(path, std::ios::binary | std::ios::trunc)
+        .write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+    try {
+        (void)read_journal(path);
+        return "";
+    } catch (const std::exception& error) {
+        return error.what();
     }
 }
 
@@ -152,6 +178,7 @@ TEST_CASE(server_core_journal, replay_reproduces_every_dispatched_event) {
     CHECK_EQ(replay.commands.size(), h.core.counters().commands_applied);
     CHECK_EQ(replay.events.size(), h.recorder.events.size());
     CHECK(same_canonical_events(replay.events, h.recorder.events));
+    CHECK_EQ(replay.output_mismatches, 0u);
 
     bool saw_cancel_on_disconnect = false;
     for (const Command& command : replay.commands) {
@@ -307,14 +334,14 @@ TEST_CASE(server_core_journal, header_preserves_full_instrument_identity_and_rec
     REQUIRE(writer.flush());
     CHECK_EQ(file_size(file.path), header_size + 24);
     const auto before = file_size(file.path);
-    REQUIRE(writer.append(Command{SetPhase{123, 1, Phase::Halted}}));
+    REQUIRE(writer.append(Command{SetPhase{123, 1, Phase::Halted}}, 0x0123456789abcdefull));
     // Append remains buffered; a successful flush makes it readable by another fd.
     CHECK_EQ(file_size(file.path), before);
     REQUIRE(writer.flush());
-    CHECK_EQ(file_size(file.path), before + 56);
-    testsupport::JournalReader reader(file.path);
-    CHECK_EQ(reader.setup().engine.max_level_qty, std::uint64_t{12345});
-    const auto& actual = reader.setup().instruments.front();
+    CHECK_EQ(file_size(file.path), before + 64);
+    const JournalContents read = read_journal(file.path);
+    CHECK_EQ(read.setup.engine.max_level_qty, std::uint64_t{12345});
+    const auto& actual = read.setup.instruments.front();
     CHECK(actual.symbol == instrument.symbol);
     CHECK_EQ(actual.tick_size, instrument.tick_size);
     CHECK_EQ(actual.lot_size, instrument.lot_size);
@@ -327,19 +354,17 @@ TEST_CASE(server_core_journal, header_preserves_full_instrument_identity_and_rec
     CHECK(actual.cme_symbol == instrument.cme_symbol);
     CHECK_EQ(actual.cme_maturity_date, instrument.cme_maturity_date);
     CHECK_EQ(actual.cme_contract_size, instrument.cme_contract_size);
-    Command command;
-    REQUIRE(reader.next(command));
-    CHECK(command.type == CommandType::SetPhase);
-    CHECK_EQ(command.ts(), 123u);
-    CHECK(!reader.next(command));
-    REQUIRE(writer.append(limit_order(1, 9, 1, Side::BUY, 1'000'000, 10)));
+    REQUIRE_EQ(read.records.size(), 1u);
+    CHECK(read.records[0].command.type == CommandType::SetPhase);
+    CHECK_EQ(read.records[0].command.ts(), 123u);
+    CHECK_EQ(read.records[0].output, 0x0123456789abcdefull);
+    REQUIRE(writer.append(limit_order(1, 9, 1, Side::BUY, 1'000'000, 10), 7));
     REQUIRE(writer.flush());
-    CHECK_EQ(file_size(file.path), before + 56 + 128);
-    testsupport::JournalReader updated(file.path);
-    REQUIRE(updated.next(command));
-    REQUIRE(updated.next(command));
-    CHECK(command.type == CommandType::NewOrder);
-    CHECK(!updated.next(command));
+    CHECK_EQ(file_size(file.path), before + 64 + journal::kMaxRecordBytes);
+    const JournalContents updated = read_journal(file.path);
+    REQUIRE_EQ(updated.records.size(), 2u);
+    CHECK(updated.records[1].command.type == CommandType::NewOrder);
+    CHECK_EQ(updated.records[1].output, 7u);
 }
 
 TEST_CASE(server_core_journal, variable_records_roundtrip_all_command_types_and_detect_corruption) {
@@ -347,23 +372,26 @@ TEST_CASE(server_core_journal, variable_records_roundtrip_all_command_types_and_
     const auto config = parse_test_config();
     journal::JournalWriter writer(file.path, {config.engine.engine, config.instruments});
     const auto header = file_size(file.path);
-    const Command commands[] = {Command{NewOrder{}}, Command{CancelOrder{}}, Command{ReplaceOrder{}},
-                                Command{MassCancel{}}, Command{SetPhase{}}};
-    const std::size_t sizes[] = {128, 72, 88, 72, 56};
+    // No field at its default, so a field the reader skips or decodes as a constant fails.
+    const Command commands[] = {Command{NewOrder{1, 2, 3, 4, 5, Side::SELL, OrdType::Market, TimeInForce::IOC,
+                                                 StpMode::CancelBoth, true, -6, 7}},
+                                Command{CancelOrder{8, 9, 10, 11, 12}},
+                                Command{ReplaceOrder{13, 14, 15, 16, -17, 18, true}},
+                                Command{MassCancel{19, 20, 21, 22, true}}, Command{SetPhase{23, 24, Phase::PreClose}}};
+    const std::size_t sizes[] = {136, 80, 96, 80, 64};
     auto expected = header + 24;
     for (std::size_t index = 0; index < std::size(commands); ++index) {
-        REQUIRE(writer.append(commands[index]));
+        REQUIRE(writer.append(commands[index], index));
         REQUIRE(writer.flush());
         expected += sizes[index];
         CHECK_EQ(file_size(file.path), expected);
     }
-    testsupport::JournalReader reader(file.path);
-    Command actual;
-    for (const auto& command : commands) {
-        REQUIRE(reader.next(actual));
-        CHECK(journal::encode(actual) == journal::encode(command));
+    const JournalContents read = read_journal(file.path);
+    REQUIRE_EQ(read.records.size(), std::size(commands));
+    for (std::size_t index = 0; index < std::size(commands); ++index) {
+        CHECK(journal::encode(read.records[index].command) == journal::encode(commands[index]));
+        CHECK_EQ(read.records[index].output, index);
     }
-    CHECK(!reader.next(actual));
     // A length beyond the remaining file must fail before any command escapes.
     {
         std::fstream corrupt(file.path, std::ios::in | std::ios::out | std::ios::binary);
@@ -372,6 +400,35 @@ TEST_CASE(server_core_journal, variable_records_roundtrip_all_command_types_and_
         corrupt.write(invalid_length, 8);
     }
     CHECK(!journal_is_readable(file.path));
+}
+
+TEST_CASE(server_core_journal, short_record_read_names_the_record_and_offset) {
+    // The file shrinks after the reader checked its footer, as a failing disk could leave a
+    // read. The cut is far past the start so the stdio buffer cannot hold the lost record.
+    // 8 bytes in stops the 16-byte prefix read; 24 bytes in stops the rest of the record.
+    const TempFile file{temp_journal_path("shrunk")};
+    const auto config = parse_test_config();
+    for (const std::size_t into : {std::size_t{8}, std::size_t{24}}) {
+        std::size_t header = 0;
+        {
+            journal::JournalWriter writer(file.path, {config.engine.engine, config.instruments});
+            header = file_size(file.path);
+            for (std::uint64_t index = 0; index < 1000; ++index) {
+                REQUIRE(writer.append(Command{NewOrder{}}, index));
+                if (index % 100 == 99) REQUIRE(writer.flush());
+            }
+        }
+        const std::size_t cut = header + 900 * 136;
+        journal::JournalReader reader(file.path);
+        REQUIRE(::truncate(file.path.c_str(), static_cast<off_t>(cut + into)) == 0);
+        std::string error;
+        try {
+            while (reader.next()) {}
+        } catch (const std::runtime_error& e) {
+            error = e.what();
+        }
+        CHECK_EQ(error, "cannot read in record 900 at byte " + std::to_string(cut));
+    }
 }
 
 TEST_CASE(server_core_journal, symlinked_destination_is_refused_and_its_target_is_unchanged) {
@@ -396,7 +453,7 @@ TEST_CASE(server_core_journal, second_writer_is_refused_without_truncating_and_a
     const auto config = parse_test_config();
     {
         journal::JournalWriter first(file.path, {config.engine.engine, config.instruments});
-        REQUIRE(first.append(Command{SetPhase{123, 1, Phase::Halted}}));
+        REQUIRE(first.append(Command{SetPhase{123, 1, Phase::Halted}}, 0));
         REQUIRE(first.flush());
         const auto written = file_size(file.path);
         bool refused = false;
@@ -411,7 +468,134 @@ TEST_CASE(server_core_journal, second_writer_is_refused_without_truncating_and_a
     // Once the first writer is gone, the same file can be truncated and reused.
     journal::JournalWriter restarted(file.path, {config.engine.engine, config.instruments});
     REQUIRE(restarted.flush());
-    testsupport::JournalReader reader(file.path);
-    Command command;
-    CHECK(!reader.next(command));
+    CHECK(read_journal(file.path).records.empty());
+}
+
+TEST_CASE(server_core_journal, every_truncation_and_byte_flip_is_reported) {
+    const TempFile file{temp_journal_path("damage")};
+    const auto config = parse_test_config();
+    {
+        journal::JournalWriter writer(file.path, {config.engine.engine, config.instruments});
+        REQUIRE(writer.append(limit_order(1, 1, kAapl, Side::BUY, 1'000'000, 10), 11));
+        REQUIRE(writer.append(Command{CancelOrder{}}, 12));
+        REQUIRE(writer.append(Command{SetPhase{5, 0, Phase::Closed}}, 13));
+        REQUIRE(writer.flush());
+    }
+    std::ifstream in(file.path, std::ios::binary);
+    const std::vector<char> good{std::istreambuf_iterator<char>(in), {}};
+    REQUIRE_EQ(read_error(file.path, good), "");
+    std::size_t unreported_cuts = 0;
+    for (std::size_t size = 0; size < good.size(); ++size) {
+        const std::vector<char> cut(good.begin(), good.begin() + static_cast<std::ptrdiff_t>(size));
+        if (read_error(file.path, cut).find("truncated") == std::string::npos) ++unreported_cuts;
+    }
+    CHECK_EQ(unreported_cuts, 0u);
+    std::size_t unreported_flips = 0;
+    for (std::size_t index = 0; index < good.size(); ++index) {
+        std::vector<char> damaged = good;
+        damaged[index] = static_cast<char>(damaged[index] ^ 0x40);
+        if (read_error(file.path, damaged).empty()) ++unreported_flips;
+    }
+    CHECK_EQ(unreported_flips, 0u);
+    // A damaged record is named by its sequence number.
+    std::vector<char> damaged = good;
+    damaged[good.size() - 24 - 8] ^= 0x01;  // checksum of the last record
+    CHECK_EQ(read_error(file.path, damaged).find("bad checksum in record 2 at byte"), 0u);
+}
+
+TEST_CASE(server_core_journal, output_digest_sees_the_same_top_bit_change_in_two_events) {
+    // A resting order produces Accepted and Rested with one timestamp. With word-wise FNV-1a,
+    // flipping bit 63 in both cancelled out and replay matched two wrong timestamps.
+    std::array<Event, 2> events{};
+    events[0].type = EventType::Accepted;
+    events[0].accepted = AcceptedEvent{};
+    events[1].type = EventType::Rested;
+    events[1].rested = RestedEvent{};
+    for (Event& event : events) event.ts = 5;
+    const std::uint64_t digest = journal::output_digest(events);
+    for (Event& event : events) event.ts ^= Timestamp{1} << 63;
+    CHECK(journal::output_digest(events) != digest);
+}
+
+TEST_CASE(server_core_journal, output_digest_sees_an_extra_event_whose_words_are_all_zero) {
+    // Accepted is tag 0, so an Accepted event with every field zero folded only zero words
+    // into a digest that started at zero, and an extra one at the start of a batch went unseen.
+    std::array<Event, 2> events{};
+    events[0].type = EventType::Accepted;
+    events[0].accepted = AcceptedEvent{};
+    events[1].type = EventType::Rested;
+    events[1].rested = RestedEvent{};
+    events[1].ts = 5;
+    const std::span<const Event> all(events);
+    CHECK(journal::output_digest(all) != journal::output_digest(all.subspan(1)));
+    CHECK(journal::output_digest(all.first(1)) != journal::output_digest({}));
+}
+
+TEST_CASE(server_core_journal, output_digest_of_a_resting_order_is_pinned) {
+    // Journals outlive builds: a digest change makes every existing schema 3 journal diverge
+    // at sequence 0, while tests that write and replay with one build still pass.
+    std::array<Event, 2> events{};
+    events[0].type = EventType::Accepted;
+    events[0].accepted =
+        AcceptedEvent{7, 3, 2, 5, Side::SELL, OrdType::Limit, TimeInForce::Day, StpMode::None, false, 1'502'500, 60};
+    events[1].type = EventType::Rested;
+    events[1].rested = RestedEvent{7, 3, 2, Side::SELL, 1'502'500, 60};
+    for (Event& event : events) {
+        event.instrument = 1;
+        event.ts = 57'488'377'589'000;
+    }
+    CHECK_EQ(journal::output_digest(events), 0xce55d6711f256508ull);
+}
+
+TEST_CASE(server_core_journal, header_word_wider_than_its_field_is_reported) {
+    const TempFile file{temp_journal_path("width")};
+    const auto config = parse_test_config();
+    {
+        journal::JournalWriter writer(file.path, {config.engine.engine, config.instruments});
+        REQUIRE(writer.flush());
+    }
+    std::ifstream in(file.path, std::ios::binary);
+    std::vector<char> bytes{std::istreambuf_iterator<char>(in), {}};
+    // The first instrument (at byte 48, 108 bytes each) has its CME contract size at offset 100.
+    // Give that word a nonzero upper half and reseal the header checksum.
+    bytes[48 + 100 + 3] = 1;
+    const std::size_t header = 48 + config.instruments.size() * 108;
+    auto* raw = reinterpret_cast<unsigned char*>(bytes.data());
+    journal::store64(raw + header, journal::hash_bytes({raw, header}));
+    CHECK_EQ(read_error(file.path, bytes), "instrument field width");
+}
+
+TEST_CASE(server_core_journal, only_regular_files_are_read) {
+    // Opened without blocking and checked on the descriptor, so a FIFO cannot block the reader
+    // and a device cannot feed it forever.
+    const TempFile fifo{temp_journal_path("fifo")};
+    REQUIRE_EQ(::mkfifo(fifo.path.c_str(), 0600), 0);
+    for (const std::string& path : {std::string("/tmp"), std::string("/dev/null"), fifo.path}) {
+        std::string error;
+        try {
+            (void)read_journal(path);
+        } catch (const std::exception& thrown) {
+            error = thrown.what();
+        }
+        CHECK_EQ(error.find("cannot open"), 0u);
+    }
+}
+
+TEST_CASE(server_core_journal, huge_file_that_is_not_a_journal_is_reported_from_its_first_bytes) {
+    // Holes up to a petabyte, as large as the filesystem allows (ext4 stops below 16 TiB): the
+    // reader must check what it reads before sizing memory by the file.
+    const TempFile file{temp_journal_path("sparse")};
+    std::ofstream(file.path) << "not a journal";
+    int shift = 50;
+    while (::truncate(file.path.c_str(), off_t{1} << shift) != 0) {
+        REQUIRE(errno == EFBIG && shift > 40);
+        --shift;
+    }
+    std::string error;
+    try {
+        (void)read_journal(file.path);
+    } catch (const std::exception& thrown) {
+        error = thrown.what();
+    }
+    CHECK_EQ(error, "not a journal");
 }

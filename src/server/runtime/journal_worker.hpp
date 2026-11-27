@@ -50,8 +50,8 @@ public:
     JournalWorker(const JournalWorker&) = delete;
     JournalWorker& operator=(const JournalWorker&) = delete;
 
-    [[nodiscard]] bool append(const Command& command) noexcept {
-        if (!enqueue({command, false})) return false;
+    [[nodiscard]] bool append(const Command& command, std::uint64_t output) noexcept {
+        if (!enqueue({command, output, false})) return false;
         last_operation_flush_ = false;
         return true;
     }
@@ -60,7 +60,7 @@ public:
     [[nodiscard]] bool flush() noexcept {
         if (!healthy()) return false;
         if (last_operation_flush_) return true;
-        if (!enqueue({{}, true})) return false;
+        if (!enqueue({{}, 0, true})) return false;
         last_operation_flush_ = true;
         return true;
     }
@@ -78,6 +78,7 @@ public:
 private:
     struct Entry {
         Command command;
+        std::uint64_t output;
         bool flush;
     };
     struct State {
@@ -113,7 +114,7 @@ private:
             Entry entry{};
             if (state.queue.try_pop(entry)) {
                 ++processed;
-                io_ok = entry.flush ? state.writer->flush() : state.writer->append(entry.command);
+                io_ok = entry.flush ? state.writer->flush() : state.writer->append(entry.command, entry.output);
                 if (!io_ok) break;
                 if (entry.flush) state.flushed_operations.store(processed, std::memory_order_release);
             } else if (state.stopping.load(std::memory_order_acquire)) {

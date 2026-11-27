@@ -8,7 +8,6 @@
 #include "server/config.hpp"
 #include "server/admin/core_admin.hpp"
 #include "server/core/exchange_core.hpp"
-#include "test/exsim/support/journal_canonical.hpp"
 #include "test/framework/test.hpp"
 
 #include <array>
@@ -258,13 +257,11 @@ struct CountingMarketData {
     std::uint64_t events = 0;
     std::uint64_t flushes = 0;
     std::uint64_t fills = 0;
-    std::uint64_t hash = 14695981039346656037ull;
     void on_events(std::span<const Event> batch) noexcept {
         ++batches;
         for (const Event& event : batch) {
             ++events;
             fills += event.type == EventType::Fill ? 1 : 0;
-            hash = server::journal::hash_event(event, hash);
         }
     }
     void flush() noexcept { ++flushes; }

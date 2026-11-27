@@ -80,6 +80,54 @@ class Trader:
         self.sock.close()
 
 
+def fix_send(sock, user, kind, sequence, fields):
+    body = (f"35={kind}|49={user}|56=EXSIM|34={sequence}|52={fix_time()}|{fields}"
+            .replace("|", "\x01").encode())
+    frame = f"8=FIX.4.4\x019={len(body)}\x01".encode() + body
+    sock.sendall(frame + f"10={sum(frame) % 256:03d}\x01".encode())
+
+
+def fix_time():
+    return datetime.now(timezone.utc).strftime("%Y%m%d-%H:%M:%S.%f")[:-3]
+
+
+def fix_receive(sock):
+    """One FIX frame by BodyLength, preserving any following frame."""
+    header = b""
+    while header.count(b"\x01") < 2:
+        byte = sock.recv(1)
+        if not byte:
+            raise AssertionError("FIX connection closed before header")
+        header += byte
+    body_length = int(header.split(b"\x01")[1].split(b"=")[1])
+    remaining = body_length + 7  # Body plus 10=ddd<SOH>.
+    body = b""
+    while len(body) < remaining:
+        chunk = sock.recv(remaining - len(body))
+        if not chunk:
+            raise AssertionError("FIX connection closed before checksum")
+        body += chunk
+    return header + body
+
+
+def fix_wait(sock, field):
+    for _ in range(3):
+        if field in fix_receive(sock):
+            return
+    raise AssertionError(f"no FIX message with {field!r}")
+
+
+def fnv1a(data):
+    digest = 0xCBF29CE484222325
+    for byte in data:
+        digest = (digest ^ byte) * 0x100000001B3 % 2**64
+    return digest
+
+
+def replay(journal):
+    return subprocess.run([str(BUILD / "journal_replay"), str(journal)], capture_output=True, text=True, timeout=10)
+
+
 class Exchange:
     """One exsim_exchanged child. `ready` is its ready line, or None if it exited during startup."""
 
@@ -311,9 +359,9 @@ class ExsimExchangedTests(unittest.TestCase):
         while offset < len(data) - 24:
             sequence, size, tag = struct.unpack("!QQQ", data[offset:offset + 24])
             self.assertEqual(sequence, len(tags))
-            self.assertLessEqual(size + 24, 128)
+            self.assertLessEqual(size + 32, 136)
             tags.append(tag)
-            offset += size + 24
+            offset += size + 32
         self.assertEqual(offset, len(data) - 24)
         magic, records, _ = struct.unpack("!QQQ", data[-24:])
         self.assertEqual(magic, 0x455853494D454E44)
@@ -321,6 +369,67 @@ class ExsimExchangedTests(unittest.TestCase):
         self.assertGreaterEqual(records, 2)
         self.assertEqual(tags[0], 0)  # NewOrder from the external client
         self.assertEqual(tags[-1], 4)  # SetPhase Closed at shutdown
+
+    def test_journal_replay_matches_a_run_traded_over_ouch_and_fix(self):
+        exchange = self.start(config().replace("protocol = ouch42\nsession_id = 2", "protocol = fix44\nsession_id = 2")
+                              + "\n[journal]\npath = run.journal\n")
+        alice = Trader(exchange.ready["orderEntryPort"], "ALICE", "alice")
+        self.addCleanup(alice.close)
+        bob = socket.create_connection(("127.0.0.1", exchange.ready["fixOrderEntryPort"]), timeout=3)
+        self.addCleanup(bob.close)
+        fix_send(bob, "BOB", "A", 1, "98=0|108=30|554=bob|")
+        self.assertIn(b"35=A\x01", fix_receive(bob))
+        alice.order("BID", b"B")  # 100 at 150.00 over OUCH
+        fix_send(bob, "BOB", "D", 2, f"11=HIT|55=AAPL|54=2|38=60|40=2|44=150|59=0|60={fix_time()}|")
+        fix_wait(bob, b"39=2\x01")
+        self.assertEqual(alice.event(b"E")[:1], b"E")
+        fix_send(bob, "BOB", "D", 3, f"11=ASK|55=AAPL|54=2|38=40|40=2|44=151|59=0|60={fix_time()}|")
+        fix_wait(bob, b"39=0\x01")
+        self.assertIn("orders live=2", exchange.admin("status"))
+        self.assertEqual(exchange.stop(), 0)
+        result = replay(self.directory / "run.journal")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        # Three orders and the closing SetPhase, whose DAY expiries must also match.
+        self.assertRegex(result.stdout, r"^replayed 4 commands and \d+ events: every output matches the journal\n$")
+
+    def test_journal_replay_reports_divergence_damage_and_truncation(self):
+        exchange = self.start(config() + "\n[journal]\npath = run.journal\n")
+        trader = Trader(exchange.ready["orderEntryPort"], "ALICE", "alice")
+        self.addCleanup(trader.close)
+        trader.order("FIRST", b"B")
+        trader.order("SECOND", b"B")
+        self.assertEqual(exchange.stop(), 0)
+        good = (self.directory / "run.journal").read_bytes()
+        self.assertEqual(replay(self.directory / "run.journal").returncode, 0)
+        first = 56 + 108 * struct.unpack("!Q", good[40:48])[0]
+        second = first + struct.unpack("!Q", good[first + 8:first + 16])[0] + 32
+        digest = second + 16 + struct.unpack("!Q", good[second + 8:second + 16])[0]
+        # A different output digest for record 1, resealed with a valid checksum.
+        sealed = good[second:digest] + struct.pack("!Q", struct.unpack("!Q", good[digest:digest + 8])[0] ^ 1)
+        divergent = good[:second] + sealed + struct.pack("!Q", fnv1a(sealed)) + good[digest + 16:]
+        damaged = good[:first + 20] + bytes([good[first + 20] ^ 1]) + good[first + 21:]
+        # The first instrument listed twice, with room for it and a valid header checksum.
+        count = struct.unpack("!Q", good[40:48])[0]
+        header = (good[:16] + struct.pack("!Q", count + 1) + good[24:40] + struct.pack("!Q", count + 1)
+                  + good[48:first - 8] + good[48:156])
+        duplicate = header + struct.pack("!Q", fnv1a(header)) + good[first:]
+        # Replay checks each record as it is read, so damage near the end cannot hide an earlier divergence.
+        late_damage = divergent[:-32] + bytes([divergent[-32] ^ 1]) + divergent[-31:]
+        for name, data, message in (("divergent", divergent, "divergence at sequence 1: NEW_ORDER"),
+                                    ("late damage", late_damage, "divergence at sequence 1: NEW_ORDER"),
+                                    ("damaged", damaged, f"bad checksum in record 0 at byte {first}"),
+                                    ("duplicate", duplicate, "not accepted"),
+                                    ("truncated", good[:-10], "truncated")):
+            with self.subTest(name):
+                path = self.directory / f"{name}.journal"
+                path.write_bytes(data)
+                result = replay(path)
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertIn(message, result.stdout + result.stderr)
+        result = replay(self.directory / "missing.journal")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("cannot open", result.stderr)
+        self.assertEqual(subprocess.run([str(BUILD / "journal_replay")], capture_output=True).returncode, 2)
 
     def test_symlinked_journal_is_refused_and_its_target_is_unchanged(self):
         outside = self.directory / "outside"
@@ -373,47 +482,20 @@ class ExsimExchangedTests(unittest.TestCase):
         self.assertGreater(port, 0)
         self.assertNotEqual(port, exchange.ready["orderEntryPort"])
 
-        def receive(sock):
-            # Read one FIX frame by BodyLength, preserving any following frame.
-            header = b""
-            while header.count(b"\x01") < 2:
-                byte = sock.recv(1)
-                self.assertTrue(byte, "FIX connection closed before header")
-                header += byte
-            body_length = int(header.split(b"\x01")[1].split(b"=")[1])
-            remaining = body_length + 7  # Body plus 10=ddd<SOH>.
-            body = b""
-            while len(body) < remaining:
-                chunk = sock.recv(remaining - len(body))
-                self.assertTrue(chunk, "FIX connection closed before checksum")
-                body += chunk
-            return header + body
-
-        def send(sock, user, kind, sequence, fields):
-            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H:%M:%S.%f")[:-3]
-            body = f"35={kind}|49={user}|56=EXSIM|34={sequence}|52={timestamp}|{fields}".replace("|", "\x01").encode()
-            frame = f"8=FIX.4.4\x019={len(body)}\x01".encode() + body
-            sock.sendall(frame + f"10={sum(frame) % 256:03d}\x01".encode())
-
         alice = socket.create_connection(("127.0.0.1", port), timeout=3)
         bob = socket.create_connection(("127.0.0.1", port), timeout=3)
         self.addCleanup(alice.close)
         self.addCleanup(bob.close)
-        send(alice, "ALICE", "A", 1, "98=0|108=30|554=alice|")
-        self.assertIn(b"35=A\x01", receive(alice))
-        send(bob, "BOB", "A", 1, "98=0|108=30|554=bob|")
-        self.assertIn(b"35=A\x01", receive(bob))
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H:%M:%S.%f")[:-3]
-        send(alice, "ALICE", "D", 2, f"11=BUY|55=AAPL|54=1|38=100|40=2|44=150|59=0|60={timestamp}|")
-        self.assertIn(b"39=0\x01", receive(alice))
+        fix_send(alice, "ALICE", "A", 1, "98=0|108=30|554=alice|")
+        self.assertIn(b"35=A\x01", fix_receive(alice))
+        fix_send(bob, "BOB", "A", 1, "98=0|108=30|554=bob|")
+        self.assertIn(b"35=A\x01", fix_receive(bob))
+        fix_send(alice, "ALICE", "D", 2, f"11=BUY|55=AAPL|54=1|38=100|40=2|44=150|59=0|60={fix_time()}|")
+        self.assertIn(b"39=0\x01", fix_receive(alice))
         self.assertIn("orders live=1", exchange.admin("status"))
-        send(bob, "BOB", "D", 2, f"11=SELL|55=AAPL|54=2|38=100|40=2|44=150|59=0|60={timestamp}|")
+        fix_send(bob, "BOB", "D", 2, f"11=SELL|55=AAPL|54=2|38=100|40=2|44=150|59=0|60={fix_time()}|")
         for sock in (bob, alice):
-            for _ in range(3):
-                if b"39=2\x01" in receive(sock):
-                    break
-            else:
-                self.fail("FIX execution report did not reach the participant")
+            fix_wait(sock, b"39=2\x01")
         self.assertIn("orders live=0", exchange.admin("status"))
 
 

@@ -26,7 +26,7 @@ A small exchange simulator. Each exchange is one process started from a config f
 | `src/main.cpp` | The exchange binary |
 | `config/` | Example exchange configs |
 | `spec/` | Pinned CME XML schemas |
-| `tools/` | ITCH replay and the CME schema generator |
+| `tools/` | ITCH replay, journal replay and the CME schema generator |
 | `test/` | Unit and integration tests |
 | `benchmark/` | Benchmark harness and profiling scripts |
 

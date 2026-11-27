@@ -510,11 +510,12 @@ private:
         return SubmitResult::Applied;
     }
 
+    // The record carries a digest of the events just applied, so a replay can check every output.
     void journal_applied_command(const Command& command) noexcept {
         if (!journal_ || journal_failed_) {
             return;
         }
-        if (journal_->append(command)) {
+        if (journal_->append(command, journal::output_digest({events_.begin(), events_.size()}))) {
             ++counters_.journal_records;
             return;
         }
