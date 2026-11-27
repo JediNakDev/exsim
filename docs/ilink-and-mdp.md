@@ -7,26 +7,25 @@ All orders and liquidity come from external clients. The exchanges start empty.
 
 - [x] **P01: Pin schemas and scope.** iLink schema 8/version 9, MDP schema 1/version 13, Global TCP Recovery schema 9/version 0. Primary iLink sessions, outright index futures, limit DAY/FAK orders, MBP depth 1-10.
 - [x] **P02: Define shared mappings.** Separate CME SecurityIDs and full symbols from dense internal IDs. Preserve 20-byte client IDs. Convert PRICE9 exactly, share UTC event timestamps and order/trade IDs across private and public messages.
-- [x] **P03: Implement wire codecs.** Generated iLink field layouts and null defaults, handwritten framing and MDP codecs, pinned XML, C++23 regeneration tool, independent CME packet fixtures and malformed-input tests.
+- [x] **P03: Implement wire codecs.** iLink and MDP field layouts and null defaults generated from pinned XML at build time, handwritten framing and encoders, independent CME packet fixtures and malformed-input tests.
 - [x] **P04: Implement iLink sessions.** Signed negotiation/establishment, keepalives, termination, sequencing, NotApplied, reconnect, retained replies, previous UUID recovery, and bounded session history.
 - [x] **P05: Implement iLink orders.** New/cancel/replace/mass cancel, acknowledgements, rejects, partial/full fills, FAK elimination, ownership checks, static party/account validation, and cancel on disconnect.
 - [x] **P06: Implement MDP publication.** Instrument definitions, security status, MBP updates, trades, channel reset, heartbeats, packet/report sequences, event boundaries, and optional redundant A/B destinations.
 - [x] **P07: Implement MDP recovery.** Periodic snapshots with consistent incremental boundaries, instrument replay, bounded historical packet storage, authenticated TCP recovery, and explicit unavailable-history replies.
 - [x] **P08: Integrate runtime/config.** Register iLink, select ITCH or MDP, configure listeners and destinations, report bound ports, retain state in RAM, and handle faults, capacity limits, and shutdown.
-- [x] **P09: Extend management API.** Advertise protocols, publish connection details in OpenAPI, redact HMAC/replay secrets, reject feed conflicts across all destinations, and test managed lifecycle/restarts.
+- [x] **P09: Report connection details.** iLink and MDP ports and recovery transport appear in the ready line. (This first shipped through the HTTP management API, since removed.)
 - [x] **P10: Verify and document.** Unit and integration checks pass on macOS and OrbStack Ubuntu in release and ASan/UBSan builds, including existing protocol regressions and the combined private/public CME socket flow. Schema regeneration is reproducible. Fuzz and end-to-end suites remain deferred.
 
 ## Run
 
 ```sh
 make -j4 apps
-./build/release/exsim_exchanged --config test/fixtures/ilink3-mdp.conf
+./build/release/exsim_exchanged --config config/examples/cme.conf
 ```
 
-For managed exchanges, submit that same INI to the existing management API.
-Query `/v1/exchanges/{id}/connections` after startup for assigned listener
-ports. The example has local test credentials; clients sign their iLink
-Negotiate and Establish requests with the configured base64url HMAC key.
+Read the assigned listener ports from the ready line it prints at startup.
+The example has local test credentials; clients sign their iLink Negotiate
+and Establish requests with the configured base64url HMAC key.
 
 ## Supported messages
 
@@ -83,9 +82,15 @@ uses one UDP packet; an event can span packets and ends with EndOfEvent.
 `max_tokens_per_session` bounds each user's client-ID and request-ID tables.
 `store_messages_per_session` and `store_bytes_per_session` bound iLink
 history for each of the current and immediately previous UUIDs. Older UUIDs
-are unavailable. Reaching a session history/output limit disconnects that
-session. Reconnect uses Establish with the negotiated UUID and exact next
-client sequence; new UUIDs need Negotiate first.
+are unavailable. Reaching a session output limit disconnects that session.
+Reconnect uses Establish with the negotiated UUID and exact next client
+sequence; new UUIDs need Negotiate first. A report that does not fit the
+history store is lost and disconnects the session, and Establish on that UUID
+is then refused. Negotiate a new UUID to restart history. The full UUID's
+reports stay retained as the previous UUID until the next successful Negotiate
+and can be replayed once the new UUID is established. That report and every
+report until the new Negotiate are lost, so provision the store for the whole
+day.
 
 Explicit iLink retransmit ranges allow up to 2500 messages. A current-UUID
 request with count zero returns up to 2500 retained messages; previous-UUID
@@ -98,9 +103,12 @@ Sequence.
 `replay_buffer_packets` bounds the MDP packet ring. TCP replay accepts one
 range of at most 2000 packets per connection, up to four concurrent
 connections, and queues at most 4 MiB per connection. Requests outside the
-retained range or exceeding limits receive logout. An aggregate MBP level
-that cannot fit the schema's signed 32-bit quantity stops publication and
-causes exchange shutdown rather than a truncated update.
+retained range or exceeding limits receive logout. MDP sends a level's
+quantity as Int32, whose null value is INT32_MAX, so an MDP exchange keeps
+each price level at or below INT32_MAX - 1: a new or replaced order that
+would rest past it is rejected with CapacityExceeded. An update that still
+cannot be encoded stops publication and shuts the exchange down rather than
+send a truncated update.
 
 Books, UUIDs, IDs, and recovery history disappear on process exit. A restart
 starts empty, emits ChannelReset, and requires new session negotiation.
@@ -110,10 +118,10 @@ clearing. MBO, options/spreads, on-demand party registration, backup iLink
 connections, advanced order types, and other templates are outside this
 profile and are not silently accepted.
 
-## Pinned schemas and regeneration
+## Pinned schemas and code generation
 
-XML lives in `spec/cme/`. Builds use committed C++ layouts and need no network
-or CME credentials. Linux builds require OpenSSL development headers and
+XML lives in `spec/`. The build generates the C++ layouts from it and needs no
+network or CME credentials. Linux builds require OpenSSL development headers and
 libcrypto (`libssl-dev` on Ubuntu); macOS uses system CommonCrypto.
 
 | File | SHA256 |
@@ -128,12 +136,13 @@ identifies version 9 as the production target. MDP and recovery XML came from
 CME anonymous FTP under `/SBEFix/Production/Templates/` and
 `/SBEFix/Production/GlobalTCPRecovery/Templates/`.
 
-Regenerate fixed-block descriptors and null defaults:
-
-```sh
-c++ -std=c++23 tools/cme_codegen/main.cpp -o output/cme_codegen
-output/cme_codegen spec/cme/ilinkbinary.xml > lib/include/protocol/ilink3_schema.hpp
-```
+The XML is the only source of the layouts. `make` builds `tools/cme_codegen`
+and writes one header per schema into `build/<mode>/gen/protocol/`:
+`ilink3_schema.hpp`, `mdp3_schema.hpp` and `tcprecovery_schema.hpp`, with
+block lengths, typed field offsets, null defaults and group dimension headers.
+The generated headers are build output, so they cannot drift from the XML.
+`ilink3.hpp` and `mdp3.hpp` assert the schema id and version their code was
+written for. The SBE framing in `cme_sbe.hpp` is handwritten.
 
 Schema changes also need gateway/MDP behavior review and updated wire tests.
 See the [iLink specification](https://cmegroupclientsite.atlassian.net/wiki/spaces/EPICSANDBOX/pages/714539039),

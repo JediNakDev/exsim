@@ -2,6 +2,8 @@
 #define TEST_EXSIM_PROTOCOL_MOLDUDP64_READER_HPP
 #include <protocol/moldudp64.hpp>
 namespace exsim::protocol::moldudp64 {
+inline constexpr std::uint16_t kEndOfSessionCount = 65535;  // header count of an end-of-session packet
+
 class PacketReader {
     std::span<const char> bytes_{};
     std::size_t offset_ = 20;
@@ -15,7 +17,7 @@ public:
         offset_ = 20;
         if (p.size() < 20) return Status::incomplete;
         decode(p.data(), 20, header);
-        auto count = header.count == 65535 ? 0 : header.count;
+        auto count = header.count == kEndOfSessionCount ? 0 : header.count;
         std::size_t pos = 20;
         for (unsigned i = 0; i < static_cast<unsigned>(count); ++i) {
             if (p.size() - pos < 2) return Status::incomplete;

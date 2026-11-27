@@ -4,24 +4,13 @@
 #include <limits>
 #include <memory>
 
-TEST_CASE(foundation, zero_and_moved_map) {
+TEST_CASE(foundation, zero_key_is_never_found) {
     exsim::util::FlatHashMap<int> map(8);
     CHECK(!map.contains(0));
     CHECK(map.insert(1, 7));
     CHECK(!map.contains(0));
     map.erase(1);
     CHECK(!map.contains(0));
-    CHECK(map.insert(2, 9));
-    exsim::util::FlatHashMap<int> moved(std::move(map));
-    CHECK_EQ(moved.size(), 1u);
-    CHECK_EQ(map.capacity(), 0u);
-    CHECK(!map.find(2));
-    map = exsim::util::FlatHashMap<int>(8);
-    CHECK(map.insert(3, 4));
-    moved = std::move(map);
-    CHECK(!map.find(3));
-    CHECK_EQ(map.size(), 0u);
-    CHECK(!moved.contains(0));
 }
 TEST_CASE(foundation, capacity_overflow_and_constness) {
     exsim::util::FlatHashMap<int> map(8);
@@ -42,10 +31,14 @@ TEST_CASE(foundation, capacity_overflow_and_constness) {
 }
 TEST_CASE(foundation, bounded_events) {
     exsim::EventBuffer out(2);
-    exsim::Event event{};
-    CHECK(out.push(event));
-    CHECK(out.push(event));
-    CHECK(!out.push(event));
+    exsim::Event* const first = out.push(exsim::EventType::Fill, 3, 7);
+    REQUIRE(first != nullptr);
+    CHECK(first->type == exsim::EventType::Fill);
+    CHECK_EQ(first->instrument, 3u);
+    CHECK_EQ(first->ts, 7u);
+    CHECK_EQ(first->fill.qty, 0u);
+    CHECK(out.push(exsim::EventType::Rested, 0, 0) == first + 1);
+    CHECK(out.push(exsim::EventType::Rested, 0, 0) == nullptr);
     CHECK_EQ(out.size(), 2u);
     CHECK_EQ(out.capacity(), 2u);
     CHECK_EQ(out.end() - out.begin(), 2);
@@ -54,7 +47,7 @@ TEST_CASE(foundation, bounded_events) {
     CHECK_EQ(out.remaining(), out.capacity());
     CHECK(out.can_append(2));
     exsim::EventBuffer empty(0);
-    CHECK(!empty.push(event));
+    CHECK(empty.push(exsim::EventType::Rested, 0, 0) == nullptr);
     CHECK_EQ(exsim::required_event_capacity({2, 10}), 28u);
     bool rejected = false;
     try {

@@ -81,7 +81,7 @@ TEST_CASE(gateway_fix_allocation, steady_state_trading_and_recovery_do_not_alloc
             make_new_order_single(token(sell_token, 'S', iteration), exsim::Side::SELL, 60, 150 * kDollar), now);
         counterparty.pump();
         if (iteration % 7 == 0) {
-            exchange.user(1).drop_out_transmissions(1);  // the trader recovers it with a ResendRequest
+            exchange.drop_next_outbound_messages(1, 1);  // the trader recovers it with a ResendRequest
         }
         trader.client().send_order_cancel_replace_request(
             make_replace_request(buy, replacement, exsim::Side::BUY, 120, 150 * kDollar), now);

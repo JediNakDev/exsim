@@ -83,7 +83,15 @@ void run_commands(benchmark::State& state, const std::string& name, Prepare&& pr
         return;
     }
     const Stats stats = Stats::from(batches, kBatchSize);
-    stats.report(state);
+    state.counters["Mean_ns"] = stats.mean_ns;
+    state.counters["P50_ns"] = stats.p50_ns;
+    state.counters["P95_ns"] = stats.p95_ns;
+    state.counters["P99_ns"] = stats.p99_ns;
+    state.counters["P99.9_ns"] = stats.p999_ns;
+    state.counters["P99.99_ns"] = stats.p9999_ns;
+    state.counters["Min_ns"] = stats.min_ns;
+    state.counters["Max_ns"] = stats.max_ns;
+    state.counters["Mops_per_s"] = stats.throughput_per_second / 1e6;
     state.counters["EventsPerCommand"] = static_cast<double>(events_emitted) / static_cast<double>(commands_run);
     state.counters["LiveOrdersAfter"] = static_cast<double>(live_orders_after);
     state.SetItemsProcessed(static_cast<std::int64_t>(commands_run));

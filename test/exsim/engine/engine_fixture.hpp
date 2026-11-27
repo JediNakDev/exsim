@@ -11,6 +11,7 @@
 #include <test/exsim/engine/live_orders.hpp>
 
 #include <cstdint>
+#include <span>
 #include <vector>
 
 namespace engine_fixture {
@@ -261,7 +262,8 @@ inline std::uint64_t book_state_digest(const MatchingEngine& engine) {
         }
     };
     mix(engine.live_order_count());
-    for (const OrderInfo& order : testsupport::live_orders(engine)) {
+    const std::vector<OrderInfo> orders = testsupport::live_orders(engine);
+    for (const OrderInfo& order : orders) {
         mix(order.order_id);
         mix(order.cl_ord_id);
         mix(order.instrument);
@@ -276,6 +278,8 @@ inline std::uint64_t book_state_digest(const MatchingEngine& engine) {
         mix(order.leaves_qty);
         mix(order.cum_qty);
     }
+    const testsupport::LevelOrders fifos(orders);
+    std::vector<OrderId> ids(orders.size());
     for (InstrumentId id = 1; id <= engine.instrument_count(); ++id) {
         mix(engine.phase(id));
         mix(engine.last_trade_price(id).value_or(-1));
@@ -284,7 +288,8 @@ inline std::uint64_t book_state_digest(const MatchingEngine& engine) {
                 mix(level.price);
                 mix(level.qty);
                 mix(level.order_count);
-                for (OrderId order_id : level_fifo(engine, id, side, level.price)) mix(order_id);
+                const std::size_t count = fifos.level_orders(id, side, level.price, ids.data(), ids.size());
+                for (std::size_t i = 0; i < count; ++i) mix(ids[i]);
             }
         }
         const AuctionIndicative indicative = engine.auction_indicative(id);
@@ -314,6 +319,8 @@ inline void check_book_invariants(const MatchingEngine& engine) {
         CHECK_EQ(by_token->order_id, order.order_id);
         CHECK_EQ(by_token->leaves_qty, order.leaves_qty);
     }
+    const testsupport::LevelOrders fifos(orders);
+    std::vector<OrderId> ids(orders.size());
     std::size_t orders_on_levels = 0;
     for (InstrumentId id = 1; id <= engine.instrument_count(); ++id) {
         const Phase phase = engine.phase(id);
@@ -335,7 +342,8 @@ inline void check_book_invariants(const MatchingEngine& engine) {
                         CHECK_GT(levels[j].price, levels[j - 1].price);
                 }
                 CHECK_GE(levels[j].order_count, 1u);
-                const std::vector<OrderId> fifo = level_fifo(engine, id, side, levels[j].price);
+                const std::span<const OrderId> fifo(
+                    ids.data(), fifos.level_orders(id, side, levels[j].price, ids.data(), ids.size()));
                 CHECK_EQ(fifo.size(), std::size_t{levels[j].order_count});
                 std::uint64_t leaves_sum = 0;
                 for (OrderId order_id : fifo) {

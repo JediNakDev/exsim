@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: unit tests
         run: make -j4 unit MODE=${{ matrix.mode }} EXTRA_CXXFLAGS=-Werror
-      - name: API and exchange integration
+      - name: integration tests
         run: make -j4 integration MODE=${{ matrix.mode }} EXTRA_CXXFLAGS=-Werror
   tsan:
     name: ThreadSanitizer (ubuntu-24.04)
@@ -30,7 +30,7 @@ jobs:
         run: sudo sysctl vm.mmap_rnd_bits=28
       - name: unit tests
         run: make -j4 unit MODE=release EXTRA_CXXFLAGS='-fsanitize=thread -g' EXTRA_LDFLAGS=-fsanitize=thread BUILD=build/tsan
-      - name: API and exchange integration
+      - name: integration tests
         run: make -j4 integration MODE=release EXTRA_CXXFLAGS='-fsanitize=thread -g' EXTRA_LDFLAGS=-fsanitize=thread BUILD=build/tsan
   benchmarks:
     name: benchmark build (ubuntu-24.04)
@@ -42,6 +42,29 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libbenchmark-dev
       - name: build benchmarks
         run: make -j4 MODE=bench bench-build
+      # A few hundred orders through a real exchange process; it fails on a wrong or missing reply, never on timing.
+      # The absolute BENCH_BUILD checks that make runs the client it just built.
+      - name: wire benchmark smoke run
+        run: make -j4 bench-wire BENCH_BUILD="$PWD/build/bench" EXTRA_CXXFLAGS=-Werror ARGS=--orders=300
+  fuzz:
+    name: fuzz harnesses (ubuntu-24.04, clang 19)
+    runs-on: ubuntu-24.04
+    # A few minutes of build, then 45 seconds per harness.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: install clang 19 and libFuzzer
+        run: sudo apt-get update && sudo apt-get install -y clang-19 libclang-rt-19-dev
+      - name: fuzz
+        run: make -j4 fuzz FUZZ_SECONDS=45 EXTRA_CXXFLAGS=-Werror
+      # The failing input (build/fuzz/<name>-crash-<sha1> and similar), to replay locally.
+      - name: keep the failing input
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-failure
+          path: build/fuzz/*-*
+          if-no-files-found: ignore
   format:
     name: format check (clang-format 18)
     runs-on: ubuntu-24.04

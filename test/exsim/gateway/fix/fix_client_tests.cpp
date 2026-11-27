@@ -18,7 +18,6 @@ std::string possdup_suffix(const fix::FixInboundMessageInfo& info) { return info
 
 struct RecordingHandler {
     Strings events;
-    std::string last_logout_text;
 
     void on_logon(const fix::FixInboundMessageInfo& info) { events.push_back("A:" + std::to_string(info.sequence)); }
     void on_execution_report(const fix44::ExecutionReport& report, const fix::FixInboundMessageInfo& info) {
@@ -44,10 +43,7 @@ struct RecordingHandler {
         events.push_back("j:" + std::to_string(info.sequence) + ":" + std::string(reject.reference_type.view()) + ":" +
                          std::to_string(reject.reason));
     }
-    void on_logout(std::string_view text) {
-        last_logout_text = std::string(text);
-        events.push_back("5");
-    }
+    void on_logout(std::string_view) { events.push_back("5"); }
 };
 
 using Wire = FixClientWire<RecordingHandler>;
@@ -164,7 +160,7 @@ TEST_CASE(gateway_fix_client, heartbeats_and_test_requests_both_directions) {
 TEST_CASE(gateway_fix_client, client_recovers_dropped_exchange_messages) {
     ConnectedClient connected;
     auto& client = connected.wire.client();
-    connected.exchange.user(1).drop_out_transmissions(1);
+    connected.exchange.drop_next_outbound_messages(1, 1);
     const auto now = connected.exchange.fix_time();
     CHECK(client.send_new_order_single(make_new_order_single("B1", exsim::Side::BUY, 100, 150 * kDollar), now));
     CHECK(client.send_new_order_single(make_new_order_single("B2", exsim::Side::BUY, 100, 150 * kDollar), now));
@@ -207,15 +203,16 @@ TEST_CASE(gateway_fix_client, reconnect_continues_sequences_and_recovers) {
     CHECK_EQ(client.session_day_state().expected_inbound_seq(), 5u);
 }
 
-TEST_CASE(gateway_fix_client, refused_logon_reports_logout_text) {
+TEST_CASE(gateway_fix_client, refused_logon_gets_no_reply) {
     FixTestExchange exchange;
     RecordingHandler handler;
     Wire wire(exchange, handler, client_settings("CLIENT1", "wrong"));
     wire.connect(false);
     wire.pump();
     CHECK(!wire.client().active());
-    CHECK(wire.client().wants_disconnect());
-    CHECK_EQ(handler.last_logout_text, std::string("invalid SenderCompID or Password"));
+    CHECK(wire.connection().wants_disconnect());
+    CHECK(handler.events.empty());
+    CHECK_EQ(wire.client().session_day_state().expected_inbound_seq(), 1u);
 }
 
 TEST_CASE(gateway_fix_client, logout_handshake) {

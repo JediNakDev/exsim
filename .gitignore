@@ -37,5 +37,8 @@ output/
 __pycache__/
 legacy/
 
-# Default local exchange configuration directory
-/exchanges/
+# Your exchange configs and their runtime files; only the examples are tracked.
+/config/*
+!/config/examples/
+/config/examples/*
+!/config/examples/*.conf

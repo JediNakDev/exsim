@@ -204,9 +204,12 @@ TEST_CASE(gateway_fix_resend, store_capacity_exhaustion_fails_closed) {
     CHECK_EQ(exchange.commands_of(1).size(), std::size_t{3});
     client.reconnect();
     client.send("A", "98=0|108=30|554=secret1|");
-    const auto messages = client.drain();
-    REQUIRE_EQ(messages.size(), std::size_t{1});
-    CHECK_EQ(messages[0].type(), std::string("5"));
+    CHECK(client.drain().empty());
+    CHECK(client.connection().wants_disconnect());
+    // A reset Logon not at MsgSeqNum 1 is refused too; the full store sends nothing.
+    client.reconnect();
+    client.send_at("A", 2, "98=0|108=30|141=Y|554=secret1|");
+    CHECK(client.drain().empty());
     CHECK(client.connection().wants_disconnect());
 }
 

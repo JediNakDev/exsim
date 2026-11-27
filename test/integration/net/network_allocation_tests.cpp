@@ -1,6 +1,7 @@
 // Runtime networking cycles must not allocate on the C++ heap after setup.
 // Counting uses the shared per-thread counter in test/framework/alloc_counter.cpp,
 // which reports nothing under ASan/TSan, so the test is skipped there.
+#include <algorithm>
 #include <cerrno>
 #include <common/clocks.hpp>
 #include "test/exsim/support/clients/tcp_client.hpp"
@@ -22,8 +23,13 @@ struct EchoEveryByteHandler {
     }
     void on_connection_closed(exsim::net::ConnectionId, exsim::net::CloseReason, int) noexcept {}
     void on_connection_data(exsim::net::ConnectionId id, exsim::net::ReceiveBuffer& buffer) noexcept {
-        server.send(id, buffer.readable());
-        buffer.consume(buffer.size());
+        const std::span<const char> bytes = buffer.readable();
+        const std::span<char> space = server.reserve_send_if_room(id, bytes.size());
+        if (space.size() == bytes.size()) {
+            std::ranges::copy(bytes, space.begin());
+            server.commit_send(id, bytes.size());
+        }
+        buffer.consume(bytes.size());
     }
 };
 }  // namespace
@@ -85,7 +91,7 @@ TEST_CASE(Network, connect_echo_close_and_udp_cycles_allocate_nothing_after_setu
                     client.receive();
                 }
                 server.flush_pending(echo);
-                echo_received = client.connection().receive_buffer().size() == 4;
+                echo_received = client.receive_buffer().size() == 4;
                 (void)clock.midnight_ns(realtime_ns());
             }
             every_cycle_passed = every_cycle_passed && echo_received && echo.connection_opened;

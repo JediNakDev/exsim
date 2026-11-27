@@ -8,7 +8,6 @@
 #include "server/config.hpp"
 #include "server/admin/core_admin.hpp"
 #include "server/core/exchange_core.hpp"
-#include "test/exsim/support/journal_canonical.hpp"
 #include "test/framework/test.hpp"
 
 #include <array>
@@ -31,6 +30,9 @@ inline const char* const kBaseConfig = R"(
 [engine]
 max_instruments = 4
 max_orders = 4096
+
+[market_data]
+port = 16000
 
 [instrument AAPL]
 tick_size = 0.01
@@ -219,7 +221,9 @@ struct HarnessWith {
         : server_config(config),
           sessions{recorder},
           market_data{recorder},
-          core(server_config, sessions, market_data, clock, options) {}
+          core(server_config, sessions, market_data, clock, options) {
+        core.open_journal();
+    }
 
     ServerConfig server_config;  // the core keeps a reference
     Recorder recorder;
@@ -253,13 +257,11 @@ struct CountingMarketData {
     std::uint64_t events = 0;
     std::uint64_t flushes = 0;
     std::uint64_t fills = 0;
-    std::uint64_t hash = 14695981039346656037ull;
     void on_events(std::span<const Event> batch) noexcept {
         ++batches;
         for (const Event& event : batch) {
             ++events;
             fills += event.type == EventType::Fill ? 1 : 0;
-            hash = server::journal::hash_event(event, hash);
         }
     }
     void flush() noexcept { ++flushes; }

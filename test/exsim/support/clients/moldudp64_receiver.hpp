@@ -105,7 +105,8 @@ public:
         ++stats_.packets;
         protocol::moldudp64::PacketReader reader;
         if (reader.reset(datagram) != protocol::Status::ok || reader.header.sequence == 0 ||
-            reader.header.sequence > std::numeric_limits<std::uint64_t>::max() - kMoldEndOfSessionCount) {
+            reader.header.sequence >
+                std::numeric_limits<std::uint64_t>::max() - protocol::moldudp64::kEndOfSessionCount) {
             ++stats_.malformed_packets;
             return PacketStatus::Malformed;
         }
@@ -121,7 +122,7 @@ public:
             next_sequence_ = header.sequence;
             started_ = true;
         }
-        if (header.count == kMoldEndOfSessionCount) {
+        if (header.count == protocol::moldudp64::kEndOfSessionCount) {
             ++stats_.end_of_session_packets;
             end_of_session_seen_ = true;
             end_of_session_sequence_ = header.sequence;
@@ -260,7 +261,7 @@ private:
         request.session = session_name_;
         request.sequence = next_sequence_;
         request.count = static_cast<std::uint16_t>(missing_run_end() - next_sequence_);
-        char bytes[kMoldRequestSize];
+        char bytes[kMoldHeaderSize];  // a request is a bare header
         (void)protocol::moldudp64::encode(request, bytes, sizeof bytes);
         request_ = {true, next_sequence_, now_ns, attempts};
         ++stats_.requests_sent;

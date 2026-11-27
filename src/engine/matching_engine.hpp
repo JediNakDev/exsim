@@ -1,0 +1,149 @@
+#ifndef EXSIM_ENGINE_MATCHING_ENGINE_HPP
+#define EXSIM_ENGINE_MATCHING_ENGINE_HPP
+
+// Multi-instrument matching engine. Pure and single-threaded: no I/O, no
+// clocks, no threads. Every input is a Command, every output is an Event
+// appended to a caller-owned EventBuffer, so a journaled command stream
+// replays to identical ordered active field values (never compare padding).
+//
+// Hot-path guarantee: after construction, handle() performs no heap
+// allocation (orders, price levels and id maps are all pre-sized from
+// EngineConfig). When capacity is exhausted orders are rejected with
+// RejectReason::CapacityExceeded rather than growing.
+//
+// Setup cost: the constructor and add_instrument allocate and zero-fill all
+// of their storage up front. If it does not fit they throw std::bad_alloc or
+// std::length_error rather than returning. The constructor sizes one order
+// pool, level pool and OrderId map shared by all instruments from max_orders;
+// add_instrument adds only that instrument's price ladders, which scale with
+// its price band. Size max_orders and price bands for physical memory.
+
+#include "engine/command.hpp"
+#include "engine/event.hpp"
+#include "engine/instrument.hpp"
+#include "common/types.hpp"
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <optional>
+#include <limits>
+#include <stdexcept>
+#include <type_traits>
+
+namespace exsim {
+
+struct EngineConfig {
+    std::size_t max_instruments = 64;
+    // Live (resting) orders across all instruments. A few megabytes at the
+    // default; set `[engine] max_orders` for larger books.
+    std::size_t max_orders = 1u << 16;
+    // Most quantity that may rest at one price on one side. A new or replaced
+    // order that would rest past it is rejected with CapacityExceeded, and an
+    // instrument whose max_order_qty exceeds it is refused. The server lowers
+    // it for a feed whose level quantity field is narrower.
+    std::uint64_t max_level_qty = std::numeric_limits<std::uint64_t>::max();
+};
+
+// Conservative bound for ANY command, including all-instrument phase changes.
+// Setup-time validation also bounds aggregate quantities and count fields.
+[[nodiscard]] inline std::size_t required_event_capacity(const EngineConfig& c) {
+    if (c.max_instruments == 0 || c.max_instruments > std::numeric_limits<InstrumentId>::max() || c.max_orders == 0 ||
+        c.max_orders > std::numeric_limits<std::uint32_t>::max())
+        throw std::invalid_argument("EngineConfig bounds");
+    const auto limit = std::numeric_limits<std::size_t>::max();
+    if (c.max_orders > (limit - 4) / 2 || c.max_instruments > (limit - 4 - 2 * c.max_orders) / 2)
+        throw std::length_error("event capacity");
+    const auto count = 2 * c.max_orders + 2 * c.max_instruments + 4;
+    if (count > limit / sizeof(Event)) throw std::length_error("event storage");
+    return count;
+}
+
+enum class HandleResult { Applied, InsufficientOutput };
+
+struct LevelInfo {
+    Price price;
+    std::uint64_t qty;
+    std::uint32_t order_count;
+};
+
+struct OrderInfo {
+    OrderId order_id;
+    ClOrdId cl_ord_id;
+    InstrumentId instrument;
+    SessionId session;
+    OwnerId owner;
+    Side side;
+    TimeInForce tif;
+    StpMode stp;
+    bool post_only;
+    Price price;
+    Quantity qty;
+    Quantity leaves_qty;
+    Quantity cum_qty;
+};
+
+// Indicative auction state during a call phase (feeds ITCH NOII 'I').
+struct AuctionIndicative {
+    bool crossed = false;                        // false => no executable volume
+    Price price = 0;                             // indicative uncross price
+    std::uint64_t paired_qty = 0;                // V(p*)
+    std::uint64_t imbalance_qty = 0;             // at price if crossed; total side difference otherwise
+    Aggressor imbalance_side = Aggressor::None;  // Buy/Sell surplus, None if balanced
+};
+
+class MatchingEngine {
+public:
+    explicit MatchingEngine(const EngineConfig& config = {});
+    ~MatchingEngine();
+
+    MatchingEngine(const MatchingEngine&) = delete;
+    MatchingEngine& operator=(const MatchingEngine&) = delete;
+    MatchingEngine(MatchingEngine&&) = delete;
+    MatchingEngine& operator=(MatchingEngine&&) = delete;
+
+    // Setup-time only (allocates the instrument's price ladders).
+    // Returns the new InstrumentId (1, 2, ...) or 0 if the config is invalid,
+    // the band exceeds the engine's tick limit, the symbol is taken or is
+    // eight NUL bytes, or max_instruments is reached. Throws if the ladders
+    // cannot be allocated.
+    [[nodiscard]] InstrumentId add_instrument(const InstrumentConfig& config);
+
+    // Before ANY mutation (including counters), require remaining output >=
+    // required_event_capacity(config). Otherwise return InsufficientOutput with
+    // engine AND output unchanged. Applied includes semantic rejection events.
+    // Implementations may use a tighter proven bound from a read-only preflight.
+    // ---- Hot path -------------------------------------------------------
+    [[nodiscard]] HandleResult handle(const NewOrder& cmd, EventBuffer& out);
+    [[nodiscard]] HandleResult handle(const CancelOrder& cmd, EventBuffer& out);
+    [[nodiscard]] HandleResult handle(const ReplaceOrder& cmd, EventBuffer& out);
+    [[nodiscard]] HandleResult handle(const MassCancel& cmd, EventBuffer& out);
+    [[nodiscard]] HandleResult handle(const SetPhase& cmd, EventBuffer& out);
+    [[nodiscard]] HandleResult handle(const Command& cmd, EventBuffer& out);
+
+    // ---- Queries (not latency critical, never allocate) ------------------
+    [[nodiscard]] std::size_t instrument_count() const noexcept;
+    [[nodiscard]] const InstrumentConfig* instrument(InstrumentId id) const noexcept;
+    [[nodiscard]] InstrumentId find_instrument(const Symbol& symbol) const noexcept;  // 0 if unknown
+    [[nodiscard]] Phase phase(InstrumentId id) const noexcept;
+    [[nodiscard]] std::optional<Price> best_bid(InstrumentId id) const noexcept;
+    [[nodiscard]] std::optional<Price> best_ask(InstrumentId id) const noexcept;
+    [[nodiscard]] std::optional<Price> last_trade_price(InstrumentId id) const noexcept;
+
+    // Writes up to `max_levels` levels of `side` in priority order (best
+    // first) into `out`; returns the number written.
+    std::size_t depth(InstrumentId id, Side side, LevelInfo* out, std::size_t max_levels) const noexcept;
+
+    [[nodiscard]] std::optional<OrderInfo> find_order(SessionId session, ClOrdId cl_ord_id) const noexcept;
+    [[nodiscard]] std::optional<OrderInfo> find_order(OrderId order_id) const noexcept;
+    [[nodiscard]] std::size_t live_order_count() const noexcept;
+
+    [[nodiscard]] AuctionIndicative auction_indicative(InstrumentId id) const noexcept;
+
+private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};
+
+}  // namespace exsim
+
+#endif

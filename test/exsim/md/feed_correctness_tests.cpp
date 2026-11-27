@@ -10,7 +10,7 @@
 
 #include <test/exsim/md/feed_harness.hpp>
 #include <test/exsim/support/command_gen.hpp>
-#include <test/exsim/support/format.hpp>
+#include <server/journal/format.hpp>
 #include <test/framework/test.hpp>
 
 #include <cstdio>
@@ -106,7 +106,7 @@ void run_feed(std::uint64_t seed, std::size_t command_count, bool tiny_engine, c
             const std::string mismatch = feed.clean_mismatch();
             if (!mismatch.empty())
                 FAIL("seed " + std::to_string(seed) + " command " + std::to_string(index) + " " +
-                     testsupport::format_command(command) + ": " + mismatch);
+                     server::journal::format_command(command) + ": " + mismatch);
         }
         if (!feed.handler.first_failure.empty())
             FAIL("seed " + std::to_string(seed) + ": " + feed.handler.first_failure);

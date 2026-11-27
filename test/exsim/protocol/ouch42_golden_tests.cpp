@@ -1,5 +1,5 @@
 #include "../../framework/test.hpp"
-#include <protocol/ouch42.hpp>
+#include "test/exsim/protocol/ouch42_client_codec.hpp"
 #include <random>
 using namespace exsim::protocol::ouch42;
 TEST_CASE(proto_ouch42_golden, EnterOrder) {

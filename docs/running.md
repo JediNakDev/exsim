@@ -1,0 +1,101 @@
+# Running an exchange
+
+One `exsim_exchanged` process runs one exchange. Build and start one from the repository root:
+
+```sh
+make -j4 apps
+./build/release/exsim_exchanged --config config/examples/exchange.conf
+```
+
+`--config PATH` is the only option; everything else, including the [admin socket](#runtime-commands), is in the config file. [config/examples/exchange.conf](../config/examples/exchange.conf) shows every setting with its default. Every start creates empty books and a new session name, generated at startup, shared by the MoldUDP64 feed and SoupBinTCP and shown as `session` in the ready line. External trading clients provide the orders. To run several exchanges, start several processes, each with its own config.
+
+## Ready line
+
+Once every listener is open, the process prints one JSON line to stdout:
+
+```json
+{"state":"running","address":"127.0.0.1","orderEntryPort":15000,"fixOrderEntryPort":52114,"ilinkOrderEntryPort":0,"marketDataProtocol":"itch50_moldudp64","marketDataAddress":"239.192.10.1","marketDataPort":16000,"recoveryPort":16001,"recoveryTransport":"udp","snapshotPort":0,"instrumentReplayPort":0,"backupMarketDataPort":0,"channelId":1,"session":"2499623000"}
+```
+
+Listener port zero in the config asks the OS for a port; the ready line has the actual one. A disabled listener reports port 0. Startup errors go to stderr with exit status 1. Bad arguments exit with 2.
+
+A test harness reads the line, trades, and stops the process:
+
+```python
+exchange = subprocess.Popen(["build/release/exsim_exchanged", "--config", "scenario.conf"],
+                            stdout=subprocess.PIPE, text=True)
+ports = json.loads(exchange.stdout.readline())
+# connect traders to ports["orderEntryPort"] ...
+exchange.terminate()
+exchange.wait()
+```
+
+## Stopping
+
+Ctrl+C (SIGINT), `kill <pid>` (SIGTERM), or SIGHUP shuts down cleanly: instruments close, end-of-day messages go out, sessions drain, the journal flushes, the admin socket file is removed, and the process exits with 0. If a journal write failed, or the journal did not drain before the end-of-day deadline, it prints `exsim_exchanged: journal PATH failed; it is incomplete` to stderr and exits with 1. `kill -9` skips all of that and leaves the socket file behind; remove it before reusing the path.
+
+Closing the terminal or SSH session that started the exchange can send it SIGHUP, which stops it as above. Use tmux, `nohup`, or a systemd unit to keep it running after you log out; under `nohup` it ignores SIGHUP.
+
+## Runtime commands
+
+Name a Unix socket in the config, and the exchange takes one command per connection on it:
+
+```ini
+[exchange]
+admin_socket = exsim.sock
+```
+
+A relative path is relative to the config file, like the journal. Leave the key out for no admin socket. Replies are lines ending in `OK` or `ERR <message>`:
+
+```sh
+echo 'phase AAPL continuous' | nc -U config/examples/exsim.sock
+echo 'fault user ALICE reject 1' | nc -U config/examples/exsim.sock
+```
+
+A command is one line of at most 4096 bytes, ended by a newline or by closing the write side, and must arrive within 5 s of connecting. It runs on the exchange's event loop; an invalid command leaves the exchange running.
+
+Read the reply to end of input: the exchange closes the connection after it, and its last line is `OK` or `ERR <message>`. Earlier lines can start with anything, including a symbol named `ERR`. A reply the client does not read within 1 s is cut off without that last line, so a stalled reader holds up trading for at most 1 s.
+
+Send `help` for the full syntax. Commands include `status`, `book AAPL [levels]`,
+`phase <SYMBOL|*> <closed|pre_open|continuous|halted|pre_close>`,
+`fault user <USER> <reject|delay|drop_out|disconnect|off> [n]`, and
+`fault md <drop|dup|reorder|rate|off> ...`. `shutdown` closes all instruments
+and drains the process, which then exits. Phase changes can enter auctions and
+uncross them on transition to continuous. Faults and phases are runtime state
+and reset on restart.
+
+The socket file is created with mode 0600, so only its owner can connect; there is no other access control. An existing path is refused. One client is served at a time and others wait. The resolved socket path is limited to 103 bytes on macOS and 107 on Linux. On Ubuntu, `nc -U` comes from `netcat-openbsd`; `socat - UNIX-CONNECT:exsim.sock` works too.
+
+## Trading connections
+
+Set each user's `protocol` to `ouch42`, `fix44`, or `ilink3`. All gateways share the same books. Public events use ITCH 5.0 over MoldUDP64 by default, or CME MDP 3.0 with `[market_data] protocol=mdp3`.
+
+Configure TCP listeners with `ouch_port`, `fix_port`, and `ilink_port`. The ready line reports them as `orderEntryPort`, `fixOrderEntryPort`, and `ilinkOrderEntryPort`. iLink is disabled when no iLink users or explicit listener are configured.
+
+MDP uses `snapshot_port` and `instrument_port` for recovery feeds and optional `backup_port` for a redundant incremental feed. `retransmit_port` is then an authenticated TCP replay listener; `recoveryTransport` reports `tcp`. ITCH recovery remains UDP. See the [CME profile, credentials, limits, and sample config](ilink-and-mdp.md).
+
+Listeners bind `bind_address`, which traders must be able to reach. A config needs at least one `[user]` and a nonzero `[market_data] port`; MDP recovery feeds with port 0 are off. Running exchanges need distinct feed address and port pairs, including MDP snapshot, instrument, and backup destinations; nothing checks this across processes. A unicast feed sends to one destination address; multicast needs a working network path.
+
+## Config files and disk state
+
+Config files are yours to keep next to your trading engine and in version control. They hold credentials, so keep them readable by their owner only. Books and sessions are not saved.
+
+Exchanges can use optional `[journal]` settings: `path`, `on_failure`, and `flush_interval_ms`. A relative `path` is relative to the config file. An exchange refuses a journal path whose last component is a symlink, and takes an exclusive lock on the file before truncating it, so a second running exchange that names the same journal fails to start and leaves the first one's history intact. The journal is opened last, after every listener, so a start refused for a busy port or a taken admin socket leaves the last run's journal alone.
+
+## Replaying a journal
+
+A journal holds the commands the exchange applied, each with the timestamp the exchange gave it and a digest of the events it produced. `journal_replay` feeds the commands to a fresh matching engine and checks each one's events against that digest. With the `[journal]` section of `config/examples/exchange.conf` uncommented, the example exchange writes `config/examples/exchange.journal`; after it stops:
+
+`make` builds it next to the exchange:
+
+```sh
+./build/release/journal_replay config/examples/exchange.journal
+```
+
+A clean run prints `replayed N commands and M events: every output matches the journal` and exits 0. That covers the records before the checkpoint at the end of the file, which every successful flush writes, including the one at shutdown. A write failure stops journaling, so later commands are not in the file, and it can leave the file without a valid checkpoint, which replay reports as truncated. Replay a journal its exchange is no longer writing: a flush during the read can be reported as damage, or leave the records after the checkpoint replay saw unchecked. Replay checks the header and the checkpoint first, then each record as it is read, so memory does not grow with the journal and the first record that diverges is reported before any later damage. Checksums catch damage, not tampering: replay trusts the header as the exchange trusts its config, and builds the same engine, so it needs the memory that exchange had. Otherwise it prints the first command whose output differs, with its sequence number and the replayed events, and exits 1; replaying an old journal with a new build shows where matching changed, as long as the build reads that journal's schema. A build reads only its own schema; schema 2 journals, written before output digests, cannot be replayed. A damaged or truncated journal is reported, with the record and byte offset when the problem is in a record, also with exit 1. The exchange itself never reads a journal: every start is empty.
+
+The legacy Exsim `fixp_sbe` protocol and `admin_port` are rejected; CME iLink 3 has its own FIXP/SBE gateway, and runtime commands use `admin_socket`.
+
+`ilink_account` is no longer a `[user <name>]` key and nothing replaces it; the simulator never used the value. A config that still has it fails to load with `<line>: unknown key 'ilink_account'`. Remove the line.
+
+See [architecture](architecture.md) for process boundaries.

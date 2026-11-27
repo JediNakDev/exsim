@@ -5,7 +5,7 @@ TEST_CASE(itch_runtime, counts_udp_send_failures_but_not_successes_or_disabled_f
     using namespace exsim;
     server::ServerConfig config;
     std::string error;
-    REQUIRE(server::load_config("test/fixtures/exchange.conf", config, error));
+    REQUIRE(server::load_config("config/examples/exchange.conf", config, error));
     config.market_data.retransmit_port = 0;
     config.market_data.retransmit_buffer = 32;
     MatchingEngine engine(config.engine.engine);

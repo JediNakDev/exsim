@@ -4,6 +4,8 @@
 #include "../../framework/test.hpp"
 
 #include <algorithm>
+#include <cstdint>
+#include <limits>
 #include <string>
 
 using namespace exsim;
@@ -11,6 +13,9 @@ using namespace exsim::server;
 
 namespace {
 const char* kMinimal = R"(
+[market_data]
+port = 16000
+
 [instrument AAPL]
 tick_size = 0.01
 min_price = 0.01
@@ -32,6 +37,7 @@ TEST_CASE(server_config_mdp, fixture_and_cme_identity) {
     CHECK_EQ(config.market_data.book_depth, 10);
     CHECK_EQ(config.instruments[0].cme_security_id, 800001);
     CHECK_EQ(std::string_view(config.instruments[0].cme_symbol.data(), 19), "ES-SIMULATED-FUTURE");
+    CHECK_EQ(config.engine.engine.max_level_qty, std::uint64_t{INT32_MAX - 1});
 }
 
 TEST_CASE(server_config_mdp, rejects_invalid_profile_without_truncating) {
@@ -68,17 +74,45 @@ reference_price = 10
     CHECK(!parse_config(prefix + instrument + "[instrument NQ]\ncme_security_id=800001\n", config, error));
 }
 
+// OUCH 4.2 Price(4) is unsigned 32-bit: an OUCH user could not be told about a
+// fill printed above 429,496.7295, so such an instrument is refused at load.
+TEST_CASE(server_config_mdp, ouch_user_limits_max_price_to_the_ouch_price_field) {
+    const std::string config_text =
+        "[market_data]\nprotocol = mdp3\nport = 19001\nsnapshot_port = 19002\ninstrument_port = 19003\n"
+        "replay_username = CME\nreplay_password = secret\n"
+        "[instrument ES]\ncme_security_id = 800001\ntick_size = 1\nmin_price = 1\nmax_price = 600000\n"
+        "reference_price = 150\n"
+        "[user ALICE]\nprotocol = fix44\nsession_id = 1\n";
+    ServerConfig config;
+    std::string error;
+    REQUIRE(parse_config(config_text, config, error));
+    CHECK(!parse_config(config_text + "[user BOB]\nprotocol = ouch42\nsession_id = 2\n", config, error));
+    CHECK(error.find("OUCH") != std::string::npos);
+}
+
+// Every start takes a fresh session name (src/main.cpp), so a configured name
+// would be replaced; the keys are refused instead of silently ignored.
+TEST_CASE(server_config, session_names_are_not_config_keys) {
+    for (const auto extra : {"[exchange]\nsoup_session = X\n", "[market_data]\nsession = X\n"}) {
+        ServerConfig config;
+        std::string error;
+        CHECK(!parse_config(std::string(kMinimal) + extra, config, error));
+        CHECK(error.find("unknown key") != std::string::npos);
+    }
+}
+
 TEST_CASE(server_config_mdp, rejects_keys_of_the_other_market_data_protocol) {
     const std::string mdp =
         "[market_data]\nprotocol = mdp3\nport = 19001\nsnapshot_port = 19002\ninstrument_port = 19003\n"
         "replay_username = CME\nreplay_password = secret\nmarket_segment_id = 2\n";
-    const std::string instrument =
-        "[instrument ES]\ncme_security_id = 800001\nmin_price = 1\nmax_price = 100\nreference_price = 10\n";
+    const std::string instrument_and_user =
+        "[instrument ES]\ncme_security_id = 800001\nmin_price = 1\nmax_price = 100\nreference_price = 10\n"
+        "[user ALICE]\nsession_id = 1\n";
     ServerConfig config;
     std::string error;
-    REQUIRE(parse_config(mdp + instrument, config, error));
-    for (const auto itch_key : {"session = EXSIM\n", "retransmit_buffer = 16\n", "noii_interval_ms = 5\n"}) {
-        CHECK(!parse_config(mdp + itch_key + instrument, config, error));
+    REQUIRE(parse_config(mdp + instrument_and_user, config, error));
+    for (const auto itch_key : {"retransmit_buffer = 16\n", "noii_interval_ms = 5\n"}) {
+        CHECK(!parse_config(mdp + itch_key + instrument_and_user, config, error));
         CHECK(error.find("ignored by the selected protocol") != std::string::npos);
     }
     for (const auto mdp_key :
@@ -86,14 +120,15 @@ TEST_CASE(server_config_mdp, rejects_keys_of_the_other_market_data_protocol) {
         CHECK(!parse_config(std::string(kMinimal) + "[market_data]\nport = 19001\n" + mdp_key, config, error));
         CHECK(error.find("ignored by the selected protocol") != std::string::npos);
     }
-    CHECK(parse_config(std::string(kMinimal) + "[market_data]\nport = 19001\nsession = ABC\nmarket_segment_id = 2\n",
-                       config, error));
+    CHECK(parse_config(
+        std::string(kMinimal) + "[market_data]\nport = 19001\nretransmit_buffer = 16\nmarket_segment_id = 2\n", config,
+        error));
 }
 
 TEST_CASE(server_config_ilink, current_schema_fixture_and_missing_credentials) {
     ServerConfig config;
     std::string error;
-    REQUIRE(load_config("test/fixtures/ilink3-mdp.conf", config, error));
+    REQUIRE(load_config("config/examples/cme.conf", config, error));
     REQUIRE_EQ(config.users.back().protocol, Protocol::Ilink3);
     CHECK_EQ(config.users.back().ilink_party_id, 1001u);
     CHECK_EQ(config.users.back().ilink_session, "AAA");
@@ -185,10 +220,11 @@ TEST_CASE(server_config, minimal_uses_defaults) {
     CHECK(cfg.users[0].cancel_on_disconnect);
     CHECK(cfg.exchange.name == "EXSIM");
     CHECK(cfg.users[0].username == "ALICE");
+    CHECK_EQ(cfg.engine.engine.max_level_qty, std::numeric_limits<std::uint64_t>::max());  // ITCH has no level total
 }
 
 // Large capacity is an explicit config choice: the defaults stay small
-// (documented in docs/api.md).
+// (documented in docs/running.md).
 TEST_CASE(server_config, defaults_are_small) {
     ServerConfig cfg;
     std::string err;
@@ -203,7 +239,7 @@ TEST_CASE(server_config, defaults_are_small) {
 TEST_CASE(server_config, example_file_parses) {
     ServerConfig cfg;
     std::string error;
-    REQUIRE(load_config("test/fixtures/exchange.conf", cfg, error));
+    REQUIRE(load_config("config/examples/exchange.conf", cfg, error));
     CHECK_EQ(cfg.instruments.size(), 1u);
     CHECK_EQ(cfg.users.size(), 2u);
     CHECK_EQ(cfg.exchange.ouch_port, 15000);
@@ -248,7 +284,6 @@ TEST_CASE(server_config, semantic_validation) {
     CHECK(fails("[instrument AAPL]\n"));                       // duplicate instrument
     CHECK(fails("[instrument B]\nmin_price = 0.015\n"));       // off-tick band
     CHECK(fails("[instrument B]\nreference_price = 2000\n"));  // outside default band
-    CHECK(fails("[exchange]\nsoup_session = ELEVENCHARS\n"));
     {
         ServerConfig cfg;
         std::string err;
@@ -268,9 +303,10 @@ ServerConfig parse_ok(const std::string& text) {
 
 }  // namespace
 
-TEST_CASE(server_config, trading_day_and_journal_keys) {
+TEST_CASE(server_config, trading_day_admin_socket_and_journal_keys) {
     ServerConfig cfg = parse_ok(std::string(kMinimal) + R"(
 [exchange]
+admin_socket = run/admin.sock
 trading_day_start = 09:30
 trading_day_end = 16:00:00.5
 
@@ -281,6 +317,8 @@ flush_interval_ms = 0
 )");
     CHECK_EQ(cfg.exchange.trading_day_start_ns, (9 * 3600 + 30 * 60) * 1'000'000'000ull);
     CHECK_EQ(cfg.exchange.trading_day_end_ns, 16 * 3600 * 1'000'000'000ull + 500'000'000ull);
+    CHECK_EQ(cfg.exchange.admin_socket, "run/admin.sock");
+    CHECK(parse_ok(kMinimal).exchange.admin_socket.empty());
     CHECK(cfg.journal_failure_policy == JournalFailurePolicy::Continue);
     CHECK_EQ(cfg.journal_flush_interval_ms, 0u);
 
@@ -305,6 +343,19 @@ flush_interval_ms = 0
     CHECK(fails("[exchange]\ntrading_day_start = 9h\n"));
     CHECK(fails("[journal]\non_failure = retry\n"));
     CHECK(fails("[journal]\nflush_interval_ms = soon\n"));
+}
+
+// A comment starts at `#` or `;` only at the start of a line or after a space
+// or tab, so both characters can appear inside a value.
+TEST_CASE(server_config, comment_characters_inside_a_value_are_kept) {
+    const ServerConfig cfg = parse_ok(std::string(kMinimal) +
+                                      "[exchange]\nadmin_socket = run;1/s.sock\n"
+                                      "[user BOB]\npassword = pa#ss\nsession_id = 2 ; second user\n"
+                                      "[market_data]\nport = 36000 # comment\n");
+    CHECK_EQ(cfg.exchange.admin_socket, "run;1/s.sock");
+    CHECK_EQ(cfg.users[1].password, "pa#ss");
+    CHECK_EQ(cfg.users[1].session_id, 2u);
+    CHECK_EQ(cfg.market_data.port, 36000);
 }
 
 TEST_CASE(server_config, day_times_parse_and_format) {
@@ -339,6 +390,30 @@ TEST_CASE(server_config, rejects_legacy_listeners_and_protocols) {
     for (const auto protocol : {"fixp_sbe", "sbe"})
         CHECK(!parse_config(std::string(kMinimal) + "\n[user LEGACY]\nsession_id=7\nprotocol=" + protocol + "\n", cfg,
                             err));
+}
+
+// A config with no user or no feed destination would start an exchange no one
+// can trade on or watch. 0.0.0.0 stays legal for remote traders.
+TEST_CASE(server_config, requires_a_user_and_a_feed_port) {
+    ServerConfig cfg;
+    std::string err;
+    std::string text(kMinimal);
+    CHECK(!parse_config(text.substr(0, text.find("[user ALICE]")), cfg, err));
+    CHECK_EQ(err, "0: no [user] sections");
+    CHECK(!parse_config(text + "[market_data]\nport = 0\n", cfg, err));
+    CHECK_EQ(err, "0: market_data.port must be nonzero");
+    CHECK(parse_config(text + "[exchange]\nbind_address = 0.0.0.0\n", cfg, err));
+}
+
+TEST_CASE(server_config, rejects_a_nul_byte_anywhere) {
+    // "a.sock\0suffix" would open a.sock: the OS reads paths as C strings.
+    std::string text = std::string(kMinimal) + "[exchange]\nadmin_socket = a.sock";
+    text += '\0';
+    text += "suffix\n";
+    ServerConfig cfg;
+    std::string err;
+    CHECK(!parse_config(text, cfg, err));
+    CHECK_EQ(err, "0: config contains a NUL byte");
 }
 
 // The publisher needs room for its largest ITCH message in one packet, so the

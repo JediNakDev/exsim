@@ -13,22 +13,25 @@ constexpr bool better_price(Side side, Price candidate, Price reference) noexcep
 }
 }  // namespace
 
+const BookBuilderConfig& ItchBookBuilder::validated(const BookBuilderConfig& config) {
+    if (config.max_instruments == 0 || config.max_instruments > std::numeric_limits<InstrumentId>::max())
+        throw std::invalid_argument("book builder max_instruments out of range");
+    if (config.max_orders == 0 || config.max_orders >= kNoOrderSlot)
+        throw std::invalid_argument("book builder max_orders out of range");
+    if (config.max_levels_per_side == 0 || config.max_levels_per_side > std::numeric_limits<std::size_t>::max() /
+                                                                            sizeof(Level) / 2 / config.max_instruments)
+        throw std::invalid_argument("book builder max_levels_per_side out of range");
+    return config;
+}
+
 ItchBookBuilder::ItchBookBuilder(const BookBuilderConfig& config)
     : max_instruments_(config.max_instruments),
       max_orders_(config.max_orders),
       max_levels_per_side_(config.max_levels_per_side),
-      order_slots_by_reference_(0) {
-    if (max_instruments_ == 0 || max_instruments_ > std::numeric_limits<InstrumentId>::max())
-        throw std::invalid_argument("book builder max_instruments out of range");
-    if (max_orders_ == 0 || max_orders_ >= kNoOrderSlot)
-        throw std::invalid_argument("book builder max_orders out of range");
-    if (max_levels_per_side_ == 0 ||
-        max_levels_per_side_ > std::numeric_limits<std::size_t>::max() / sizeof(Level) / 2 / max_instruments_)
-        throw std::invalid_argument("book builder max_levels_per_side out of range");
+      order_slots_by_reference_(validated(config).max_orders) {
     orders_ = std::make_unique<OrderSlot[]>(max_orders_);
     levels_ = std::make_unique<Level[]>(max_instruments_ * 2 * max_levels_per_side_);
     instruments_ = std::make_unique<InstrumentRecord[]>(max_instruments_ + 1);
-    order_slots_by_reference_ = exsim::util::FlatHashMap<std::uint32_t>(max_orders_);
     for (std::size_t slot = 0; slot < max_orders_; ++slot)
         orders_[slot].next = slot + 1 < max_orders_ ? static_cast<std::uint32_t>(slot + 1) : kNoOrderSlot;
     free_order_slot_ = 0;

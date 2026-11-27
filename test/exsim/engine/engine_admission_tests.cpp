@@ -342,8 +342,59 @@ TEST_CASE(engine_admission, rejections_do_not_consume_order_ids) {
 
 // ---- NewOrder validation: capacity -------------------------------------------
 
+// The level check runs before matching, so a full-size order must fit a level.
+TEST_CASE(engine_instrument, refuses_an_order_cap_above_max_level_qty) {
+    MatchingEngine engine(small_engine_config(1024, /*max_level_qty=*/100));
+    InstrumentConfig config = standard_instrument_config("WIDE");
+    config.max_order_qty = 101;
+    CHECK_EQ(engine.add_instrument(config), InstrumentId{0});
+    config.max_order_qty = 100;
+    CHECK_EQ(engine.add_instrument(config), InstrumentId{1});
+}
+
+// A feed that publishes level totals in a narrow field sets max_level_qty; an
+// order that would rest past it is refused instead of reaching the feed.
+TEST_CASE(engine_capacity, rejects_an_order_that_would_rest_past_max_level_qty) {
+    Harness h(Phase::Continuous, 1024, /*max_level_qty=*/100);
+    h.rest(1, 1, Side::BUY, 1000, 60);
+    NewOrder over = h.limit(1, 2, Side::BUY, 1000, 41);
+    h.send(over);
+    check_new_order_rejected(h, over, RejectReason::CapacityExceeded);
+    const OrderId filler = h.rest(1, 2, Side::BUY, 1000, 40);
+    const OrderId other_price = h.rest(1, 3, Side::BUY, 900, 100);
+    CHECK_EQ(h.engine().live_order_count(), std::size_t{3});
+
+    // An IOC cannot rest, so the level does not limit it.
+    NewOrder ioc = h.limit(1, 4, Side::BUY, 1000, 41);
+    ioc.tif = TimeInForce::IOC;
+    h.send(ioc);
+    REQUIRE_EQ(h.event_count(), std::size_t{2});
+    CHECK(h.event(0).type == EventType::Accepted);
+    CHECK(h.event(1).type == EventType::Canceled);
+
+    // A replace that loses priority must fit the target level without its own old leaves.
+    h.replace(1, 2, 5, 1000, 41);
+    REQUIRE_EQ(h.event_count(), std::size_t{1});
+    check_rejected(h.event(0), CommandType::Replace, RejectReason::CapacityExceeded, 1, 5, 2, filler, h.instrument());
+    h.replace(1, 3, 6, 1000, 1);
+    REQUIRE_EQ(h.event_count(), std::size_t{1});
+    check_rejected(h.event(0), CommandType::Replace, RejectReason::CapacityExceeded, 1, 6, 3, other_price,
+                   h.instrument());
+    h.replace(1, 2, 7, 1000, 30);
+    REQUIRE_EQ(h.event_count(), std::size_t{1});
+    CHECK(h.event(0).type == EventType::Replaced);
+    CHECK(h.event(0).replaced.priority_kept);
+    h.replace(1, 7, 8, 1000, 40);  // 60 + 40 fills the level exactly
+    REQUIRE_EQ(h.event_count(), std::size_t{2});
+    CHECK(h.event(0).type == EventType::Replaced);
+    CHECK(!h.event(0).replaced.priority_kept);
+    CHECK(h.event(1).type == EventType::Rested);
+    CHECK_EQ(h.engine().live_order_count(), std::size_t{3});
+}
+
 TEST_CASE(engine_capacity, rejects_when_live_orders_reach_max_orders) {
     Harness h(Phase::Continuous, 2);
+    CHECK_EQ(h.engine().live_order_count(), std::size_t{0});
     h.rest(1, 1, Side::BUY, 1000, 10);
     h.rest(1, 2, Side::BUY, 900, 10);
     CHECK_EQ(h.engine().live_order_count(), std::size_t{2});

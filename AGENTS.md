@@ -5,7 +5,7 @@
 - Start with `README.md`, then `CONTEXT.md`, then the relevant source and tests.
 - Keep docs focused on topics that need more depth than the README.
 - Match the README's short, direct writing style. Do not add dated reports or long task histories.
-- Open review findings live in `TODO.md` and GitHub issues. A finding is fixed only when the code changed and a check proves it.
+- Open review findings live in GitHub issues. A finding is fixed only when the code changed and a check proves it.
 
 ## Keep it simple
 
@@ -34,11 +34,11 @@ Judge every change against these themes, in this order. `CONTEXT.md` has the det
 
 ## User constraints
 
-- Product: API-managed empty exchange processes. External trading engines supply all orders and liquidity.
+- Product: empty exchange processes, one per exchange, started from a config file. External trading engines supply all orders and liquidity.
 - No web frontend, built-in trader strategies, or PostgreSQL. Keep live exchange state in RAM, with config files and optional logs on disk.
 - Language: C++23 for production builds, tests, and editor tooling.
-- Management: an OpenAPI-described C++ HTTP API. Trading engines connect directly to each exchange's protocol endpoints.
-- Active verification: unit and integration tests on macOS and local OrbStack Ubuntu. Fuzz and end-to-end suites are deferred.
+- Management: run `exsim_exchanged --config PATH` directly and stop it with a signal. Runtime commands go over its owner-only Unix admin socket. No HTTP management API (user decision 2026-11-23). Trading engines connect directly to each exchange's protocol endpoints.
+- Active verification: unit and integration tests on macOS and local OrbStack Ubuntu, plus libFuzzer harnesses for every parser of untrusted input (`make fuzz`, user decision 2026-11-24). End-to-end suites are deferred.
 - Do not edit `README.md` unless the user asks for a specific change.
 - Simulation, matching, exchange protocols, accounting, and simulated time belong in C++.
 - Never include a co-author attribution in commits. Avoid em dashes in responses, comments, and new prose.

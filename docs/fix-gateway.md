@@ -1,13 +1,13 @@
 # FIX 4.4 gateway integration
 
-Include [`gateway/fix/fix_connection.hpp`](../lib/include/gateway/fix/fix_connection.hpp)
-and [`gateway/fix/fix_user_state.hpp`](../lib/include/gateway/fix/fix_user_state.hpp)
+Include [`gateway/fix/fix_connection.hpp`](../src/gateway/fix/fix_connection.hpp)
+and [`gateway/fix/fix_user_state.hpp`](../src/gateway/fix/fix_user_state.hpp)
 for the exchange side. The test client is
 [`fix_client.hpp`](../test/exsim/support/clients/fix_client.hpp) in test support.
 All types are in `exsim::gateway::fix`; implementations are header-only C++23
 templates.
 
-- Output goes to a `gateway::ByteSink` ([`gateway/byte_sink.hpp`](../lib/include/gateway/byte_sink.hpp)):
+- Output goes to a `gateway::ByteSink` ([`gateway/byte_sink.hpp`](../src/gateway/byte_sink.hpp)):
   `char* prepare(size_t)` and `void commit(size_t)`, both noexcept.
 - `FixTime{monotonic_ns, realtime_ns}`: injected timer and Unix wire clocks.
 - `FixSessionSettings`: framing/held-message bounds, heartbeat maximum and timeouts.
@@ -32,11 +32,10 @@ templates.
 - `begin_logout(text, ctx)` starts the exchange-initiated Logout handshake.
 - Context supplies authenticate, bind/unbind, instrument lookups, submit, now/realtime_ns.
 - Connection IDs use `server::ConnectionId`, with packing from net IDs owned by the server.
-- `submit` may return void (standalone contexts) or `server::SubmitResult` (ExchangeCore).
-- Applied/Deferred mean success; other results receive protocol application rejections.
-- Optional Context `consume_injected_reject(session)` and `consume_drop_out(session)`
+- `submit` returns `server::SubmitResult`. Applied/Deferred mean success; other
+  results receive protocol application rejections.
+- Context `consume_injected_reject(session)` and `consume_drop_out(session)`
   connect ExchangeCore admin faults directly to gateway application reports.
-- Local `inject_new_order_rejects`/`drop_out_transmissions` support standalone contexts.
 - `FixClient<Handler, Sink>(handler, FixClientSettings)` owns client day state.
 - `connect(sink, reset, FixTime)` sends Logon; `on_data`, `on_timer`, `logout`,
   `on_disconnected` supply the client transport lifecycle.
@@ -64,7 +63,11 @@ Authenticated sequence reset clears the resend store and both sequence counters,
 but preserves tokens, order records and ExecIDs. Duplicate low non-PossDup messages
 log out; a low PossDup message, GapFill included, is ignored and never advances
 expected sequence. A duplicate early ResendRequest already held is serviced once.
-MsgSeqNum above 2^64 - 2 is refused with Logout so expected never wraps.
+MsgSeqNum above 2^64 - 2 is refused so expected never wraps. A Logon refused for
+a bad field, CompID or Password, a user already logged on, or an exhausted store
+closes the connection without a Logout, which would need a MsgSeqNum the session
+has not assigned. A Logon with MsgSeqNum too low, or with ResetSeqNumFlag(141)=Y
+and MsgSeqNum other than 1, gets a sequenced Logout unless the store is exhausted.
 
 Live output that overflows the sink disconnects while stored reports remain
 recoverable. A resend that does not fit pauses and resumes from the session
@@ -89,7 +92,6 @@ arrival order and allow session timer/recovery work. No socket reactor or standa
 CLI is included in this component.
 
 The existing codec handles application decode/encode, framing and semantic field
-reads. A local frame writer is restricted to PossDup rebuilds because the codec's
-Builder has no raw-field splice operation; original application body bytes are
-copied intact. Raw header scans are only used for malformed messages the codec
+reads. PossDup rebuilds use the codec's Builder and copy the original application
+body bytes intact with `raw_fields`. Raw header scans are only used for malformed messages the codec
 rejects, to recover reference sequence/type and the duplicate tag for Reject(3).

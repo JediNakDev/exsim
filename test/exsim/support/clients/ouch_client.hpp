@@ -26,8 +26,8 @@
 // to login() on the new connection and the server replays what was missed.
 
 #include "gateway/byte_sink.hpp"
-#include "protocol/ouch42.hpp"
-#include "protocol/soupbintcp.hpp"
+#include "test/exsim/protocol/ouch42_client_codec.hpp"
+#include "test/exsim/protocol/soupbintcp_client_codec.hpp"
 #include "common/types.hpp"
 
 #include <array>

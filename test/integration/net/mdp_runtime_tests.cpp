@@ -1,5 +1,4 @@
-#include "api/api_json.hpp"
-#include "api/exchange_service.hpp"
+#include "server/admin/core_admin.hpp"
 #include "server/runtime/server_runtime.hpp"
 #include "test/exsim/gateway/fix/fix_test_support.hpp"
 #include "test/exsim/gateway/ilink/ilink_test_support.hpp"
@@ -7,7 +6,6 @@
 #include "test/framework/test.hpp"
 
 #include <arpa/inet.h>
-#include <cstdlib>
 #include <fstream>
 #include <functional>
 #include <poll.h>
@@ -113,7 +111,7 @@ void expect_template(const std::vector<char>& bytes, unsigned id, unsigned schem
     CHECK_EQ(message.header.template_id, id);
     CHECK_EQ(message.header.schema_id, schema);
 }
-void fix_exchange(int fd, std::string_view message, const Pump& pump) {
+std::string fix_exchange(int fd, std::string_view message, const Pump& pump) {
     send_text(fd, message);
     std::string response;
     const auto deadline = common::monotonic_ns() + 2000000000;
@@ -129,35 +127,10 @@ void fix_exchange(int fd, std::string_view message, const Pump& pump) {
         if (protocol::fix44::frame_size(std::span(response), size) == protocol::Status::ok && size <= response.size()) {
             REQUIRE(response.find("35=3\1") == std::string::npos);
             REQUIRE(response.find("35=5\1") == std::string::npos);
-            return;
+            return response;
         }
     }
     FAIL("FIX response timeout");
-}
-struct TempDirectory {
-    std::filesystem::path path;
-    TempDirectory() {
-        char text[] = "/tmp/exsim-mdp-XXXXXX";
-        const char* result = ::mkdtemp(text);
-        REQUIRE(result);
-        path = result;
-    }
-    ~TempDirectory() {
-        std::error_code error;
-        std::filesystem::remove_all(path, error);
-    }
-};
-api::HttpResponse api_request(api::ExchangeService& service, std::string method, std::string path,
-                              std::string body = {}) {
-    api::HttpRequest request;
-    request.method = std::move(method);
-    request.path = std::move(path);
-    request.body = std::move(body);
-    return service.handle(request);
-}
-std::string config_json(const std::string& text) {
-    api::ApiJsonWriter writer;
-    return writer.begin_object().key("config").string(text).end_object().take();
 }
 std::string ilink_user_text() {
     return "\n[user ILINK]\nprotocol=ilink3\nsession_id=3\nowner=3\ncancel_on_disconnect=true\n"
@@ -246,55 +219,30 @@ TEST_CASE(mdp_runtime, fix_orders_udp_redundancy_snapshots_and_tcp_recovery) {
     CHECK(runtime.finished());
 }
 
-TEST_CASE(mdp_runtime, api_managed_exchange_readiness_redaction_conflicts_and_restart) {
+// Broadcast without SO_BROADCAST fails on both macOS and Linux, so every MDP
+// feed send fails; status shows the count while the exchange runs.
+TEST_CASE(mdp_runtime, status_counts_udp_send_failures) {
     Feeds feeds;
-    TempDirectory directory;
-    const char* build = std::getenv("EXSIM_BUILD");
-    api::ExchangeService service(directory.path,
-                                 std::filesystem::path(build ? build : "build/release") / "exsim_exchanged");
-    const auto text = feeds.config_text() + ilink_user_text();
-    const auto created = api_request(service, "POST", "/v1/exchanges", config_json(text));
-    REQUIRE_EQ(created.status, 201);
-    REQUIRE(created.body.find("exsim-replay") == std::string::npos);
-    REQUIRE(created.body.find("[REDACTED]") != std::string::npos);
-    REQUIRE(created.body.find(std::string(43, 'A')) == std::string::npos);
-    const auto json = api::parse_json(created.body);
-    const auto path = "/v1/exchanges/" + json.find("id")->text;
-    const auto started = api_request(service, "POST", path + "/start");
-    REQUIRE_EQ(started.status, 200);
-    const auto running = api::parse_json(started.body);
-    const auto* connections = running.find("runtime")->find("connections");
-    REQUIRE(connections);
-    CHECK_EQ(connections->find("marketDataProtocol")->text, "mdp3_sbe");
-    CHECK_EQ(connections->find("recoveryTransport")->text, "tcp");
-    expect_template(datagram(feeds.primary, {}, 4), 4, 1);
-    auto alice = connect_port(static_cast<std::uint16_t>(std::stoul(connections->find("ilinkOrderEntryPort")->text)));
-    server::ServerConfig config;
-    std::string error;
-    REQUIRE(server::parse_config(text, config, error));
-    ilink_logon(alice.fd(), config.users.back(), 1700000000000001ull, {});
-    ilink_send(alice.fd(), ilink_test::order(config.users.back(), 1, 1, "MANAGED", 1, 7));
-    CHECK_EQ(ilink_packet(alice.fd(), {}).id(), 522);
-    expect_template(datagram(feeds.primary, {}, 46), 46, 1);
-    // Cross-protocol destination conflicts include snapshot and definition feeds.
-    auto other_text = text;
-    auto position = other_text.find("port = " + std::to_string(feeds.p.port));
-    other_text.replace(position, std::string("port = " + std::to_string(feeds.p.port)).size(),
-                       "port = " + std::to_string(feeds.s.port));
-    position = other_text.find("snapshot_port = " + std::to_string(feeds.s.port));
-    other_text.replace(position, std::string("snapshot_port = " + std::to_string(feeds.s.port)).size(),
-                       "snapshot_port = " + std::to_string(feeds.p.port));
-    const auto other = api_request(service, "POST", "/v1/exchanges", config_json(other_text));
-    REQUIRE_EQ(other.status, 201);
-    const auto other_json = api::parse_json(other.body);
-    CHECK_EQ(api_request(service, "POST", "/v1/exchanges/" + other_json.find("id")->text + "/start").status, 409);
-    alice.close();
-    REQUIRE_EQ(api_request(service, "POST", path + "/stop").status, 200);
-    const auto restart = api_request(service, "POST", path + "/start");
-    REQUIRE_EQ(restart.status, 200);
-    const auto restarted = api::parse_json(restart.body);
-    CHECK_EQ(restarted.find("runtime")->find("liveOrders")->text, "0");
-    REQUIRE_EQ(api_request(service, "POST", path + "/stop").status, 200);
+    for (const bool broadcast : {false, true}) {
+        server::ServerConfig config;
+        std::string error;
+        REQUIRE(server::parse_config(feeds.config_text(), config, error));
+        if (broadcast) config.market_data.address = "255.255.255.255";
+        server::ServerRuntimeOptions options;
+        options.log = nullptr;
+        server::ServerRuntime runtime(config, options);
+        REQUIRE(runtime.start().empty());
+        runtime.poll_once();
+        std::string reply;
+        server::CoreAdmin(runtime.core()).execute_line("status", reply);
+        const auto at = reply.find(" send_failures=");
+        REQUIRE(at != std::string::npos);
+        const auto failures = std::stoull(reply.substr(at + std::string_view(" send_failures=").size()));
+        if (broadcast)
+            CHECK_GT(failures, 0u);
+        else
+            CHECK_EQ(failures, 0u);
+    }
 }
 
 TEST_CASE(ilink_runtime, private_fills_correlate_with_mdp_and_replay_over_real_sockets) {
@@ -361,5 +309,45 @@ TEST_CASE(ilink_runtime, private_fills_correlate_with_mdp_and_replay_over_real_s
     runtime.request_shutdown();
     const auto stopped = common::monotonic_ns() + 4000000000;
     while (!runtime.finished() && common::monotonic_ns() < stopped) runtime.poll_once();
+    CHECK(runtime.finished());
+}
+
+// A level total past MDP's Int32 quantity would stop the feed and end the
+// trading day for every session, so the engine refuses the order instead.
+TEST_CASE(mdp_runtime, an_order_past_the_level_quantity_limit_is_rejected_and_the_exchange_keeps_running) {
+    Feeds feeds;
+    std::string text = feeds.config_text();
+    const std::string_view small_qty = "max_order_qty = 1000\n";
+    const auto qty = text.find(small_qty);
+    REQUIRE(qty != std::string::npos);
+    text.replace(qty, small_qty.size(), "max_order_qty = 1100000000\n");
+    server::ServerConfig config;
+    std::string error;
+    REQUIRE(server::parse_config(text, config, error));
+    server::ServerRuntimeOptions options;
+    options.log = nullptr;
+    options.day_time_at_start = fix_test::kSessionStartNs;
+    server::ServerRuntime runtime(config, options);
+    REQUIRE(runtime.start().empty());
+    const Pump pump = [&] { runtime.poll_once(); };
+    auto alice = connect_port(runtime.listen_endpoint<server::runtime::FixGateway>().port);
+    fix_exchange(alice.fd(), fix_test::client_message("A", 1, "98=0|108=30|554=alice|", "ALICE"), pump);
+    fix_exchange(
+        alice.fd(),
+        fix_test::client_message("D", 2, fix_test::new_order_fields("B1", "1", 1100000000, "150", "ES"), "ALICE"),
+        pump);
+    const std::string rejected = fix_exchange(
+        alice.fd(),
+        fix_test::client_message("D", 3, fix_test::new_order_fields("B2", "1", 1100000000, "150", "ES"), "ALICE"),
+        pump);
+    CHECK(rejected.find("11=B2\1") != std::string::npos);
+    CHECK(rejected.find("39=8\1") != std::string::npos);
+    CHECK(rejected.find("58=CAPACITY_EXCEEDED\1") != std::string::npos);
+    for (int pass = 0; pass < 20; ++pass) pump();
+    CHECK_EQ(runtime.core().engine().live_order_count(), 1u);
+    CHECK(!runtime.core().shutdown_requested());
+    runtime.request_shutdown();
+    const auto deadline = common::monotonic_ns() + 4000000000;
+    while (!runtime.finished() && common::monotonic_ns() < deadline) runtime.poll_once();
     CHECK(runtime.finished());
 }

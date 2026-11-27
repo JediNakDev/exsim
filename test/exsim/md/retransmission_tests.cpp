@@ -33,8 +33,8 @@ Bytes request_bytes(std::string_view session, std::uint64_t sequence, std::uint1
     request.session = name;
     request.sequence = sequence;
     request.count = count;
-    Bytes bytes(md::kMoldRequestSize);
-    REQUIRE_EQ(protocol::moldudp64::encode(request, bytes.data(), bytes.size()), md::kMoldRequestSize);
+    Bytes bytes(md::kMoldHeaderSize);
+    REQUIRE_EQ(protocol::moldudp64::encode(request, bytes.data(), bytes.size()), md::kMoldHeaderSize);
     return bytes;
 }
 

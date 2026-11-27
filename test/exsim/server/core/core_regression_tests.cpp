@@ -21,6 +21,7 @@ struct DiscardingPacketSink {
 
 // The real ITCH publisher as MarketData: on_events and on_timer return its
 // md::PublishStatus (the core ignores it), and state()/stop_reason() are exposed.
+// Its packets go nowhere, so no send fails.
 struct PublisherMarketData {
     explicit PublisherMarketData(Recorder&) : publisher(md::PublisherConfig{}, DiscardingPacketSink{}) {}
 
@@ -29,6 +30,7 @@ struct PublisherMarketData {
     md::PublishStatus on_timer(Timestamp now) { return publisher.poll_heartbeat(now); }
     [[nodiscard]] md::PublisherState state() const noexcept { return publisher.state(); }
     [[nodiscard]] md::PublishStatus stop_reason() const noexcept { return publisher.stop_reason(); }
+    [[nodiscard]] std::uint64_t send_failure_count() const noexcept { return 0; }
 
     md::MarketDataPublisher<DiscardingPacketSink> publisher;
 };
@@ -138,7 +140,7 @@ TEST_CASE(server_core_review, market_data_publisher_failures_are_visible) {
 
     REQUIRE_EQ(h.core.submit(limit_order(1, 1, kAapl, Side::BUY, 1'000'000, 10)), SubmitResult::Applied);
     std::string reply = h.admin("status");
-    CHECK(contains(reply, "md state=live stop_reason=none\n"));
+    CHECK(contains(reply, "md state=live stop_reason=none send_failures=0\n"));
 
     // An event for an instrument the publisher does not know stops the feed.
     REQUIRE_EQ(h.core.submit(limit_order(1, 2, kMsft, Side::BUY, 1'000'000, 10)), SubmitResult::Applied);
@@ -149,7 +151,7 @@ TEST_CASE(server_core_review, market_data_publisher_failures_are_visible) {
     h.clock.day += kSecond;
     h.core.timer(h.clock.day);
     reply = h.admin("status");
-    CHECK(contains(reply, "md state=stopped stop_reason=unknown_instrument\n"));
+    CHECK(contains(reply, "md state=stopped stop_reason=unknown_instrument send_failures=0\n"));
 }
 
 TEST_CASE(server_core_review, market_data_state_unavailable_without_hooks) {

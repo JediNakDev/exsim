@@ -1,8 +1,12 @@
 #include "md/mdp_publisher.hpp"
 #include "md/mdp_replay_session.hpp"
+#include "test/exsim/support/command_gen.hpp"
+#include "server/journal/format.hpp"
 #include "test/framework/test.hpp"
 #include "test/framework/alloc_counter.hpp"
 
+#include <algorithm>
+#include <array>
 #include <map>
 #include <random>
 
@@ -12,6 +16,7 @@ namespace cme = protocol::cme;
 struct Packet {
     std::vector<char> bytes;
     md::MdpStream stream;
+    bool operator==(const Packet&) const = default;
 };
 struct Capture {
     std::vector<Packet>* packets;
@@ -58,6 +63,7 @@ struct Book {
     std::uint32_t report = 0;
 };
 struct Consumer {
+    std::size_t depth = 10;  // the publisher's book_depth
     std::map<std::int32_t, Book> books;
     unsigned end_events = 0;
     bool batch_ended = false;
@@ -103,7 +109,7 @@ struct Consumer {
                 if (action == 0) {
                     REQUIRE(rank <= side.size());
                     side.insert(side.begin() + rank, level);
-                    if (side.size() > 10) side.resize(10);
+                    if (side.size() > depth) side.resize(depth);
                 } else {
                     REQUIRE(rank < side.size());
                     if (action == 1)
@@ -125,8 +131,7 @@ struct Consumer {
             const auto& book = books[instruments[instrument].cme_security_id];
             for (const auto side : {Side::BUY, Side::SELL}) {
                 std::array<LevelInfo, 10> levels{};
-                const auto count =
-                    engine.depth(static_cast<InstrumentId>(instrument + 1), side, levels.data(), levels.size());
+                const auto count = engine.depth(static_cast<InstrumentId>(instrument + 1), side, levels.data(), depth);
                 const auto& actual = side == Side::BUY ? book.bids : book.asks;
                 REQUIRE_EQ(actual.size(), count);
                 for (std::size_t i = 0; i < count; ++i) {
@@ -273,6 +278,114 @@ TEST_CASE(mdp_publisher, seeded_command_stream_matches_engine_at_every_boundary)
             exchange.order(id, (random() & 1) ? Side::BUY : Side::SELL, 9000 + (random() % 21) * 100, 1 + random() % 9,
                            &consumer);
     }
+}
+
+TEST_CASE(mdp_publisher, changes_behind_the_tenth_level_publish_nothing) {
+    Exchange exchange;
+    Consumer consumer;
+    for (ClOrdId id = 1; id <= 12; ++id)  // bids 10000 down to 8900; the tenth level is 9100
+        exchange.order(id, Side::BUY, 10100 - static_cast<Price>(id) * 100, 5, &consumer);
+    const auto sequence = exchange.publisher.next_sequence();
+    exchange.order(13, Side::BUY, 8800, 4, &consumer);
+    CHECK(exchange.packets.empty());
+    CancelOrder cancel;
+    cancel.session = 1;
+    cancel.orig_cl_ord_id = 11;  // 9000
+    exchange.submit(Command{cancel}, &consumer);
+    CHECK(exchange.packets.empty());
+    ReplaceOrder replace;
+    replace.session = 1;
+    replace.orig_cl_ord_id = 12;  // 8900 to 8700
+    replace.cl_ord_id = 14;
+    replace.price = 8700;
+    replace.qty = 3;
+    exchange.submit(Command{replace}, &consumer);
+    CHECK(exchange.packets.empty());
+    CHECK_EQ(exchange.publisher.next_sequence(), sequence);
+
+    exchange.order(15, Side::BUY, 9100, 1, &consumer);  // the tenth level grows
+    CHECK_EQ(exchange.packets.size(), 1u);
+    cancel.orig_cl_ord_id = 1;  // the best bid goes and 8800 becomes the tenth level
+    exchange.submit(Command{cancel}, &consumer);
+    CHECK_EQ(exchange.packets.size(), 1u);
+}
+
+// The reference publisher also gets an AuctionSummary for every instrument in every batch, which makes it
+// recompute both sides of every instrument, as the publisher did before it skipped changes behind its levels.
+// A consumer applies only the reference's incremental packets, never a snapshot that would hide a missed
+// update, and checks them against the engine, so a rule that also kept the reference from recomputing still
+// fails. Both must send the same bytes, snapshots included, while the books run deeper than the published
+// levels: ten for odd seeds, three for even ones.
+TEST_CASE(mdp_publisher, skipping_deep_changes_sends_the_same_bytes_as_recomputing_every_batch) {
+    const server::journal::JournalSetup setup = testsupport::fuzz_setup(false, 2);
+    server::ServerConfig config = mdp_config();
+    config.engine.engine = setup.engine;
+    config.instruments = setup.instruments;
+    for (std::size_t index = 0; index < config.instruments.size(); ++index)
+        config.instruments[index].cme_security_id = 800001 + static_cast<std::int32_t>(index);
+    const auto instrument_count = static_cast<InstrumentId>(config.instruments.size());
+    std::size_t deep_changes = 0;  // resting-book changes behind the last level of a side that shows them all
+    // Few phase changes and mass cancels, so the books grow past ten levels between them.
+    const testsupport::CommandWeights weights{.add = 80, .cancel = 8, .replace = 10, .mass = 1, .phase = 1};
+    for (std::uint64_t seed = 1; seed <= 5; ++seed) {
+        const std::uint8_t depth = seed % 2 ? 10 : 3;
+        config.market_data.book_depth = depth;
+        MatchingEngine engine(config.engine.engine);
+        for (const auto& instrument : config.instruments) REQUIRE(engine.add_instrument(instrument) != 0);
+        EventBuffer events(required_event_capacity(config.engine.engine));
+        std::vector<Event> forced;
+        std::vector<Packet> packets, reference_packets;
+        md::MdpPublisher<Capture> publisher(config, Capture{&packets});
+        md::MdpPublisher<Capture> reference(config, Capture{&reference_packets});
+        Timestamp now = 1'000'000;
+        REQUIRE_EQ(publisher.start(now, 1700000000000000000ull + now, engine), md::PublishStatus::Ok);
+        REQUIRE_EQ(reference.start(now, 1700000000000000000ull + now, engine), md::PublishStatus::Ok);
+        Consumer consumer;
+        consumer.depth = depth;
+        for (const auto& packet : reference_packets) consumer.packet(packet);
+        testsupport::CommandGenerator generator(seed, weights, 40);
+        for (int step = 0; step < 4000; ++step) {
+            now += 1'000'000;
+            Command command = generator.next(engine);
+            command.timestamp = now;
+            std::array<std::array<Price, 2>, 2> last{};  // [instrument - 1][ask]; 0 when the side shows fewer
+            for (InstrumentId id = 1; id <= instrument_count; ++id)
+                for (const auto side : {Side::BUY, Side::SELL}) {
+                    std::array<LevelInfo, 10> levels{};
+                    if (engine.depth(id, side, levels.data(), depth) == depth)
+                        last[id - 1][side == Side::SELL] = levels[depth - 1].price;
+                }
+            events.clear();
+            REQUIRE_EQ(engine.handle(command, events), HandleResult::Applied);
+            // A rejection naming an instrument the feed does not list would stop both feeds; it changes no book.
+            const auto unlisted = [&](const Event& e) { return e.instrument > instrument_count; };
+            if (std::any_of(events.begin(), events.end(), unlisted)) continue;
+            forced.assign(events.begin(), events.end());
+            for (InstrumentId id = 1; id <= instrument_count; ++id)
+                forced.push_back(Event{EventType::AuctionSummary, id, now, {.auction_summary = {}}});
+            packets.clear();
+            reference_packets.clear();
+            REQUIRE_EQ(publisher.on_events({events.begin(), events.size()}), md::PublishStatus::Ok);
+            REQUIRE_EQ(reference.on_events(forced), md::PublishStatus::Ok);
+            consumer.batch_ended = false;
+            for (const auto& packet : reference_packets) consumer.packet(packet);
+            consumer.compare(engine, config.instruments);
+            publisher.poll(now, UINT64_MAX);
+            reference.poll(now, UINT64_MAX);
+            if (packets != reference_packets)
+                FAIL("seed " + std::to_string(seed) + " step " + std::to_string(step) + " " +
+                     server::journal::format_command(command));
+            for (const auto& event : events) {
+                const bool rested = event.type == EventType::Rested;
+                if (!rested && !(event.type == EventType::Canceled && event.canceled.was_resting)) continue;
+                const Side side = rested ? event.rested.side : event.canceled.side;
+                const Price price = rested ? event.rested.price : event.canceled.price;
+                const Price behind = last[event.instrument - 1][side == Side::SELL];
+                deep_changes += behind != 0 && (side == Side::BUY ? price < behind : price > behind);
+            }
+        }
+    }
+    CHECK_GT(deep_changes, 1000u);
 }
 
 TEST_CASE(mdp_publisher, one_batch_changing_two_instruments_keeps_books_flags_and_report_sequences_apart) {

@@ -1,0 +1,11 @@
+fault user FIX reject 2
+fault user OUCH delay 100
+fault user ILINK drop_out 1
+fault user FIX disconnect
+fault user FIX off
+fault md drop 3
+fault md dup 2
+fault md reorder 2 3
+fault md rate drop=10 dup=5 reorder=1 delay=2 seed=7
+fault md off
+status

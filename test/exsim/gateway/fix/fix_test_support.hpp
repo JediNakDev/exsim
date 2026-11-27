@@ -119,7 +119,9 @@ public:
           directory_(users_, "EXSIM", limits),
           bound_sessions_(std::size_t{1} << 16, false),
           bound_connection_by_session_(std::size_t{1} << 16, 0),
-          dispatch_generation_by_session_(std::size_t{1} << 16, 0) {
+          dispatch_generation_by_session_(std::size_t{1} << 16, 0),
+          injected_rejects_by_session_(std::size_t{1} << 16, 0),
+          outbound_drops_by_session_(std::size_t{1} << 16, 0) {
         for (std::string_view symbol : {std::string_view("AAPL"), std::string_view("MSFT")}) {
             exsim::InstrumentConfig instrument;
             instrument.symbol = exsim::Symbol(symbol);
@@ -163,20 +165,37 @@ public:
         return engine_.find_instrument(symbol);
     }
     const exsim::InstrumentConfig* instrument(exsim::InstrumentId id) const noexcept { return engine_.instrument(id); }
-    void submit(const exsim::Command& command) noexcept {
+    exsim::server::SubmitResult submit(const exsim::Command& command) noexcept {
         events_.clear();
         if (engine_.handle(command, events_) != exsim::HandleResult::Applied) {
             ++insufficient_output_results;
-            return;
+            return exsim::server::SubmitResult::OutputCapacityExceeded;
         }
         if (record_history) {
             submitted_commands.push_back(command);
             dispatched_events.insert(dispatched_events.end(), events_.begin(), events_.end());
         }
         dispatch(std::span<const exsim::Event>(events_.begin(), events_.size()));
+        return exsim::server::SubmitResult::Applied;
     }
     exsim::Timestamp now() const noexcept { return now_ns_; }
     std::uint64_t realtime_ns() const noexcept { return kMidnightRealtimeNs + now_ns_; }
+
+    // Fault queries: each true consumes one count.
+    bool consume_injected_reject(exsim::SessionId session) noexcept {
+        return consume_one(injected_rejects_by_session_[session]);
+    }
+    bool consume_drop_out(exsim::SessionId session) noexcept {
+        return consume_one(outbound_drops_by_session_[session]);
+    }
+
+    // `fault user X reject n` and `fault user X drop_out n`.
+    void inject_gateway_rejects(exsim::SessionId session, std::uint32_t count) noexcept {
+        injected_rejects_by_session_[session] = count;
+    }
+    void drop_next_outbound_messages(exsim::SessionId session, std::uint32_t count) noexcept {
+        outbound_drops_by_session_[session] = count;
+    }
 
     void advance(exsim::Timestamp nanoseconds) noexcept { now_ns_ += nanoseconds; }
     [[nodiscard]] fix::FixTime fix_time() const noexcept { return {now(), realtime_ns()}; }
@@ -227,8 +246,16 @@ private:
     std::vector<bool> bound_sessions_;
     std::vector<exsim::server::ConnectionId> bound_connection_by_session_;
     std::vector<std::uint64_t> dispatch_generation_by_session_;  // generation of the last dispatch to the session
+    std::vector<std::uint32_t> injected_rejects_by_session_;
+    std::vector<std::uint32_t> outbound_drops_by_session_;
     std::uint64_t dispatch_generation_ = 0;
     exsim::Timestamp now_ns_ = kSessionStartNs;
+
+    static bool consume_one(std::uint32_t& remaining) noexcept {
+        if (remaining == 0) return false;
+        --remaining;
+        return true;
+    }
 
     // Each distinct session of the batch that has a FIX user gets the whole
     // batch once, in first-appearance order; the user filters its events.
