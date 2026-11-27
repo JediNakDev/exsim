@@ -26,7 +26,7 @@ using namespace exsim;
 server::ServerConfig loopback_config_with_ephemeral_ports() {
     server::ServerConfig config;
     std::string error;
-    REQUIRE(server::load_config("config/exchange.conf", config, error));
+    REQUIRE(server::load_config("config/examples/exchange.conf", config, error));
     config.exchange.ouch_port = 0;
     config.exchange.fix_port = 0;
     config.market_data.port = 0;

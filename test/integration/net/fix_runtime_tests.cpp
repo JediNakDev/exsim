@@ -57,7 +57,7 @@ std::string exchange_frame(Runtime& runtime, int fd, std::string_view frame) {
 exsim::server::ServerConfig fix_config() {
     exsim::server::ServerConfig config;
     std::string error;
-    REQUIRE(exsim::server::load_config("config/exchange.conf", config, error));
+    REQUIRE(exsim::server::load_config("config/examples/exchange.conf", config, error));
     config.exchange.ouch_port = 0;
     config.exchange.fix_port = 0;
     config.market_data.port = 0;
@@ -109,7 +109,7 @@ TEST_CASE(fix_runtime, tcp_logon_orders_matching_and_logout) {
 TEST_CASE(fix_runtime, shutdown_summary_counts_feed_send_failures_during_the_drain) {
     exsim::server::ServerConfig config;
     std::string error;
-    REQUIRE(exsim::server::load_config("config/exchange.conf", config, error));
+    REQUIRE(exsim::server::load_config("config/examples/exchange.conf", config, error));
     config.exchange.ouch_port = 0;
     config.exchange.fix_port = 0;
     config.market_data.address = "255.255.255.255";

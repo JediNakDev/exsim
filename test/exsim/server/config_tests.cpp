@@ -128,7 +128,7 @@ TEST_CASE(server_config_mdp, rejects_keys_of_the_other_market_data_protocol) {
 TEST_CASE(server_config_ilink, current_schema_fixture_and_missing_credentials) {
     ServerConfig config;
     std::string error;
-    REQUIRE(load_config("config/cme.conf", config, error));
+    REQUIRE(load_config("config/examples/cme.conf", config, error));
     REQUIRE_EQ(config.users.back().protocol, Protocol::Ilink3);
     CHECK_EQ(config.users.back().ilink_party_id, 1001u);
     CHECK_EQ(config.users.back().ilink_session, "AAA");
@@ -239,7 +239,7 @@ TEST_CASE(server_config, defaults_are_small) {
 TEST_CASE(server_config, example_file_parses) {
     ServerConfig cfg;
     std::string error;
-    REQUIRE(load_config("config/exchange.conf", cfg, error));
+    REQUIRE(load_config("config/examples/exchange.conf", cfg, error));
     CHECK_EQ(cfg.instruments.size(), 1u);
     CHECK_EQ(cfg.users.size(), 2u);
     CHECK_EQ(cfg.exchange.ouch_port, 15000);

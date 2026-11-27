@@ -21,7 +21,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 BUILD = ROOT / os.environ.get("EXSIM_BUILD", "build/release")
-CONFIG = (ROOT / "config/exchange.conf").read_text()
+CONFIG = (ROOT / "config/examples/exchange.conf").read_text()
 
 
 def unused_udp_port():

@@ -4,10 +4,10 @@ One `exsim_exchanged` process runs one exchange. Build and start one from the re
 
 ```sh
 make -j4 apps
-./build/release/exsim_exchanged --config config/exchange.conf
+./build/release/exsim_exchanged --config config/examples/exchange.conf
 ```
 
-`--config PATH` is the only option; everything else, including the [admin socket](#runtime-commands), is in the config file. [config/exchange.conf](../config/exchange.conf) shows every setting with its default. Every start creates empty books and a new session name, generated at startup, shared by the MoldUDP64 feed and SoupBinTCP and shown as `session` in the ready line. External trading clients provide the orders. To run several exchanges, start several processes, each with its own config.
+`--config PATH` is the only option; everything else, including the [admin socket](#runtime-commands), is in the config file. [config/examples/exchange.conf](../config/examples/exchange.conf) shows every setting with its default. Every start creates empty books and a new session name, generated at startup, shared by the MoldUDP64 feed and SoupBinTCP and shown as `session` in the ready line. External trading clients provide the orders. To run several exchanges, start several processes, each with its own config.
 
 ## Ready line
 
@@ -48,8 +48,8 @@ admin_socket = exsim.sock
 A relative path is relative to the config file, like the journal. Leave the key out for no admin socket. Replies are lines ending in `OK` or `ERR <message>`:
 
 ```sh
-echo 'phase AAPL continuous' | nc -U config/exsim.sock
-echo 'fault user ALICE reject 1' | nc -U config/exsim.sock
+echo 'phase AAPL continuous' | nc -U config/examples/exsim.sock
+echo 'fault user ALICE reject 1' | nc -U config/examples/exsim.sock
 ```
 
 A command is one line of at most 4096 bytes, ended by a newline or by closing the write side, and must arrive within 5 s of connecting. It runs on the exchange's event loop; an invalid command leaves the exchange running.
@@ -84,11 +84,11 @@ Exchanges can use optional `[journal]` settings: `path`, `on_failure`, and `flus
 
 ## Replaying a journal
 
-A journal holds the commands the exchange applied, each with the timestamp the exchange gave it and a digest of the events it produced. `journal_replay` feeds the commands to a fresh matching engine and checks each one's events against that digest. With the `[journal]` section of `config/exchange.conf` uncommented, the example exchange writes `config/exchange.journal`; after it stops:
+A journal holds the commands the exchange applied, each with the timestamp the exchange gave it and a digest of the events it produced. `journal_replay` feeds the commands to a fresh matching engine and checks each one's events against that digest. With the `[journal]` section of `config/examples/exchange.conf` uncommented, the example exchange writes `config/examples/exchange.journal`; after it stops:
 
 ```sh
 make -j4 journal-replay
-./build/release/journal_replay config/exchange.journal
+./build/release/journal_replay config/examples/exchange.journal
 ```
 
 A clean run prints `replayed N commands and M events: every output matches the journal` and exits 0. That covers the records before the checkpoint at the end of the file, which every successful flush writes, including the one at shutdown. A write failure stops journaling, so later commands are not in the file, and it can leave the file without a valid checkpoint, which replay reports as truncated. Replay a journal its exchange is no longer writing: a flush during the read can be reported as damage, or leave the records after the checkpoint replay saw unchecked. Replay checks the header and the checkpoint first, then each record as it is read, so memory does not grow with the journal and the first record that diverges is reported before any later damage. Checksums catch damage, not tampering: replay trusts the header as the exchange trusts its config, and builds the same engine, so it needs the memory that exchange had. Otherwise it prints the first command whose output differs, with its sequence number and the replayed events, and exits 1; replaying an old journal with a new build shows where matching changed, as long as the build reads that journal's schema. A build reads only its own schema; schema 2 journals, written before output digests, cannot be replayed. A damaged or truncated journal is reported, with the record and byte offset when the problem is in a record, also with exit 1. The exchange itself never reads a journal: every start is empty.

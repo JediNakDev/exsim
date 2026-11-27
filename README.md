@@ -24,12 +24,12 @@ make -j4 apps
 ### Running
 
 ```sh
-./build/release/exsim_exchanged --config config/exchange.conf
+./build/release/exsim_exchanged --config config/examples/exchange.conf
 ```
 
 This builds the exchange and starts one with empty books, waiting for external trading clients. Once ready it prints one JSON line with its ports. Each exchange is its own process: start more with their own config files, and stop one with **Ctrl+C** or `kill <pid>`.
 
-[config/exchange.conf](./config/exchange.conf) is a commented example of every setting; copy it to start your own exchange. [config/cme.conf](./config/cme.conf) is the CME profile, with MDP 3.0 market data and iLink 3 order entry.
+[config/examples/exchange.conf](./config/examples/exchange.conf) is a commented example of every setting; copy it into `config/` to start your own exchange (git ignores everything in `config/` outside `config/examples/`). [config/examples/cme.conf](./config/examples/cme.conf) is the CME profile, with MDP 3.0 market data and iLink 3 order entry.
 
 See [Running an exchange](./docs/running.md) for the ready line, runtime commands, and config.
 

@@ -138,7 +138,7 @@ fuzz:
 # The config harness starts from the example configs; the others from fuzz/seeds/<name>.
 fuzz-run: $(FUZZ_RUN:%=$(BUILD)/fuzz_%)
 	for name in $(FUZZ_RUN); do \
-		seeds=fuzz/seeds/$$name; [ $$name != config ] || seeds=config; \
+		seeds=fuzz/seeds/$$name; [ $$name != config ] || seeds=config/examples; \
 		mkdir -p $(BUILD)/corpus/$$name && \
 		$(BUILD)/fuzz_$$name -max_total_time=$(FUZZ_SECONDS) -timeout=60 -print_final_stats=1 \
 			-artifact_prefix=$(BUILD)/$$name- $(BUILD)/corpus/$$name $$seeds || exit 1; \
